@@ -75,13 +75,15 @@ CREATE TRIGGER audit_log_no_update_delete
 ALTER TABLE consultations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 
+-- NULLIF guards the unset/empty-string GUC states: both must fail CLOSED
+-- (no rows visible), never error and never leak.
 CREATE POLICY tenant_isolation_consultations ON consultations
-    USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 CREATE POLICY tenant_isolation_documents ON documents
-    USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
+    USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
 
 -- Non-owner role the app/tests can assume; RLS applies to it (owners bypass).
 DO $$

@@ -60,6 +60,18 @@ describe.skipIf(!url)("schema v0 guarantees", () => {
     }
   });
 
+  it("RLS: an empty-string app.tenant_id fails closed, not with an error", async () => {
+    await client.query("BEGIN");
+    try {
+      await client.query("SET LOCAL ROLE policy_app");
+      await client.query("SELECT set_config('app.tenant_id', '', true)");
+      const rows = (await client.query("SELECT * FROM consultations")).rows;
+      expect(rows).toHaveLength(0);
+    } finally {
+      await client.query("ROLLBACK");
+    }
+  });
+
   it("RLS: inserting into a foreign tenant is rejected", async () => {
     await client.query("BEGIN");
     try {
