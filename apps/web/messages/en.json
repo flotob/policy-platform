@@ -1,0 +1,16 @@
+{
+  "HelloMap": {
+    "title": "The map of the dispute",
+    "subtitle": "How thousands of submissions become a readable picture.",
+    "zoneExperts": "Zone of the experts — resolvable by evidence",
+    "zoneCouncil": "Zone of the council — to be decided politically",
+    "placeholder": "The argument map will render here."
+  },
+  "Tenants": {
+    "heading": "Create a tenant",
+    "nameLabel": "Organization name",
+    "slugLabel": "Slug (URL identifier)",
+    "submit": "Create tenant",
+    "created": "Tenant \"{name}\" created."
+  }
+}

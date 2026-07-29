@@ -1,0 +1,24 @@
+# deps / builds
+node_modules/
+.next/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# runtime data
+blobs/
+
+# OS / editor
+.DS_Store

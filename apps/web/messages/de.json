@@ -1,0 +1,16 @@
+{
+  "HelloMap": {
+    "title": "Die Landkarte des Streits",
+    "subtitle": "Wie aus tausenden Stellungnahmen ein lesbares Bild wird.",
+    "zoneExperts": "Zone der Gutachter — durch Evidenz klärbar",
+    "zoneCouncil": "Zone des Rates — politisch zu entscheiden",
+    "placeholder": "Hier entsteht die Argumentlandkarte."
+  },
+  "Tenants": {
+    "heading": "Mandanten anlegen",
+    "nameLabel": "Name der Organisation",
+    "slugLabel": "Slug (URL-Kennung)",
+    "submit": "Mandanten anlegen",
+    "created": "Mandant „{name}“ angelegt."
+  }
+}
