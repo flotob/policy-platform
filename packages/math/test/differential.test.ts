@@ -16,9 +16,14 @@ import { describe, expect, it } from "vitest";
 import {
   buildRawMatrix,
   clusterableParticipantIds,
+  commentStatistics,
+  findBestKmeans,
   parseModeratedOutStatementIds,
   parseVotesCsv,
   runPca,
+  selectConsensusStatements,
+  selectParticipants,
+  selectRepresentativeStatements,
   votesPerParticipant,
   zeroOutStatements,
 } from "../src/index.ts";
@@ -134,6 +139,84 @@ for (const name of CONVERSATIONS) {
         expect(x * signs[0]).toBeCloseTo(expected[0], 6);
         expect(y * signs[1]).toBeCloseTo(expected[1], 6);
       });
+    });
+
+    // ——— clustering stage ———
+    const clusteredIds = Object.keys(reference.clustering.labels)
+      .map(Number)
+      .sort((a, b) => a - b);
+    const pIndex = new Map(raw.participantIds.map((id, i) => [id, i]));
+    // Cluster on projections in the reference's sign orientation, so the
+    // deterministic "polis" init sees the same lexicographic row order.
+    const clusterRows = clusteredIds.map((pid) => {
+      const [x, y] = pca.participantProjections[pIndex.get(pid)!]!;
+      return [x * signs[0], y * signs[1]];
+    });
+
+    it("reproduces k selection and exact cluster labels", () => {
+      const { best } = findBestKmeans(clusterRows, 2, 5);
+      expect(best.k).toBe(reference.clustering.k);
+      clusteredIds.forEach((pid, i) => {
+        expect(best.labels[i]).toBe(reference.clustering.labels[String(pid)]);
+      });
+    });
+
+    // ——— statistics stage (isolated: reference labels as input) ———
+    const referenceLabels = clusteredIds.map(
+      (pid) => reference.clustering.labels[String(pid)] as number,
+    );
+    const clusterableRaw = selectParticipants(raw, clusteredIds);
+    const stats = commentStatistics(clusterableRaw, referenceLabels);
+
+    it("reproduces group-aware consensus", () => {
+      const refAgree = reference.group_aware_consensus.agree ?? {};
+      for (const [sid, expected] of Object.entries(refAgree)) {
+        const actual = stats.groupAwareConsensusAgree.get(Number(sid));
+        expect(actual).toBeDefined();
+        expect(actual!).toBeCloseTo(expected as number, 9);
+      }
+    });
+
+    it("reproduces representative statements (repness)", () => {
+      const repness = selectRepresentativeStatements(stats.grouped, modOut);
+      const groups = Object.keys(reference.repness);
+      expect(Object.keys(repness).map(String).sort()).toEqual(groups.sort());
+      for (const gid of groups) {
+        const ours = repness[Number(gid)]!;
+        const theirs = reference.repness[gid];
+        expect(ours.map((s) => s.tid)).toEqual(theirs.map((s: any) => s.tid));
+        ours.forEach((s, i) => {
+          const t = theirs[i];
+          expect(s["n-success"]).toBe(t["n-success"]);
+          expect(s["n-trials"]).toBe(t["n-trials"]);
+          expect(s["p-success"]).toBeCloseTo(t["p-success"], 9);
+          expect(s["p-test"]).toBeCloseTo(t["p-test"], 9);
+          if (t.repness !== undefined) {
+            expect(s.repness!).toBeCloseTo(t.repness, 9);
+            expect(s["repness-test"]!).toBeCloseTo(t["repness-test"], 9);
+            expect(s["repful-for"]).toBe(t["repful-for"]);
+          }
+          if (t["best-agree"] !== undefined) {
+            expect(s["best-agree"]).toBe(t["best-agree"]);
+          }
+        });
+      }
+    });
+
+    it("reproduces overall consensus statements", () => {
+      const consensus = selectConsensusStatements(raw, modOut);
+      for (const direction of ["agree", "disagree"] as const) {
+        const ours = consensus[direction];
+        const theirs = reference.consensus[direction];
+        expect(ours.map((s) => s.tid)).toEqual(theirs.map((s: any) => s.tid));
+        ours.forEach((s, i) => {
+          const t = theirs[i];
+          expect(s["n-success"]).toBe(t["n-success"]);
+          expect(s["n-trials"]).toBe(t["n-trials"]);
+          expect(s["p-success"]).toBeCloseTo(t["p-success"], 9);
+          expect(s["p-test"]).toBeCloseTo(t["p-test"], 9);
+        });
+      }
     });
   });
 }

@@ -73,3 +73,20 @@ export function clusterableParticipantIds(
   const counts = votesPerParticipant(matrix);
   return matrix.participantIds.filter((_, i) => counts[i]! >= threshold);
 }
+
+/** Row-subset of the matrix for the given participant ids (order preserved). */
+export function selectParticipants(
+  matrix: VoteMatrix,
+  participantIds: number[],
+): VoteMatrix {
+  const index = new Map(matrix.participantIds.map((id, i) => [id, i]));
+  return {
+    participantIds: [...participantIds],
+    statementIds: matrix.statementIds,
+    values: participantIds.map((id) => {
+      const i = index.get(id);
+      if (i === undefined) throw new Error(`unknown participant ${id}`);
+      return matrix.values[i]!;
+    }),
+  };
+}
