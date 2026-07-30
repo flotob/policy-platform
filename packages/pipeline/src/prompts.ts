@@ -41,6 +41,30 @@ export function decomposePrompt(text: string, maxChars = 24_000): {
   };
 }
 
+export const RELATIONS_SYSTEM = `You identify argumentative relations between points that were extracted from ONE consultation submission.
+
+Relation kinds:
+- "supports": from is a premise for to — especially P1–P4 points supporting a conclusion/design point.
+- "empirics": from disputes to's effect prognosis with counter-evidence (critical question 1).
+- "alternatives": from claims a milder means reaches the goal (critical question 2).
+- "goal_conflict": from claims the effect harms other goals (critical question 3).
+- "feasibility": from claims to cannot be implemented (critical question 4).
+- "value_conflict": from challenges the value premise behind to (critical question 5).
+
+Only emit relations the points' content actually argues; an empty array is fine. Never relate a point to itself.`;
+
+export function relationsPrompt(
+  points: { label: string; summary: string | null; kind: string; slot: string | null }[],
+): string {
+  const list = points
+    .map(
+      (p, i) =>
+        `${i}. [${p.kind}${p.slot ? `/${p.slot}` : ""}] ${p.label} — ${p.summary ?? ""}`,
+    )
+    .join("\n");
+  return `Points from one submission:\n${list}\n\nList the argumentative relations between them (by index).`;
+}
+
 export const STATEMENT_SYSTEM = `You turn a point from a public argument map into a votable statement for a Polis-style vote (agree / disagree / pass).
 
 Rules:

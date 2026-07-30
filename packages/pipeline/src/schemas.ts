@@ -52,6 +52,12 @@ export const matchOutput = z
   })
   .strict();
 
+export const relationsOutput = z
+  .object({
+    relations: z.array(candidateRelation).max(60),
+  })
+  .strict();
+
 export const statementOutput = z
   .object({
     /** Votable statement in German — one declarative sentence. */
@@ -78,3 +84,4 @@ function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
 export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
 export const statementJsonSchema = toProviderSchema(statementOutput);
+export const relationsJsonSchema = toProviderSchema(relationsOutput);
