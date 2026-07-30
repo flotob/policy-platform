@@ -103,6 +103,63 @@ export default async function MapPage({
     </p>
   );
 
+  // Decomposed argument points (excluding questionnaire pseudo-points, which
+  // are the analyzed statements themselves) — shown as zones on every map.
+  const pointsRes = await db.execute(sql`
+    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.status,
+      (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
+       FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
+       WHERE ps.point_id = p.id) AS sources
+    FROM points p
+    WHERE p.consultation_id = ${consultation.id}
+      AND p.status IN ('draft', 'released')
+      AND p.created_by <> 'import:questionnaire'
+    ORDER BY p.created_at
+  `);
+  const points = pointsRes.rows as {
+    id: string; kind: string; slot: string | null; label: string;
+    summary: string | null; status: string;
+    sources: { quote: string | null; org: string | null }[] | null;
+  }[];
+  const byKind = (kind: string) => points.filter((p) => p.kind === kind);
+  const zoneSections: [string, string, typeof points][] = [
+    ["factZone", "fact", byKind("fact")],
+    ["valueZone", "value", byKind("value")],
+    ["designZone", "design", byKind("design")],
+  ];
+  const zonesBlock =
+    points.length === 0 ? null : (
+      <>
+        {zoneSections.map(([key, mod, list]) =>
+          list.length === 0 ? null : (
+            <section key={key} className={`map-section map-section--${mod}`}>
+              <h2>{t(key as "factZone")} ({list.length})</h2>
+              {list.map((p) => (
+                <details key={p.id} className={`chip chip--${mod}`}>
+                  <summary>
+                    <span className="chip__label">{p.label}</span>
+                    {p.slot && <span className={`badge badge--${mod}`}>{p.slot}</span>}
+                    {p.status === "draft" && <span className="badge badge--draft">draft</span>}
+                  </summary>
+                  <div className="chip__detail">
+                    {p.summary && <p>{p.summary}</p>}
+                    {(p.sources ?? []).slice(0, 3).map((s2, i) =>
+                      s2.quote ? (
+                        <blockquote key={i} className="quote">
+                          „{s2.quote}"
+                          {s2.org && <cite>— {s2.org}</cite>}
+                        </blockquote>
+                      ) : null,
+                    )}
+                  </div>
+                </details>
+              ))}
+            </section>
+          ),
+        )}
+      </>
+    );
+
   if (analysis) {
     const labels = displayLabels(analysis.statements);
     const bridged = analysis.statements.filter((s) => s.profile === "bridged");
@@ -196,24 +253,12 @@ export default async function MapPage({
         <div className="zone zone--council">
           <strong>{t("diagnosis")}:</strong> {t(diagKey)}
         </div>
+        {zonesBlock}
       </main>
     );
   }
 
-  // No analysis: decomposed argument map (points from submissions, by kind).
-  const pointsRes = await db.execute(sql`
-    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.status,
-      (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
-       FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
-       WHERE ps.point_id = p.id) AS sources
-    FROM points p WHERE p.consultation_id = ${consultation.id}
-    ORDER BY p.created_at
-  `);
-  const points = pointsRes.rows as {
-    id: string; kind: string; slot: string | null; label: string;
-    summary: string | null; status: string;
-    sources: { quote: string | null; org: string | null }[] | null;
-  }[];
+  // No analysis: decomposed argument map only.
   if (points.length === 0) {
     const subCount = await db.execute(
       sql`SELECT count(*)::int AS n FROM submissions WHERE consultation_id = ${consultation.id}`,
@@ -229,12 +274,6 @@ export default async function MapPage({
     );
   }
 
-  const byKind = (kind: string) => points.filter((p) => p.kind === kind);
-  const sections: [string, string, typeof points][] = [
-    ["factZone", "fact", byKind("fact")],
-    ["valueZone", "value", byKind("value")],
-    ["designZone", "design", byKind("design")],
-  ];
   return (
     <main className="page">
       <h1>{consultation.title}</h1>
@@ -242,33 +281,7 @@ export default async function MapPage({
         <span><strong>{points.length}</strong> {t("points")}</span>
       </div>
       {voteCta}
-      {sections.map(([key, mod, list]) =>
-        list.length === 0 ? null : (
-          <section key={key} className={`map-section map-section--${mod}`}>
-            <h2>{t(key as "factZone")} ({list.length})</h2>
-            {list.map((p) => (
-              <details key={p.id} className={`chip chip--${mod}`}>
-                <summary>
-                  <span className="chip__label">{p.label}</span>
-                  {p.slot && <span className={`badge badge--${mod}`}>{p.slot}</span>}
-                  {p.status === "draft" && <span className="badge badge--draft">draft</span>}
-                </summary>
-                <div className="chip__detail">
-                  {p.summary && <p>{p.summary}</p>}
-                  {(p.sources ?? []).slice(0, 3).map((s2, i) =>
-                    s2.quote ? (
-                      <blockquote key={i} className="quote">
-                        „{s2.quote}"
-                        {s2.org && <cite>— {s2.org}</cite>}
-                      </blockquote>
-                    ) : null,
-                  )}
-                </div>
-              </details>
-            ))}
-          </section>
-        ),
-      )}
+      {zonesBlock}
       <p className="placeholder-note">{t("noAnalysis")}</p>
     </main>
   );
