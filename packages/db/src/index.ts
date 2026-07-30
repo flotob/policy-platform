@@ -7,7 +7,7 @@ export * from "./schema.ts";
 export { schema };
 // Query operators re-exported so app code never imports drizzle-orm directly —
 // the db package stays the single place that owns the ORM dependency.
-export { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+export { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 export type Db = ReturnType<typeof createDb>;
 

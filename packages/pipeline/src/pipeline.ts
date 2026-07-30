@@ -12,6 +12,7 @@ import {
   eq,
   inArray,
   matchDecisions,
+  ne,
   points,
   pointSources,
   submissions,
@@ -82,6 +83,9 @@ export async function runForSubmission(
       and(
         eq(points.consultationId, submission.consultationId),
         inArray(points.status, ["draft", "released"]),
+        // Questionnaire pseudo-points are question texts, not claims — a
+        // free-text argument must never be folded into one.
+        ne(points.createdBy, "import:questionnaire"),
       ),
     )
     .orderBy(points.createdAt);
