@@ -43,12 +43,16 @@ async function main() {
   for (const row of rows.rows as { id: string; author_org: string; chars: number }[]) {
     console.log(`→ ${row.author_org ?? row.id} (${row.chars} chars)…`);
     const started = Date.now();
-    const result = await runForSubmission(db, provider, row.id, model);
-    console.log(
-      `  ${result.candidates} candidates → ${result.created} new points, ` +
-        `${result.matched} matched${result.truncated ? " (text truncated)" : ""} ` +
-        `[${Math.round((Date.now() - started) / 1000)}s]`,
-    );
+    try {
+      const result = await runForSubmission(db, provider, row.id, model);
+      console.log(
+        `  ${result.candidates} candidates → ${result.created} new points, ` +
+          `${result.matched} matched${result.truncated ? " (text truncated)" : ""} ` +
+          `[${Math.round((Date.now() - started) / 1000)}s]`,
+      );
+    } catch (err) {
+      console.log(`  FAILED: ${err instanceof Error ? err.message : err}`);
+    }
   }
   process.exit(0);
 }

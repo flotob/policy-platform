@@ -41,7 +41,7 @@ export class AgentSdkProvider implements LlmProvider {
         model,
         systemPrompt: req.system,
         allowedTools: [],
-        maxTurns: 1,
+        maxTurns: 3, // schema-validation retries need extra turns
         outputFormat: { type: "json_schema", schema: req.schema },
       } as never,
     })) {
