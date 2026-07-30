@@ -13,6 +13,7 @@ import {
   inArray,
   matchDecisions,
   ne,
+  pointEdges,
   points,
   pointSources,
   submissions,
@@ -68,6 +69,7 @@ export async function runForSubmission(
 
   let created = 0;
   let matchedCount = 0;
+  const pointIdByCandidate: string[] = [];
 
   // Snapshot BEFORE the loop: candidates from the same submission never match
   // against each other — the decomposition prompt already dedupes within a
@@ -139,6 +141,8 @@ export async function runForSubmission(
       created++;
     }
 
+    pointIdByCandidate.push(pointId);
+
     const spanStart = submission.text.indexOf(candidate.quote);
     await db.insert(pointSources).values({
       tenantId: submission.tenantId,
@@ -167,13 +171,32 @@ export async function runForSubmission(
     });
   }
 
+  // Argumentative relations between the submission's candidates, mapped to
+  // their (possibly matched) point ids. Idempotent via the unique constraint.
+  let edgeCount = 0;
+  for (const rel of parsed.relations) {
+    const fromId = pointIdByCandidate[rel.from];
+    const toId = pointIdByCandidate[rel.to];
+    if (!fromId || !toId || fromId === toId) continue;
+    await db
+      .insert(pointEdges)
+      .values({
+        tenantId: submission.tenantId,
+        fromPoint: fromId,
+        toPoint: toId,
+        kind: rel.kind,
+      })
+      .onConflictDoNothing();
+    edgeCount++;
+  }
+
   await db.insert(auditLog).values({
     tenantId: submission.tenantId,
     actor: method,
     action: "submission.decompose",
     subjectKind: "submission",
     subjectId: submission.id,
-    payload: { candidates: parsed.points.length, created, matched: matchedCount, truncated },
+    payload: { candidates: parsed.points.length, created, matched: matchedCount, edges: edgeCount, truncated },
   });
 
   return {

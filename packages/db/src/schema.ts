@@ -49,6 +49,7 @@ export const points = pgTable("points", {
   slot: text("slot"),
   label: text("label").notNull(),
   summary: text("summary"),
+  finding: text("finding"),
   status: text("status").notNull().default("draft"),
   mergedInto: uuid("merged_into"),
   createdBy: text("created_by").notNull(),

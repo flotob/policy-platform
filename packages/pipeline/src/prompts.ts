@@ -20,11 +20,12 @@ The debate follows the practical-reasoning schema for a proposed measure M:
 Rules:
 1. Extract every DISTINCT point; merge repetitions within the submission.
 2. Strip rhetoric and tone; keep the argumentative core, neutrally phrased.
-3. kind = "fact" for empirically checkable claims (present or prognosis), "value" for normative judgments no study could settle, "design" for concrete proposals on how to shape/implement the measure (transition periods, exemptions, procedures).
+3. kind = "fact" for empirically checkable claims (present or prognosis), "value" for normative judgments no study could settle, "design" for concrete proposals on how to shape/implement the measure (transition periods, exemptions, procedures), "gap" for an open question the submission raises but nobody answers (an explicitly missing piece of evidence or an unexamined alternative).
 4. slot: assign P1–P4 or "conclusion" when clearly attributable, else null. Design proposals are usually "conclusion".
 5. quote: a short VERBATIM excerpt from the submission (copy exactly, no ellipses) that best evidences the point.
 6. label and summary: write them in the language of the submission.
-7. Prefer 3–15 points for a typical association submission; never pad.`;
+7. Prefer 3–15 points for a typical association submission; never pad.
+8. relations: argumentative links BETWEEN the candidates you extracted, by array index. kind "supports" = from is a premise for to (especially P1–P4 points supporting a conclusion point). The five critical-question kinds mark attacks: "empirics" (from disputes to's effect prognosis with counter-evidence), "alternatives" (from claims a milder means reaches the goal), "goal_conflict" (from claims the effect harms other goals), "feasibility" (from claims to cannot be implemented), "value_conflict" (from challenges the value premise behind to). Only emit relations the text actually argues; an empty array is fine.`;
 
 export function decomposePrompt(text: string, maxChars = 24_000): {
   prompt: string;

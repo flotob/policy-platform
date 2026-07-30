@@ -11,7 +11,7 @@ export const candidatePoint = z
     label: z.string().min(3).max(120),
     /** One neutral sentence stating the claim. */
     summary: z.string().min(10).max(500),
-    kind: z.enum(["fact", "value", "design"]),
+    kind: z.enum(["fact", "value", "design", "gap"]),
     /** Slot in the practical-reasoning schema; null when not attributable. */
     slot: z.enum(["P1", "P2", "P3", "P4", "conclusion"]).nullable(),
     /** Verbatim supporting excerpt from the submission text. */
@@ -19,9 +19,27 @@ export const candidatePoint = z
   })
   .strict();
 
+/** Argumentative relation between two candidate points (by array index). */
+export const candidateRelation = z
+  .object({
+    from: z.number().int().nonnegative(),
+    to: z.number().int().nonnegative(),
+    /** 'supports' = premise-of; the rest are the five critical questions. */
+    kind: z.enum([
+      "supports",
+      "empirics",
+      "alternatives",
+      "goal_conflict",
+      "feasibility",
+      "value_conflict",
+    ]),
+  })
+  .strict();
+
 export const decompositionOutput = z
   .object({
     points: z.array(candidatePoint).max(30),
+    relations: z.array(candidateRelation).max(60),
   })
   .strict();
 

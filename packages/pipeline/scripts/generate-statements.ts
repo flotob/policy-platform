@@ -35,6 +35,7 @@ async function main() {
     JOIN consultations c ON c.id = p.consultation_id
     WHERE (c.id::text = ${consultation} OR c.source_ref = ${consultation})
       AND p.status = 'released'
+      AND p.kind <> 'gap' -- open questions are not votable claims
       AND NOT EXISTS (SELECT 1 FROM statements st WHERE st.point_id = p.id)
     ORDER BY p.created_at ASC
     LIMIT ${limit}

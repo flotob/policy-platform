@@ -71,6 +71,7 @@ describe.skipIf(!url)("decomposition pipeline (db-backed)", () => {
           quote: "der Eingriff ins Eigentum ist nicht hinnehmbar",
         },
       ],
+      relations: [{ from: 0, to: 1, kind: "empirics" }],
     });
 
     const result = await runForSubmission(db, provider, sub1);
@@ -90,6 +91,13 @@ describe.skipIf(!url)("decomposition pipeline (db-backed)", () => {
     );
     expect(sources.rows).toHaveLength(2);
     expect(sources.rows[0].span_start).toBe(0); // verbatim quote located
+
+    const edges = await raw.query(
+      `SELECT e.kind FROM point_edges e
+       JOIN points p ON p.id = e.from_point WHERE p.consultation_id = $1`,
+      [consultationId],
+    );
+    expect(edges.rows).toEqual([{ kind: "empirics" }]);
   });
 
   it("second submission: match folds into existing point, new one created", async () => {
@@ -112,6 +120,7 @@ describe.skipIf(!url)("decomposition pipeline (db-backed)", () => {
             quote: "Außerdem fehlen Fachkräfte.",
           },
         ],
+        relations: [],
       },
       // match call for candidate 1 → same as existing point 0
       { decision: "matched", matched_index: 0, confidence: 0.92 },

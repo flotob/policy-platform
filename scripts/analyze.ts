@@ -64,6 +64,11 @@ async function main() {
      WHERE pa.consultation_id = $1`,
     [consultationId],
   );
+  const edgesRes = await client.query(
+    `SELECT e.from_point, e.to_point, e.kind FROM point_edges e
+     JOIN points p ON p.id = e.from_point WHERE p.consultation_id = $1`,
+    [consultationId],
+  );
 
   // uuid → dense numeric ids for the math package.
   const pIndex = new Map<string, number>(participants.rows.map((r, i) => [r.id, i]));
@@ -92,10 +97,19 @@ async function main() {
   const repness = selectRepresentativeStatements(stats.grouped, []);
   const consensus = selectConsensusStatements(matrix, []);
 
+  const supportsByPoint = new Map<string, string[]>();
+  for (const e of edgesRes.rows) {
+    if (e.kind !== "supports") continue;
+    supportsByPoint.set(e.from_point, [
+      ...(supportsByPoint.get(e.from_point) ?? []),
+      e.to_point,
+    ]);
+  }
   const diagnosisPoints: DiagnosisPoint[] = statementsRes.rows.map((r, i) => ({
     id: r.point_id,
     kind: r.kind,
     statementId: i,
+    supports: supportsByPoint.get(r.point_id),
   }));
   const diagnosis = diagnose(diagnosisPoints, stats.grouped);
 
@@ -118,6 +132,7 @@ async function main() {
     repness,
     consensus,
     diagnosisOverall: diagnosis.overall,
+    conclusions: diagnosis.conclusions,
     participantGroups: clusterable.map((pid, i) => ({
       participant: participants.rows[pid]?.id, group: best.labels[i],
       authorType: participants.rows[pid]?.author_type,
