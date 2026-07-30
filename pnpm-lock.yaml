@@ -113,6 +113,28 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.1)
 
+  packages/pipeline:
+    dependencies:
+      '@policy/db':
+        specifier: workspace:*
+        version: link:../db
+      '@policy/llm':
+        specifier: workspace:*
+        version: link:../llm
+      zod:
+        specifier: ^4.0.0
+        version: 4.4.3
+    devDependencies:
+      pg:
+        specifier: ^8.13.0
+        version: 8.22.0
+      tsx:
+        specifier: ^4.19.0
+        version: 4.23.1
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.1)(tsx@4.23.1)
+
 packages:
 
   '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.220':

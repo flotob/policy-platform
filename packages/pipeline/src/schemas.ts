@@ -1,0 +1,51 @@
+/**
+ * Structured-output contracts for the decomposition pipeline.
+ * zod is the source; JSON Schema is derived for the LLM provider.
+ */
+
+import { z } from "zod";
+
+export const candidatePoint = z
+  .object({
+    /** Short editorial label in the submission's language (≤ 80 chars). */
+    label: z.string().min(3).max(120),
+    /** One neutral sentence stating the claim. */
+    summary: z.string().min(10).max(500),
+    kind: z.enum(["fact", "value", "design"]),
+    /** Slot in the practical-reasoning schema; null when not attributable. */
+    slot: z.enum(["P1", "P2", "P3", "P4", "conclusion"]).nullable(),
+    /** Verbatim supporting excerpt from the submission text. */
+    quote: z.string().min(5).max(600),
+  })
+  .strict();
+
+export const decompositionOutput = z
+  .object({
+    points: z.array(candidatePoint).max(30),
+  })
+  .strict();
+
+export const matchOutput = z
+  .object({
+    decision: z.enum(["matched", "new"]),
+    /** Index into the numbered list of existing points (when matched). */
+    matched_index: z.number().int().nonnegative().nullable(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
+export type CandidatePoint = z.infer<typeof candidatePoint>;
+export type DecompositionOutput = z.infer<typeof decompositionOutput>;
+export type MatchOutput = z.infer<typeof matchOutput>;
+
+function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
+  // Strip the $schema meta-ref: the Claude Code CLI's validator rejects
+  // external meta-schema references.
+  const { $schema: _, ...rest } = z.toJSONSchema(schema, {
+    target: "draft-2020-12",
+  }) as Record<string, unknown> & { $schema?: string };
+  return rest;
+}
+
+export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
+export const matchJsonSchema = toProviderSchema(matchOutput);
