@@ -8,6 +8,7 @@ import {
   releaseAllDraftStatements,
   reviewPoint,
   reviewStatements,
+  saveFinding,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +55,14 @@ export default async function ReviewPage({
     WHERE p.consultation_id = ${consultation.id} AND st.status = 'released'
   `);
 
+  const releasedPoints = await db.execute(sql`
+    SELECT p.id, p.kind, p.label, p.finding
+    FROM points p
+    WHERE p.consultation_id = ${consultation.id} AND p.status = 'released'
+      AND p.created_by <> 'import:questionnaire'
+    ORDER BY p.finding IS NULL, p.created_at
+  `);
+
   const rows = drafts.rows as {
     id: string; kind: string; slot: string | null; label: string;
     summary: string | null;
@@ -62,6 +71,9 @@ export default async function ReviewPage({
   const statementRows = draftStatements.rows as {
     point_id: string; label: string; kind: string;
     versions: { locale: string; text: string }[];
+  }[];
+  const findingRows = releasedPoints.rows as {
+    id: string; kind: string; label: string; finding: string | null;
   }[];
 
   return (
@@ -107,6 +119,36 @@ export default async function ReviewPage({
                     style={{ background: "var(--coral)" }}
                   >
                     Ablehnen
+                  </button>
+                </form>
+              </div>
+            </details>
+          ))}
+        </section>
+      )}
+
+      {findingRows.length > 0 && (
+        <section className="map-section map-section--open">
+          <h2>Befunde ({findingRows.filter((p) => p.finding).length}/{findingRows.length})</h2>
+          {findingRows.map((p) => (
+            <details key={p.id} className={`chip chip--${p.kind}`}>
+              <summary>
+                <span className="chip__label">{p.label}</span>
+                {p.finding && <span className="badge badge--fact">Befund</span>}
+                <span className={`badge badge--${p.kind}`}>{p.kind}</span>
+              </summary>
+              <div className="chip__detail">
+                <form action={saveFinding} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <input type="hidden" name="pointId" value={p.id} />
+                  <textarea
+                    name="finding"
+                    defaultValue={p.finding ?? ""}
+                    rows={3}
+                    placeholder="Redaktioneller Befund (öffentlich, erscheint auf der Karte)"
+                    style={{ font: "inherit", border: "1px solid var(--line)", borderRadius: 6, padding: "0.5rem" }}
+                  />
+                  <button className="button" type="submit" style={{ alignSelf: "flex-start" }}>
+                    Befund speichern
                   </button>
                 </form>
               </div>

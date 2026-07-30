@@ -4,6 +4,12 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { sql } from "@policy/db";
 
 import { getDb } from "@/lib/db";
+import {
+  ArgumentMap,
+  type MapEdgeData,
+  type MapPoint,
+  type SaturationData,
+} from "./argument-map";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +27,7 @@ interface Analysis {
   matrix: { participants: number; statements: number; votes: number };
   statements: AnalysisStatement[];
   diagnosisOverall: string | null;
+  conclusions?: Record<string, "bridge_of_reasons" | "bridge_of_results" | "contested" | "open">;
   participantGroups: { group: number; authorType: string | null }[];
 }
 
@@ -104,60 +111,112 @@ export default async function MapPage({
   );
 
   // Decomposed argument points (excluding questionnaire pseudo-points, which
-  // are the analyzed statements themselves) — shown as zones on every map.
+  // are the analyzed statements themselves) with their canonical statement.
   const pointsRes = await db.execute(sql`
-    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.status,
+    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.finding, p.status,
       (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
        FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
-       WHERE ps.point_id = p.id) AS sources
+       WHERE ps.point_id = p.id) AS sources,
+      canonical.id AS statement_id,
+      COALESCE(loc.text, canonical.text) AS statement_text
     FROM points p
+    LEFT JOIN LATERAL (
+      SELECT st.id, st.text FROM statements st
+      WHERE st.point_id = p.id AND st.status = 'released'
+      ORDER BY st.locale LIMIT 1
+    ) canonical ON true
+    LEFT JOIN statements loc ON loc.point_id = p.id
+      AND loc.locale = ${locale} AND loc.status = 'released'
     WHERE p.consultation_id = ${consultation.id}
       AND p.status IN ('draft', 'released')
       AND p.created_by <> 'import:questionnaire'
     ORDER BY p.created_at
   `);
-  const points = pointsRes.rows as {
-    id: string; kind: string; slot: string | null; label: string;
-    summary: string | null; status: string;
+  const rawPoints = pointsRes.rows as {
+    id: string; kind: MapPoint["kind"]; slot: MapPoint["slot"]; label: string;
+    summary: string | null; finding: string | null; status: string;
     sources: { quote: string | null; org: string | null }[] | null;
+    statement_id: string | null; statement_text: string | null;
   }[];
-  const byKind = (kind: string) => points.filter((p) => p.kind === kind);
-  const zoneSections: [string, string, typeof points][] = [
-    ["factZone", "fact", byKind("fact")],
-    ["valueZone", "value", byKind("value")],
-    ["designZone", "design", byKind("design")],
-  ];
+
+  const edgesRes = await db.execute(sql`
+    SELECT e.from_point, e.to_point, e.kind FROM point_edges e
+    JOIN points p ON p.id = e.from_point
+    WHERE p.consultation_id = ${consultation.id}
+  `);
+  const mapEdges: MapEdgeData[] = (edgesRes.rows as {
+    from_point: string; to_point: string; kind: MapEdgeData["kind"];
+  }[]).map((e) => ({ from: e.from_point, to: e.to_point, kind: e.kind }));
+
+  const statementIds = rawPoints.map((p) => p.statement_id).filter(Boolean) as string[];
+  const tallies = new Map<string, { agree: number; disagree: number; pass: number }>();
+  if (statementIds.length > 0) {
+    const tallyRes = await db.execute(sql`
+      SELECT statement_id, value, count(*)::int AS n FROM votes
+      WHERE statement_id IN ${statementIds}
+      GROUP BY 1, 2
+    `);
+    for (const row of tallyRes.rows as { statement_id: string; value: number; n: number }[]) {
+      const tl = tallies.get(row.statement_id) ?? { agree: 0, disagree: 0, pass: 0 };
+      if (row.value === 1) tl.agree = row.n;
+      else if (row.value === -1) tl.disagree = row.n;
+      else tl.pass = row.n;
+      tallies.set(row.statement_id, tl);
+    }
+  }
+
+  const profileByPoint = new Map(
+    (analysis?.statements ?? []).map((s) => [s.pointId, s]),
+  );
+  const mapPoints: MapPoint[] = rawPoints.map((p) => {
+    const prof = profileByPoint.get(p.id);
+    return {
+      id: p.id,
+      kind: p.kind,
+      slot: p.slot,
+      label: p.label,
+      summary: p.summary,
+      finding: p.finding,
+      status: p.status,
+      statement: p.statement_text,
+      sources: p.sources ?? [],
+      profile: prof?.profile,
+      perGroup: prof?.perGroup,
+      conclusionDiagnosis: analysis?.conclusions?.[p.id],
+      tally: p.statement_id ? (tallies.get(p.statement_id) ?? null) : null,
+    };
+  });
+
+  // Saturation: share of NEW points across the trailing window of
+  // decomposed submissions (concept paper's stopping criterion).
+  let saturation: SaturationData | null = null;
+  const satRes = await db.execute(sql`
+    SELECT count(*) FILTER (WHERE outcome = 'new')::int AS new, count(*)::int AS total
+    FROM match_decisions
+    WHERE submission_id IN (
+      SELECT submission_id FROM match_decisions
+      WHERE consultation_id = ${consultation.id}
+      GROUP BY submission_id ORDER BY min(created_at) DESC LIMIT 3
+    )
+  `);
+  const sat = satRes.rows[0] as { new: number; total: number } | undefined;
+  const decomposedSubs = await db.execute(sql`
+    SELECT count(DISTINCT submission_id)::int AS n FROM match_decisions
+    WHERE consultation_id = ${consultation.id}
+  `);
+  if (sat && sat.total > 0 && (decomposedSubs.rows[0] as { n: number }).n >= 3) {
+    const newRate = sat.new / sat.total;
+    saturation = { newRate, window: 3, reached: newRate <= 0.35 };
+  }
+
   const zonesBlock =
-    points.length === 0 ? null : (
-      <>
-        {zoneSections.map(([key, mod, list]) =>
-          list.length === 0 ? null : (
-            <section key={key} className={`map-section map-section--${mod}`}>
-              <h2>{t(key as "factZone")} ({list.length})</h2>
-              {list.map((p) => (
-                <details key={p.id} className={`chip chip--${mod}`}>
-                  <summary>
-                    <span className="chip__label">{p.label}</span>
-                    {p.slot && <span className={`badge badge--${mod}`}>{p.slot}</span>}
-                    {p.status === "draft" && <span className="badge badge--draft">draft</span>}
-                  </summary>
-                  <div className="chip__detail">
-                    {p.summary && <p>{p.summary}</p>}
-                    {(p.sources ?? []).slice(0, 3).map((s2, i) =>
-                      s2.quote ? (
-                        <blockquote key={i} className="quote">
-                          „{s2.quote}"
-                          {s2.org && <cite>— {s2.org}</cite>}
-                        </blockquote>
-                      ) : null,
-                    )}
-                  </div>
-                </details>
-              ))}
-            </section>
-          ),
-        )}
-      </>
+    mapPoints.length === 0 ? null : (
+      <ArgumentMap
+        title={consultation.title}
+        points={mapPoints}
+        edges={mapEdges}
+        saturation={saturation}
+      />
     );
 
   if (analysis) {
@@ -259,7 +318,7 @@ export default async function MapPage({
   }
 
   // No analysis: decomposed argument map only.
-  if (points.length === 0) {
+  if (mapPoints.length === 0) {
     const subCount = await db.execute(
       sql`SELECT count(*)::int AS n FROM submissions WHERE consultation_id = ${consultation.id}`,
     );
@@ -278,7 +337,7 @@ export default async function MapPage({
     <main className="page">
       <h1>{consultation.title}</h1>
       <div className="stat-strip">
-        <span><strong>{points.length}</strong> {t("points")}</span>
+        <span><strong>{mapPoints.length}</strong> {t("points")}</span>
       </div>
       {voteCta}
       {zonesBlock}

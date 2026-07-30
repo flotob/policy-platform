@@ -38,6 +38,35 @@ export async function reviewPoint(formData: FormData) {
   revalidatePath("/[locale]/consultations/[id]/review", "page");
 }
 
+const findingInput = z.object({
+  pointId: z.uuid(),
+  finding: z.string().trim().max(2000),
+});
+
+/** Save the editorial finding (Befund) shown on the map's detail panel. */
+export async function saveFinding(formData: FormData) {
+  const { pointId, finding } = findingInput.parse({
+    pointId: formData.get("pointId"),
+    finding: formData.get("finding") ?? "",
+  });
+  const db = getDb();
+  const [point] = await db
+    .update(points)
+    .set({ finding: finding || null })
+    .where(eq(points.id, pointId))
+    .returning();
+  if (!point) throw new Error("point not found");
+  await db.insert(auditLog).values({
+    tenantId: point.tenantId,
+    actor: "editor:local",
+    action: "point.finding",
+    subjectKind: "point",
+    subjectId: point.id,
+    payload: { finding: finding || null },
+  });
+  revalidatePath("/[locale]/consultations/[id]/review", "page");
+}
+
 const bulkInput = z.object({ consultationId: z.uuid() });
 
 export async function releaseAllDraftPoints(formData: FormData) {
