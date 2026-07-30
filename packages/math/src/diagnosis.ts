@@ -41,6 +41,18 @@ export interface DiagnosisThresholds {
   groupAgree: number;
   /** Smoothed within-group disagree probability ≥ this ⇒ the group disagrees. */
   groupDisagree: number;
+  /**
+   * Divergence floor: a statement is also divisive when one group agrees
+   * (≥ groupAgree, significant) while another sits at ≤ this agree
+   * probability — capturing camps that withhold agreement without
+   * explicitly disagreeing (common in importance-scale data).
+   */
+  divergenceLow: number;
+  /**
+   * The low group must actually engage (non-pass share ≥ this) for
+   * divergence to count — mass abstention stays "open", not "divisive".
+   */
+  minEngagement: number;
   /** Confidence for significance tests (matches the stats layer). */
   confidence: number;
 }
@@ -48,6 +60,8 @@ export interface DiagnosisThresholds {
 export const DEFAULT_THRESHOLDS: DiagnosisThresholds = {
   groupAgree: 0.6,
   groupDisagree: 0.6,
+  divergenceLow: 0.4,
+  minEngagement: 1 / 3,
   confidence: 0.9,
 };
 
@@ -97,6 +111,15 @@ export function classifyStatement(
   );
   if (agrees.every(Boolean)) return "bridged";
   if (agrees.some(Boolean) && disagrees.some(Boolean)) return "divisive";
+  // Divergence: one camp embraces, another withholds — but only when the
+  // withholding camp actually engaged (mass abstention is not a conflict).
+  const withholds = stats.map(
+    (s) =>
+      s.pa <= thresholds.divergenceLow &&
+      s.ns > 0 &&
+      (s.na + s.nd) / s.ns >= thresholds.minEngagement,
+  );
+  if (agrees.some(Boolean) && withholds.some(Boolean)) return "divisive";
   return "open";
 }
 
