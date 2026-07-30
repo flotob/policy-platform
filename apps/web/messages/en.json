@@ -14,6 +14,29 @@
     "created": "Tenant \"{name}\" created."
   },
   "Nav": {
-    "tenants": "Tenants"
+    "tenants": "Tenants",
+    "consultations": "Consultations"
+  },
+  "Map": {
+    "consultations": "Consultations",
+    "participants": "participants",
+    "votes": "votes",
+    "camps": "camps",
+    "points": "points",
+    "bridges": "Bridges — shared ground across camps",
+    "conflicts": "Conflict lines — the camps divide here",
+    "open": "Open — no clear signal yet",
+    "factZone": "Zone of the experts — resolvable by evidence",
+    "valueZone": "Zone of the council — politically decided",
+    "designZone": "Design proposals",
+    "agreeByCamp": "agreement by camp",
+    "sources": "sources",
+    "noAnalysis": "No analysis yet — points extracted from submissions, votes pending.",
+    "diagnosis": "Overall diagnosis",
+    "diagnosis_value_conflict": "Value conflict — the fact base is settled or quiet; the split is normative. Further studies won't move it; the decision belongs to the political body.",
+    "diagnosis_pseudo_fact_fight": "Pseudo fact fight — values are shared; a factual question divides. Resolvable for the price of an expert report.",
+    "diagnosis_mixed": "Mixed — both factual and value questions divide the camps.",
+    "campLegend": "The camps",
+    "campMembers": "members"
   }
 }

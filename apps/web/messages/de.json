@@ -14,6 +14,29 @@
     "created": "Mandant „{name}“ angelegt."
   },
   "Nav": {
-    "tenants": "Mandanten"
+    "tenants": "Mandanten",
+    "consultations": "Konsultationen"
+  },
+  "Map": {
+    "consultations": "Konsultationen",
+    "participants": "Teilnehmende",
+    "votes": "Voten",
+    "camps": "Lager",
+    "points": "Punkte",
+    "bridges": "Brücken — gemeinsamer Boden über Lager hinweg",
+    "conflicts": "Konfliktlinien — hier trennen sich die Lager",
+    "open": "Offen — noch kein klares Signal",
+    "factZone": "Zone der Gutachter — durch Evidenz klärbar",
+    "valueZone": "Zone des Rates — politisch zu entscheiden",
+    "designZone": "Ausgestaltungsvorschläge",
+    "agreeByCamp": "Zustimmung je Lager",
+    "sources": "Quellen",
+    "noAnalysis": "Noch keine Analyse — Punkte aus Stellungnahmen extrahiert, Abstimmung ausstehend.",
+    "diagnosis": "Gesamtdiagnose",
+    "diagnosis_value_conflict": "Wertkonflikt — die Faktenbasis ist geklärt oder ruhig; der Streit ist normativ. Weitere Gutachten helfen nicht; die Entscheidung gehört in das politische Gremium.",
+    "diagnosis_pseudo_fact_fight": "Scheinfaktenstreit — die Werte werden geteilt; eine Tatsachenfrage trennt. Auflösbar zum Preis eines Gutachtens.",
+    "diagnosis_mixed": "Gemischt — sowohl Tatsachen- als auch Wertfragen trennen die Lager.",
+    "campLegend": "Die Lager",
+    "campMembers": "Mitglieder"
   }
 }
