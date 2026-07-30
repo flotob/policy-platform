@@ -518,3 +518,89 @@ code {
 .vote-mark--1 { color: var(--teal); }
 .vote-mark---1 { color: var(--coral); }
 .vote-mark--0 { color: var(--muted); }
+
+/* ——— report ——— */
+
+.report {
+  max-width: 52rem;
+}
+
+.report__eyebrow {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.report__meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.3rem;
+}
+
+.report__section {
+  margin: 2rem 0;
+  break-inside: avoid;
+}
+
+.report__camps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.report__camps li {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.report__list {
+  padding-left: 1.4rem;
+  margin: 0.6rem 0;
+}
+
+.report__list li {
+  margin: 0.55rem 0;
+  break-inside: avoid;
+}
+
+.report__figures {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.report__zone {
+  border-left: 3px solid var(--line);
+  padding-left: 1rem;
+  margin: 1.2rem 0;
+}
+
+.report__zone.map-section--fact { border-color: var(--blue); }
+.report__zone.map-section--value { border-color: var(--amber); }
+.report__zone.map-section--design { border-color: var(--teal); }
+
+.report__footnote {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+@media print {
+  .site-header,
+  nav,
+  .button {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .page {
+    padding: 0;
+  }
+}

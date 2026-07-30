@@ -85,13 +85,23 @@ export default async function MapPage({
     WHERE p.consultation_id = ${consultation.id} AND st.status = 'released'
   `);
   const votable = (votableRes.rows[0] as { n: number }).n > 0;
-  const voteCta = votable ? (
-    <p>
-      <Link className="button" href={`/${locale}/consultations/${consultation.id}/vote`}>
-        {t("voteCta")}
+  const tReport = await getTranslations("Report");
+  const voteCta = (
+    <p style={{ display: "flex", gap: "0.6rem" }}>
+      {votable && (
+        <Link className="button" href={`/${locale}/consultations/${consultation.id}/vote`}>
+          {t("voteCta")}
+        </Link>
+      )}
+      <Link
+        className="button"
+        style={{ background: "transparent", color: "var(--ink)", border: "1px solid var(--line)" }}
+        href={`/${locale}/consultations/${consultation.id}/report`}
+      >
+        {tReport("reportCta")}
       </Link>
     </p>
-  ) : null;
+  );
 
   if (analysis) {
     const labels = displayLabels(analysis.statements);
