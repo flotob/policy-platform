@@ -37,6 +37,18 @@
     "diagnosis_pseudo_fact_fight": "Scheinfaktenstreit — die Werte werden geteilt; eine Tatsachenfrage trennt. Auflösbar zum Preis eines Gutachtens.",
     "diagnosis_mixed": "Gemischt — sowohl Tatsachen- als auch Wertfragen trennen die Lager.",
     "campLegend": "Die Lager",
-    "campMembers": "Mitglieder"
+    "campMembers": "Mitglieder",
+    "voteCta": "Über die Statements abstimmen"
+  },
+  "Vote": {
+    "title": "Abstimmen",
+    "intro": "Ein Statement nach dem anderen. Zustimmen, ablehnen oder überspringen — Ihre Voten verorten Sie auf der Landkarte.",
+    "progress": "{done} von {total} Statements beantwortet",
+    "agree": "Zustimmen",
+    "disagree": "Ablehnen",
+    "pass": "Überspringen",
+    "done": "Das war alles — danke. Ihre Voten fließen in die nächste Analyse ein.",
+    "backToMap": "Zurück zur Landkarte",
+    "yourVotes": "Ihre Voten"
   }
 }

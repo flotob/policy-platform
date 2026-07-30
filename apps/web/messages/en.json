@@ -37,6 +37,18 @@
     "diagnosis_pseudo_fact_fight": "Pseudo fact fight — values are shared; a factual question divides. Resolvable for the price of an expert report.",
     "diagnosis_mixed": "Mixed — both factual and value questions divide the camps.",
     "campLegend": "The camps",
-    "campMembers": "members"
+    "campMembers": "members",
+    "voteCta": "Vote on the statements"
+  },
+  "Vote": {
+    "title": "Vote",
+    "intro": "One statement at a time. Agree, disagree, or pass — your votes place you on the map.",
+    "progress": "{done} of {total} statements answered",
+    "agree": "Agree",
+    "disagree": "Disagree",
+    "pass": "Pass",
+    "done": "That was all — thank you. Your votes flow into the next analysis.",
+    "backToMap": "Back to the map",
+    "yourVotes": "Your votes"
   }
 }

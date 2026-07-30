@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { sql } from "@policy/db";
@@ -78,6 +79,20 @@ export default async function MapPage({
   `);
   const analysis = (runRes.rows[0]?.result ?? null) as Analysis | null;
 
+  const votableRes = await db.execute(sql`
+    SELECT count(*)::int AS n FROM statements st
+    JOIN points p ON p.id = st.point_id
+    WHERE p.consultation_id = ${consultation.id} AND st.status = 'released'
+  `);
+  const votable = (votableRes.rows[0] as { n: number }).n > 0;
+  const voteCta = votable ? (
+    <p>
+      <Link className="button" href={`/${locale}/consultations/${consultation.id}/vote`}>
+        {t("voteCta")}
+      </Link>
+    </p>
+  ) : null;
+
   if (analysis) {
     const labels = displayLabels(analysis.statements);
     const bridged = analysis.statements.filter((s) => s.profile === "bridged");
@@ -133,6 +148,7 @@ export default async function MapPage({
           <span><strong>{analysis.clustering.k}</strong> {t("camps")}</span>
           <span>Silhouette <strong>{analysis.clustering.silhouette.toFixed(2)}</strong></span>
         </div>
+        {voteCta}
 
         <div className="grouplegend">
           <strong>{t("campLegend")}:</strong>
@@ -215,6 +231,7 @@ export default async function MapPage({
       <div className="stat-strip">
         <span><strong>{points.length}</strong> {t("points")}</span>
       </div>
+      {voteCta}
       {sections.map(([key, mod, list]) =>
         list.length === 0 ? null : (
           <section key={key} className={`map-section map-section--${mod}`}>

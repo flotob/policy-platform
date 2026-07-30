@@ -46,10 +46,16 @@ async function main() {
     `SELECT id, author_type, country FROM participants WHERE consultation_id = $1 ORDER BY created_at`,
     [consultationId],
   );
+  // One matrix column per point: multilingual statements share votes via the
+  // canonical row (lowest locale) — same rule as the vote page.
   const statementsRes = await client.query(
-    `SELECT st.id, st.text, p.id AS point_id, p.kind, p.label
-     FROM statements st JOIN points p ON p.id = st.point_id
-     WHERE p.consultation_id = $1 AND st.status = 'released' ORDER BY st.created_at`,
+    `SELECT * FROM (
+       SELECT DISTINCT ON (p.id) st.id, st.text, st.created_at,
+         p.id AS point_id, p.kind, p.label
+       FROM statements st JOIN points p ON p.id = st.point_id
+       WHERE p.consultation_id = $1 AND st.status = 'released'
+       ORDER BY p.id, st.locale
+     ) canonical ORDER BY created_at, id`,
     [consultationId],
   );
   const votesRes = await client.query(
@@ -62,12 +68,14 @@ async function main() {
   // uuid → dense numeric ids for the math package.
   const pIndex = new Map<string, number>(participants.rows.map((r, i) => [r.id, i]));
   const sIndex = new Map<string, number>(statementsRes.rows.map((r, i) => [r.id, i]));
-  const votes: VoteRecord[] = votesRes.rows.map((v) => ({
-    participantId: pIndex.get(v.participant_id)!,
-    statementId: sIndex.get(v.statement_id)!,
-    vote: v.value,
-    modified: 1,
-  }));
+  const votes: VoteRecord[] = votesRes.rows
+    .filter((v) => sIndex.has(v.statement_id))
+    .map((v) => ({
+      participantId: pIndex.get(v.participant_id)!,
+      statementId: sIndex.get(v.statement_id)!,
+      vote: v.value,
+      modified: 1,
+    }));
 
   const matrix = buildRawMatrix(votes);
   console.log(`${title}: ${matrix.participantIds.length} participants × ${matrix.statementIds.length} statements, ${votes.length} votes`);
