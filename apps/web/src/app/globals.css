@@ -1,0 +1,275 @@
+/* policy — app foundation
+ *
+ * Design language inherited from the concept demo (docs/landkarte1.html):
+ * paper ground, ink text, Georgia serif for content, and the semantic zone
+ * palette. The zone colors are MEANING, not decoration: blue = resolvable by
+ * evidence (Gutachterzone), amber = politically decided (Ratszone),
+ * teal = bridge/consensus, coral = value difference. Never use them for
+ * anything else.
+ */
+
+:root {
+  --paper: #fbfaf6;
+  --card: #ffffff;
+  --ink: #1c1e24;
+  --muted: #6b6e76;
+  --line: #e3e1d8;
+
+  --teal: #0f6e56;
+  --teal-bg: #e7f3ee;
+  --coral: #993c1d;
+  --coral-bg: #f9ede7;
+  --amber: #9a6a14;
+  --amber-bg: #fbf3e0;
+  --blue: #1e4a7a;
+  --blue-bg: #edf2f8;
+  --gray-bg: #f1efe8;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas,
+    monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0 0 0.5rem;
+}
+
+h1 {
+  font-size: 2rem;
+  letter-spacing: -0.01em;
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+a {
+  color: var(--blue);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+/* ——— shell ——— */
+
+.site-header {
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.site-header__inner {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.wordmark::after {
+  /* the map dot — the one small signature of the shell */
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.28em;
+  border-radius: 50%;
+  background: var(--teal);
+  vertical-align: baseline;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  font-size: 0.9rem;
+}
+
+.locale-switch {
+  display: inline-flex;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+}
+
+.locale-switch a {
+  color: var(--muted);
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.locale-switch a[aria-current="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.page {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.lede {
+  color: var(--muted);
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  margin-top: -0.25rem;
+}
+
+/* ——— zones (semantic, from the Landkarte) ——— */
+
+.zone {
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-serif);
+}
+
+.zone--evidence {
+  background: var(--blue-bg);
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.zone--council {
+  background: var(--amber-bg);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.placeholder-note {
+  color: var(--muted);
+  font-style: italic;
+  font-family: var(--font-serif);
+}
+
+/* ——— forms ——— */
+
+.form {
+  display: grid;
+  gap: 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field input {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+}
+
+.field input:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 0;
+  border-color: var(--blue);
+}
+
+.button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--paper);
+  background: var(--ink);
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.2rem;
+  cursor: pointer;
+  justify-self: start;
+}
+
+.button:hover {
+  background: #33363f;
+}
+
+/* ——— lists ——— */
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+
+.record-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 0.2rem;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

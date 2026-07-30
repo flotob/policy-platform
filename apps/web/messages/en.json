@@ -12,5 +12,8 @@
     "slugLabel": "Slug (URL identifier)",
     "submit": "Create tenant",
     "created": "Tenant \"{name}\" created."
+  },
+  "Nav": {
+    "tenants": "Tenants"
   }
 }

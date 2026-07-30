@@ -21,33 +21,25 @@ export default async function TenantsPage({
     .limit(20);
 
   return (
-    <main style={{ maxWidth: "32rem", margin: "0 auto" }}>
+    <main className="page">
       <h1>{t("heading")}</h1>
-      <form
-        action={createTenant}
-        style={{ display: "grid", gap: "0.75rem", marginBottom: "2rem" }}
-      >
-        <label>
-          {t("nameLabel")}
-          <br />
-          <input name="name" required minLength={2} style={{ width: "100%" }} />
+      <form action={createTenant} className="form">
+        <label className="field">
+          <span className="field__label">{t("nameLabel")}</span>
+          <input name="name" required minLength={2} />
         </label>
-        <label>
-          {t("slugLabel")}
-          <br />
-          <input
-            name="slug"
-            required
-            pattern="[a-z0-9][a-z0-9-]+[a-z0-9]"
-            style={{ width: "100%" }}
-          />
+        <label className="field">
+          <span className="field__label">{t("slugLabel")}</span>
+          <input name="slug" required pattern="[a-z0-9][a-z0-9-]+[a-z0-9]" />
         </label>
-        <button type="submit">{t("submit")}</button>
+        <button type="submit" className="button">
+          {t("submit")}
+        </button>
       </form>
-      <ul>
+      <ul className="record-list">
         {existing.map((tenant) => (
           <li key={tenant.id}>
-            <strong>{tenant.name}</strong> <code>({tenant.slug})</code>
+            <strong>{tenant.name}</strong> <code>{tenant.slug}</code>
           </li>
         ))}
       </ul>

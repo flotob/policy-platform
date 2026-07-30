@@ -12,5 +12,8 @@
     "slugLabel": "Slug (URL-Kennung)",
     "submit": "Mandanten anlegen",
     "created": "Mandant „{name}“ angelegt."
+  },
+  "Nav": {
+    "tenants": "Mandanten"
   }
 }
