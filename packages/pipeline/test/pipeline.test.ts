@@ -11,6 +11,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { runForSubmission } from "../src/pipeline.ts";
+import { generateStatementsForPoint } from "../src/statements.ts";
 
 const url = process.env.DATABASE_URL;
 
@@ -143,6 +144,42 @@ describe.skipIf(!url)("decomposition pipeline (db-backed)", () => {
       [sub2],
     );
     expect(shared.rows[0].n).toBe(2);
+  });
+
+  it("statement generation: released point gets de+en drafts", async () => {
+    const point = await raw.query(
+      `UPDATE points SET status = 'released'
+       WHERE consultation_id = $1 AND kind = 'fact' AND status = 'draft'
+       RETURNING id`,
+      [consultationId],
+    );
+    const pointId = point.rows[0].id;
+
+    const provider = new FakeProvider();
+    provider.enqueue({
+      de: "Die Verteilnetze können den zusätzlichen Strom aufnehmen.",
+      en: "The distribution grids can absorb the additional electricity.",
+    });
+
+    const result = await generateStatementsForPoint(db, provider, pointId);
+    expect(result.locales).toEqual(["de", "en"]);
+
+    const rows = await raw.query(
+      "SELECT locale, text, status FROM statements WHERE point_id = $1 ORDER BY locale",
+      [pointId],
+    );
+    expect(rows.rows).toHaveLength(2);
+    expect(rows.rows[0]).toMatchObject({ locale: "de", status: "draft" });
+    expect(rows.rows[1]).toMatchObject({ locale: "en", status: "draft" });
+
+    // draft points are refused — statements only for released points
+    const draft = await raw.query(
+      `SELECT id FROM points WHERE consultation_id = $1 AND status = 'draft' LIMIT 1`,
+      [consultationId],
+    );
+    await expect(
+      generateStatementsForPoint(db, provider, draft.rows[0].id),
+    ).rejects.toThrow(/not released/);
   });
 
   it("audit log records the decomposition runs", async () => {

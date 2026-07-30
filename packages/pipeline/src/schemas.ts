@@ -34,9 +34,19 @@ export const matchOutput = z
   })
   .strict();
 
+export const statementOutput = z
+  .object({
+    /** Votable statement in German — one declarative sentence. */
+    de: z.string().min(10).max(400),
+    /** Votable statement in English — one declarative sentence. */
+    en: z.string().min(10).max(400),
+  })
+  .strict();
+
 export type CandidatePoint = z.infer<typeof candidatePoint>;
 export type DecompositionOutput = z.infer<typeof decompositionOutput>;
 export type MatchOutput = z.infer<typeof matchOutput>;
+export type StatementOutput = z.infer<typeof statementOutput>;
 
 function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
   // Strip the $schema meta-ref: the Claude Code CLI's validator rejects
@@ -49,3 +59,4 @@ function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
 
 export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
+export const statementJsonSchema = toProviderSchema(statementOutput);

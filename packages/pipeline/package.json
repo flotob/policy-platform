@@ -10,7 +10,8 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "decompose": "tsx scripts/decompose.ts"
+    "decompose": "tsx scripts/decompose.ts",
+    "statements": "tsx scripts/generate-statements.ts"
   },
   "dependencies": {
     "@policy/db": "workspace:*",
@@ -18,6 +19,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "pg": "^8.13.0",
     "tsx": "^4.19.0",
     "vitest": "^3.0.0"

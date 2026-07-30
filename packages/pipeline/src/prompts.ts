@@ -40,6 +40,33 @@ export function decomposePrompt(text: string, maxChars = 24_000): {
   };
 }
 
+export const STATEMENT_SYSTEM = `You turn a point from a public argument map into a votable statement for a Polis-style vote (agree / disagree / pass).
+
+Rules:
+1. ONE declarative sentence stating the claim directly — as if a participant said it. No "the submitter argues", no meta framing.
+2. Neutral register: keep the substantive claim, strip rhetoric, hedging, and qualifiers that make agreement ambiguous.
+3. Votable: a reader must be able to clearly agree or disagree. No double claims (split points were already handled upstream), no questions, no "and/or" chains.
+4. Preserve the point's polarity exactly — do not soften a rejection into a concern or sharpen a concern into a rejection.
+5. Produce a German version (de) and an English version (en) that say the same thing. Translate faithfully; do not localize examples away.`;
+
+export function statementPrompt(point: {
+  label: string;
+  summary: string | null;
+  kind: string;
+  quotes: string[];
+}): string {
+  const quotes = point.quotes
+    .slice(0, 3)
+    .map((q) => `- „${q}"`)
+    .join("\n");
+  return (
+    `Point (kind: ${point.kind}):\n${point.label}\n` +
+    `${point.summary ? `\nSummary: ${point.summary}\n` : ""}` +
+    `${quotes ? `\nSupporting quotes from submissions:\n${quotes}\n` : ""}` +
+    `\nWrite the votable statement in German (de) and English (en).`
+  );
+}
+
 export const MATCH_SYSTEM = `You decide whether a candidate point from a consultation submission is the SAME point as one already on the argument map, or a genuinely new point.
 
 The same point = the same claim content, even in different words, tone, or detail level. A different aspect, a narrower/broader claim with different implications, or a different mechanism = a new point.
