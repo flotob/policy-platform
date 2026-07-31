@@ -752,6 +752,7 @@ code {
 
 .argmap__slot {
   font: inherit;
+  color: var(--ink);
   font-size: 0.8rem;
   text-align: left;
   background: var(--card);
@@ -843,6 +844,7 @@ code {
 
 .mapnode {
   font: inherit;
+  color: var(--ink);
   font-size: 0.78rem;
   line-height: 1.25;
   max-width: 230px;
@@ -1151,6 +1153,7 @@ code {
 
 .argmap__search {
   font: inherit;
+  color: var(--ink);
   font-size: 0.85rem;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -1206,6 +1209,7 @@ code {
    Manual override via data-theme; system preference as default. */
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --paper: #16171b;
   --card: #1e2025;
   --ink: #e9e7e0;
@@ -1227,6 +1231,7 @@ code {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --paper: #16171b;
     --card: #1e2025;
     --ink: #e9e7e0;
