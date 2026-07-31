@@ -15,7 +15,12 @@ WORKDIR /app
 COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/packages/db/migrations ./migrations
-COPY --from=builder /app/packages/db/scripts/migrate.ts ./migrate.ts
+# The migrator gets its own vendored pg — independent of Next's dependency
+# tracing (ESM resolution is file-location based, so the script sits beside
+# its node_modules).
+RUN cd /app && mkdir migrate-deps && cd migrate-deps \
+  && npm init -y >/dev/null && npm install --no-audit --no-fund pg@8 >/dev/null
+COPY --from=builder /app/packages/db/scripts/migrate.ts ./migrate-deps/migrate.ts
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0 MIGRATIONS_DIR=/app/migrations
-CMD ["sh", "-c", "node --experimental-strip-types /app/migrate.ts && exec node apps/web/server.js"]
+CMD ["sh", "-c", "node --experimental-strip-types /app/migrate-deps/migrate.ts && exec node apps/web/server.js"]
