@@ -24,9 +24,15 @@ export default function middleware(request: NextRequest) {
       ok = decoded.slice(decoded.indexOf(":") + 1) === password;
     }
     if (!ok) {
+      // Only challenge real navigations: a WWW-Authenticate on prefetch
+      // responses makes browsers pop the credential dialog on pages that
+      // merely LINK here.
+      const isDocument = request.headers.get("sec-fetch-dest") === "document";
       return new NextResponse("Authentication required", {
         status: 401,
-        headers: { "WWW-Authenticate": 'Basic realm="policy editorial"' },
+        headers: isDocument
+          ? { "WWW-Authenticate": 'Basic realm="policy editorial"' }
+          : undefined,
       });
     }
   }

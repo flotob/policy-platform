@@ -109,6 +109,7 @@ export default async function MapPage({
       </Link>
       <Link
         className="button"
+        prefetch={false}
         style={{ background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
         href={`/${locale}/consultations/${consultation.id}/review`}
       >
