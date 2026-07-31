@@ -37,6 +37,8 @@ export default async function LocaleLayout({
               </Link>
               <nav className="site-nav">
                 <Link href="/consultations">{t("consultations")}</Link>
+                <Link href="/how-it-works">{t("howItWorks")}</Link>
+                <Link href="/methods">{t("methods")}</Link>
                 <Link href="/tenants">{t("tenants")}</Link>
                 <LocaleSwitcher />
               </nav>

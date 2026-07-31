@@ -987,3 +987,88 @@ code {
   cursor: pointer;
   text-align: left;
 }
+
+/* ——— explainer & methods ——— */
+
+.explainer {
+  max-width: 48rem;
+}
+
+.explainer__lead {
+  font-size: 1.05rem;
+  color: #3a3d45;
+  font-family: var(--font-serif);
+  line-height: 1.6;
+}
+
+.explainer__section {
+  margin: 2.2rem 0;
+}
+
+.explainer__section h2 {
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 0.35rem;
+}
+
+.explainer__section li {
+  margin: 0.5rem 0;
+}
+
+.methods__grid {
+  display: flex;
+  flex-direction: column;
+}
+
+.methods__row {
+  border-bottom: 1px solid var(--line);
+  padding: 0.7rem 0;
+}
+
+.methods__row p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.methods__name {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.methods__value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--teal);
+  white-space: nowrap;
+}
+
+.methods__prompt {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0.6rem 0;
+  background: var(--card);
+}
+
+.methods__prompt summary {
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.methods__prompt pre {
+  margin: 0;
+  padding: 0.9rem;
+  border-top: 1px solid var(--line);
+  background: var(--gray-bg);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}

@@ -26,6 +26,12 @@ importers:
       '@policy/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@policy/math':
+        specifier: workspace:*
+        version: link:../../packages/math
+      '@policy/pipeline':
+        specifier: workspace:*
+        version: link:../../packages/pipeline
       next:
         specifier: ^15.3.0
         version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

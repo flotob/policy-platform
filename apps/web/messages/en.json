@@ -15,7 +15,9 @@
   },
   "Nav": {
     "tenants": "Tenants",
-    "consultations": "Consultations"
+    "consultations": "Consultations",
+    "howItWorks": "How it works",
+    "methods": "Methods"
   },
   "Map": {
     "consultations": "Consultations",

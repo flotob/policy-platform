@@ -15,7 +15,9 @@
   },
   "Nav": {
     "tenants": "Mandanten",
-    "consultations": "Konsultationen"
+    "consultations": "Konsultationen",
+    "howItWorks": "So funktioniert’s",
+    "methods": "Methodik"
   },
   "Map": {
     "consultations": "Konsultationen",

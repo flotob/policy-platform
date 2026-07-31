@@ -12,6 +12,8 @@
   "dependencies": {
     "@policy/contracts": "workspace:*",
     "@policy/db": "workspace:*",
+    "@policy/math": "workspace:*",
+    "@policy/pipeline": "workspace:*",
     "next": "^15.3.0",
     "next-intl": "^4.1.0",
     "react": "^19.0.0",
