@@ -22,3 +22,4 @@ blobs/
 
 # OS / editor
 .DS_Store
+.deploy-secrets.local
