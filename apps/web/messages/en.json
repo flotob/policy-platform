@@ -41,7 +41,11 @@
     "campLegend": "The camps",
     "campMembers": "members",
     "voteCta": "Vote on the statements",
-    "reviewCta": "Editorial review"
+    "reviewCta": "Editorial review",
+    "tabMap": "Map",
+    "tabMapExplainer": "Every box is a point from the submissions — sorted into zones (resolvable by evidence vs. politically decided) and by the premise of the core argument it negotiates. Click a point for its camp profile, statement, and original quotes.",
+    "tabAnalysis": "Camps & conflict lines",
+    "tabAnalysisExplainer": "Participants who vote alike form camps. Bridges hold across all camps; conflict lines show where exactly they divide — sorted by the depth of the divide."
   },
   "MapView": {
     "mapMode": "Map",
@@ -87,7 +91,10 @@
     "votes": "votes",
     "agree": "agree",
     "disagree": "disagree",
-    "pass": "pass"
+    "pass": "pass",
+    "searchPlaceholder": "Search points …",
+    "showMore": "more",
+    "themeOther": "Other"
   },
   "Report": {
     "title": "Report",
@@ -126,6 +133,19 @@
     "pass": "Pass",
     "done": "That was all — thank you. Your votes flow into the next analysis.",
     "backToMap": "Back to the map",
-    "yourVotes": "Your votes"
+    "yourVotes": "Your votes",
+    "stopAnytime": "Stop anytime — every vote counts, and the order is shuffled differently for everyone."
+  },
+  "Home": {
+    "eyebrow": "An open-source tool for real participation",
+    "title": "The map of the dispute",
+    "lead": "policy turns thousands of free-text submissions into a readable picture: who claims what, where the camps agree, where exactly they divide — and which disputes evidence could settle versus what must be decided politically.",
+    "ctaConsultations": "Browse consultations",
+    "ctaHow": "How it works",
+    "zoneExpertsTitle": "Zone of the experts",
+    "zoneExpertsText": "Factual questions that evidence can settle — for the price of an expert report.",
+    "zoneCouncilTitle": "Zone of the council",
+    "zoneCouncilText": "Value questions no study can decide — politics must decide and own these.",
+    "liveHeading": "Live consultations"
   }
 }

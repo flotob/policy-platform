@@ -87,6 +87,54 @@ export const stanceOutput = z
   })
   .strict();
 
+/** Human-readable camp naming from composition + representative statements. */
+export const campNamesOutput = z
+  .object({
+    camps: z
+      .array(
+        z.object({
+          group: z.number().int().nonnegative(),
+          name: z.string().min(3).max(60),
+          summary: z.string().min(10).max(240),
+        }).strict(),
+      )
+      .max(8),
+  })
+  .strict();
+
+/** Short display labels for overlong point labels (same language). */
+export const shortLabelsOutput = z
+  .object({
+    labels: z
+      .array(
+        z.object({
+          index: z.number().int().nonnegative(),
+          short: z.string().min(5).max(90),
+        }).strict(),
+      )
+      .max(40),
+  })
+  .strict();
+
+/** Theme proposal + assignment (the map's zoom level). */
+export const themesOutput = z
+  .object({ themes: z.array(z.string().min(3).max(60)).min(3).max(15) })
+  .strict();
+
+export const themeAssignOutput = z
+  .object({
+    assignments: z
+      .array(
+        z.object({
+          index: z.number().int().nonnegative(),
+          /** Index into the theme list; -1 = none fits. */
+          theme: z.number().int().gte(-1),
+        }).strict(),
+      )
+      .max(50),
+  })
+  .strict();
+
 export const statementOutput = z
   .object({
     /** Votable statement in German — one declarative sentence. */
@@ -116,3 +164,7 @@ export const statementJsonSchema = toProviderSchema(statementOutput);
 export const relationsJsonSchema = toProviderSchema(relationsOutput);
 export const aiReviewJsonSchema = toProviderSchema(aiReviewOutput);
 export const stanceJsonSchema = toProviderSchema(stanceOutput);
+export const campNamesJsonSchema = toProviderSchema(campNamesOutput);
+export const shortLabelsJsonSchema = toProviderSchema(shortLabelsOutput);
+export const themesJsonSchema = toProviderSchema(themesOutput);
+export const themeAssignJsonSchema = toProviderSchema(themeAssignOutput);

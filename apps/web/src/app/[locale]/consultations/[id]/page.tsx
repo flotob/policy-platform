@@ -6,10 +6,12 @@ import { sql } from "@policy/db";
 import { getDb } from "@/lib/db";
 import {
   ArgumentMap,
+  type CampNames,
   type MapEdgeData,
   type MapPoint,
   type SaturationData,
 } from "./argument-map";
+import { ConsultationTabs } from "./consultation-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,7 @@ interface Analysis {
   statements: AnalysisStatement[];
   diagnosisOverall: string | null;
   conclusions?: Record<string, "bridge_of_reasons" | "bridge_of_results" | "contested" | "open">;
+  campNames?: CampNames;
   participantGroups: { group: number; authorType: string | null }[];
 }
 
@@ -121,7 +124,7 @@ export default async function MapPage({
   // Decomposed argument points (excluding questionnaire pseudo-points, which
   // are the analyzed statements themselves) with their canonical statement.
   const pointsRes = await db.execute(sql`
-    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.finding, p.status,
+    SELECT p.id, p.kind, p.slot, p.label, p.summary, p.finding, p.status, p.theme,
       (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
        FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
        WHERE ps.point_id = p.id) AS sources,
@@ -142,7 +145,7 @@ export default async function MapPage({
   `);
   const rawPoints = pointsRes.rows as {
     id: string; kind: MapPoint["kind"]; slot: MapPoint["slot"]; label: string;
-    summary: string | null; finding: string | null; status: string;
+    summary: string | null; finding: string | null; status: string; theme: string | null;
     sources: { quote: string | null; org: string | null }[] | null;
     statement_id: string | null; statement_text: string | null;
   }[];
@@ -187,6 +190,7 @@ export default async function MapPage({
       finding: p.finding,
       status: p.status,
       statement: p.statement_text,
+      theme: p.theme,
       sources: p.sources ?? [],
       profile: prof?.profile,
       perGroup: prof?.perGroup,
@@ -224,8 +228,11 @@ export default async function MapPage({
         points={mapPoints}
         edges={mapEdges}
         saturation={saturation}
+        campNames={analysis?.campNames}
       />
     );
+  const campName = (g: string | number) =>
+    analysis?.campNames?.[String(g)]?.name ?? `G${g}`;
 
   if (analysis) {
     const labels = displayLabels(analysis.statements);
@@ -266,27 +273,19 @@ export default async function MapPage({
             <p>
               {t("agreeByCamp")}:{" "}
               {s.perGroup
-                .map((g) => `G${g.group} ${Math.round(g.pa * 100)}% (n=${g.ns})`)
+                .map((g) => `${campName(g.group)} ${Math.round(g.pa * 100)}% (n=${g.ns})`)
                 .join(" · ")}
             </p>
           </div>
         </details>
       ));
 
-    return (
-      <main className="page">
-        <h1>{consultation.title}</h1>
-        <div className="stat-strip">
-          <span><strong>{analysis.matrix.participants}</strong> {t("participants")}</span>
-          <span><strong>{analysis.matrix.votes}</strong> {t("votes")}</span>
-          <span><strong>{analysis.clustering.k}</strong> {t("camps")}</span>
-          <span>Silhouette <strong>{analysis.clustering.silhouette.toFixed(2)}</strong></span>
-        </div>
-        {voteCta}
-
+    const campsBlock = (
+      <>
         <div className="grouplegend">
           <strong>{t("campLegend")}:</strong>
           {Object.entries(analysis.clustering.groupSizes).map(([g, n]) => {
+            const named = analysis.campNames?.[g];
             const types = [...(campTypes.get(Number(g)) ?? new Map<string, number>())]
               .filter(([type]) => type !== "—" && type !== "?")
               .sort((a, b) => b[1] - a[1])
@@ -295,8 +294,9 @@ export default async function MapPage({
               .join(", ");
             return (
               <span key={g}>
-                <strong>G{g}</strong> — {n} {t("campMembers")}
+                <strong>{named?.name ?? `G${g}`}</strong> — {n} {t("campMembers")}
                 {types ? ` (${types}, …)` : ""}
+                {named?.summary && <em className="grouplegend__summary"> {named.summary}</em>}
               </span>
             );
           })}
@@ -320,7 +320,37 @@ export default async function MapPage({
         <div className="zone zone--council">
           <strong>{t("diagnosis")}:</strong> {t(diagKey)}
         </div>
-        {zonesBlock}
+      </>
+    );
+
+    return (
+      <main className="page">
+        <h1>{consultation.title}</h1>
+        <div className="stat-strip">
+          <span><strong>{analysis.matrix.participants}</strong> {t("participants")}</span>
+          <span><strong>{analysis.matrix.votes}</strong> {t("votes")}</span>
+          <span><strong>{analysis.clustering.k}</strong> {t("camps")}</span>
+          <span>Silhouette <strong>{analysis.clustering.silhouette.toFixed(2)}</strong></span>
+        </div>
+        {voteCta}
+        <ConsultationTabs
+          tabs={[
+            ...(zonesBlock
+              ? [{
+                  key: "map",
+                  label: t("tabMap"),
+                  explainer: t("tabMapExplainer"),
+                  content: zonesBlock,
+                }]
+              : []),
+            {
+              key: "analysis",
+              label: t("tabAnalysis"),
+              explainer: t("tabAnalysisExplainer"),
+              content: campsBlock,
+            },
+          ]}
+        />
       </main>
     );
   }
@@ -348,7 +378,14 @@ export default async function MapPage({
         <span><strong>{mapPoints.length}</strong> {t("points")}</span>
       </div>
       {voteCta}
-      {zonesBlock}
+      <ConsultationTabs
+        tabs={[{
+          key: "map",
+          label: t("tabMap"),
+          explainer: t("tabMapExplainer"),
+          content: zonesBlock,
+        }]}
+      />
       <p className="placeholder-note">{t("noAnalysis")}</p>
     </main>
   );

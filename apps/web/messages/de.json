@@ -41,7 +41,11 @@
     "campLegend": "Die Lager",
     "campMembers": "Mitglieder",
     "voteCta": "Über die Statements abstimmen",
-    "reviewCta": "Redaktion"
+    "reviewCta": "Redaktion",
+    "tabMap": "Landkarte",
+    "tabMapExplainer": "Jeder Kasten ist ein Punkt aus den Stellungnahmen — sortiert nach Zonen (klärbar durch Evidenz vs. politisch zu entscheiden) und nach der Prämisse des Grundarguments, die er verhandelt. Punkt anklicken für Lagerprofil, Statement und Originalzitate.",
+    "tabAnalysis": "Lager & Konfliktlinien",
+    "tabAnalysisExplainer": "Teilnehmende mit ähnlichem Abstimmverhalten bilden Lager. Brücken tragen über alle Lager hinweg; Konfliktlinien zeigen, wo genau sie sich trennen — sortiert nach Tiefe des Grabens."
   },
   "MapView": {
     "mapMode": "Karte",
@@ -87,7 +91,10 @@
     "votes": "Voten",
     "agree": "Zustimmung",
     "disagree": "Ablehnung",
-    "pass": "Enthaltung"
+    "pass": "Enthaltung",
+    "searchPlaceholder": "Punkte durchsuchen …",
+    "showMore": "weitere",
+    "themeOther": "Weitere"
   },
   "Report": {
     "title": "Bericht",
@@ -126,6 +133,19 @@
     "pass": "Überspringen",
     "done": "Das war alles — danke. Ihre Voten fließen in die nächste Analyse ein.",
     "backToMap": "Zurück zur Landkarte",
-    "yourVotes": "Ihre Voten"
+    "yourVotes": "Ihre Voten",
+    "stopAnytime": "Sie können jederzeit aufhören — jedes Votum zählt, die Reihenfolge ist für alle unterschiedlich gemischt."
+  },
+  "Home": {
+    "eyebrow": "Ein Open-Source-Werkzeug für echte Beteiligung",
+    "title": "Die Landkarte des Streits",
+    "lead": "policy verwandelt tausende Freitext-Stellungnahmen in ein lesbares Bild: Wer behauptet was, worüber sind sich die Lager einig, wo genau trennen sie sich — und was davon ließe sich durch Evidenz klären, was muss politisch entschieden werden?",
+    "ctaConsultations": "Konsultationen ansehen",
+    "ctaHow": "So funktioniert’s",
+    "zoneExpertsTitle": "Zone der Gutachter",
+    "zoneExpertsText": "Tatsachenfragen, die sich durch Evidenz klären lassen — zum Preis eines Gutachtens.",
+    "zoneCouncilTitle": "Zone des Rates",
+    "zoneCouncilText": "Wertfragen, die kein Gutachten der Welt entscheidet — hier muss Politik entscheiden und verantworten.",
+    "liveHeading": "Live-Konsultationen"
   }
 }

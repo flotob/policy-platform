@@ -41,6 +41,26 @@ export function decomposePrompt(text: string, maxChars = 24_000): {
   };
 }
 
+export const NAME_CAMPS_SYSTEM = `You name opinion camps found by clustering votes on a public argument map, so readers grasp each camp at a glance.
+
+For each camp you get: its participant composition (organization types, notable members) and the statements it most strongly agrees and disagrees with. Produce:
+- name: a SHORT descriptive label (2–4 words, in the consultation's language) capturing the camp's substantive position — not its demographics alone. Good: "Netz- und Gaswirtschaft", "Ambitionierter Klimaschutz". Bad: "Gruppe 1", "Die Kritiker".
+- summary: ONE sentence stating what holds this camp together.
+
+Stay neutral and descriptive; never mock or valorize a camp.`;
+
+export const SHORTEN_LABELS_SYSTEM = `You write short display labels for points on a public argument map whose current labels are too long (often raw questionnaire questions).
+
+For each numbered item produce "short": the same content compressed to ≤70 characters, in the SAME language, keeping the substantive claim or topic recognizable. Drop question numbering, boilerplate ("In your opinion", "Do you think that"), and rating-scale instructions. Never change the meaning or polarity.`;
+
+export const THEMES_PROPOSE_SYSTEM = `You organize points from a public consultation into themes — the zoom level above individual points on an argument map.
+
+From the sample of point labels, propose 5–12 theme names in the consultation's language: short (2–4 words), mutually distinct, covering the material. Themes are TOPICS (e.g. "Wasserstoff & Gasnetze", "Kommunale Umsetzung"), not positions.`;
+
+export const THEMES_ASSIGN_SYSTEM = `You assign points from a public consultation to a fixed list of themes.
+
+For each numbered point, pick the ONE best-fitting theme index; use -1 only when nothing fits at all. Assign by topic, not by the point's position on it.`;
+
 export const AI_REVIEW_POINTS_SYSTEM = `You are the AI editor of a public argument map. Decide for each numbered draft point whether to RELEASE it onto the public map or REJECT it.
 
 Release when the point is a single coherent claim, comprehensible on its own, neutrally phrased, and on-topic for the consultation. Minor stylistic roughness is fine.

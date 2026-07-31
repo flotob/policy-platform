@@ -5,9 +5,13 @@ import {
   AI_REVIEW_STATEMENTS_SYSTEM,
   DECOMPOSE_SYSTEM,
   MATCH_SYSTEM,
+  NAME_CAMPS_SYSTEM,
   RELATIONS_SYSTEM,
+  SHORTEN_LABELS_SYSTEM,
   STANCE_SYSTEM,
   STATEMENT_SYSTEM,
+  THEMES_ASSIGN_SYSTEM,
+  THEMES_PROPOSE_SYSTEM,
 } from "@policy/pipeline/prompts";
 
 export const dynamic = "force-static";
@@ -26,6 +30,10 @@ const PROMPTS: { key: string; de: string; en: string; text: string }[] = [
   { key: "review-points", de: "KI-Redaktion: Punkte", en: "AI editor: points", text: AI_REVIEW_POINTS_SYSTEM },
   { key: "review-statements", de: "KI-Redaktion: Statements", en: "AI editor: statements", text: AI_REVIEW_STATEMENTS_SYSTEM },
   { key: "stance", de: "Haltungs-Inferenz (Freitext → Voten)", en: "Stance inference (free text → votes)", text: STANCE_SYSTEM },
+  { key: "name-camps", de: "Lager-Benennung", en: "Camp naming", text: NAME_CAMPS_SYSTEM },
+  { key: "shorten", de: "Label-Kürzung", en: "Label shortening", text: SHORTEN_LABELS_SYSTEM },
+  { key: "themes-propose", de: "Themen-Vorschlag (Zoom-Ebene)", en: "Theme proposal (zoom level)", text: THEMES_PROPOSE_SYSTEM },
+  { key: "themes-assign", de: "Themen-Zuordnung", en: "Theme assignment", text: THEMES_ASSIGN_SYSTEM },
 ];
 
 export default async function MethodsPage({

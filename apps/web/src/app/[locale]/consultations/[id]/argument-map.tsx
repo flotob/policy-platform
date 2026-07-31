@@ -20,11 +20,22 @@ export interface MapPoint {
   finding: string | null;
   status: string;
   statement: string | null;
+  theme: string | null;
   sources: { quote: string | null; org: string | null }[];
   profile?: "bridged" | "divisive" | "open";
   perGroup?: { group: number; pa: number; ns: number }[];
   conclusionDiagnosis?: "bridge_of_reasons" | "bridge_of_results" | "contested" | "open";
   tally?: { agree: number; disagree: number; pass: number } | null;
+}
+
+export type CampNames = Record<string, { name: string; summary?: string }>;
+
+/** How many nodes a slot group shows before collapsing behind "+N more". */
+const GROUP_LIMIT = 8;
+
+function pointWeight(p: MapPoint): number {
+  const votes = p.tally ? p.tally.agree + p.tally.disagree + p.tally.pass : 0;
+  return p.sources.length * 2 + votes;
 }
 
 export interface MapEdgeData {
@@ -64,16 +75,31 @@ export function ArgumentMap({
   points,
   edges,
   saturation,
+  campNames,
 }: {
   title: string;
   points: MapPoint[];
   edges: MapEdgeData[];
   saturation: SaturationData | null;
+  campNames?: CampNames;
 }) {
   const t = useTranslations("MapView");
   const tMap = useTranslations("Map");
   const [mode, setMode] = useState<"map" | "list">("map");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const campLabel = (g: number) => campNames?.[String(g)]?.name ?? `G${g}`;
+  const nodeText = (p: MapPoint) => p.statement ?? p.label;
+  const q = query.trim().toLowerCase();
+  const visiblePoints = q
+    ? points.filter(
+        (p) =>
+          p.label.toLowerCase().includes(q) ||
+          (p.statement ?? "").toLowerCase().includes(q) ||
+          (p.summary ?? "").toLowerCase().includes(q),
+      )
+    : points;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [paths, setPaths] = useState<{ d: string; cls: string; key: string }[]>([]);
@@ -208,6 +234,13 @@ export function ArgumentMap({
             </span>
           )}
         </div>
+        <input
+          className="argmap__search"
+          type="search"
+          placeholder={t("searchPlaceholder")}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
         <div className="argmap__modes">
           <button
             className={`argmap__mode ${mode === "map" ? "argmap__mode--on" : ""}`}
@@ -227,7 +260,7 @@ export function ArgumentMap({
       {mode === "list" ? (
         <div className="argmap__list">
           {ZONES.map(({ kind, className }) => {
-            const list = points.filter((p) => p.kind === kind);
+            const list = visiblePoints.filter((p) => p.kind === kind);
             if (list.length === 0) return null;
             return (
               <section key={kind} className={`map-section map-section--${className}`}>
@@ -287,46 +320,90 @@ export function ArgumentMap({
 
             <div className="argmap__zones">
               {ZONES.map(({ kind, className }) => {
-                const zonePoints = points.filter((p) => p.kind === kind);
+                const zonePoints = visiblePoints.filter((p) => p.kind === kind);
                 if (zonePoints.length === 0) return null;
+                // Zoom level: theme clusters (when the theming pass has run),
+                // each holding slot groups; unthemed points form one block.
+                const themes = [...new Set(zonePoints.map((p) => p.theme ?? ""))].sort(
+                  (a, b) =>
+                    zonePoints.filter((p) => (p.theme ?? "") === b).length -
+                    zonePoints.filter((p) => (p.theme ?? "") === a).length,
+                );
+                const renderSlotGroups = (themePoints: MapPoint[], themeKey: string) => (
+                  <div className="argmap__slotgroups">
+                    {SLOTS.map((slot) => {
+                      const group = themePoints
+                        .filter((p) => p.slot === slot)
+                        .sort((a, b) => pointWeight(b) - pointWeight(a));
+                      if (group.length === 0) return null;
+                      const groupKey = `${kind}:${themeKey}:${slotKey(slot)}`;
+                      const expanded =
+                        q !== "" || expandedGroups.has(groupKey) || group.length <= GROUP_LIMIT;
+                      const shown = expanded ? group : group.slice(0, GROUP_LIMIT);
+                      return (
+                        <div key={groupKey} className="argmap__slotgroup">
+                          <span className="argmap__slotchip">{slotLabel(slot)}</span>
+                          <div className="argmap__nodes">
+                            {shown.map((p) => (
+                              <button
+                                key={p.id}
+                                ref={setNodeRef(p.id)}
+                                className={[
+                                  "mapnode",
+                                  `mapnode--${profileClass(p)}`,
+                                  p.status === "draft" ? "mapnode--draft" : "",
+                                  selectedId === p.id ? "mapnode--selected" : "",
+                                  relatedIds.has(p.id) ? "mapnode--related" : "",
+                                ].join(" ")}
+                                onClick={() =>
+                                  setSelectedId(selectedId === p.id ? null : p.id)
+                                }
+                                title={nodeText(p)}
+                              >
+                                {nodeText(p)}
+                              </button>
+                            ))}
+                            {!expanded && (
+                              <button
+                                className="mapnode mapnode--more"
+                                onClick={() =>
+                                  setExpandedGroups(new Set([...expandedGroups, groupKey]))
+                                }
+                              >
+                                +{group.length - GROUP_LIMIT} {t("showMore")}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+                const hasThemes = themes.some((th) => th !== "");
                 return (
                   <section key={kind} className={`argmap__zone argmap__zone--${className}`}>
                     <header>
-                      <h3>{zoneTitle(kind)}</h3>
+                      <h3>{zoneTitle(kind)} ({zonePoints.length})</h3>
                       {kind === "design" && <small>{t("designNote")}</small>}
                     </header>
-                    <div className="argmap__slotgroups">
-                      {SLOTS.map((slot) => {
-                        const group = zonePoints.filter((p) => p.slot === slot);
-                        if (group.length === 0) return null;
-                        return (
-                          <div key={slotKey(slot)} className="argmap__slotgroup">
-                            <span className="argmap__slotchip">{slotLabel(slot)}</span>
-                            <div className="argmap__nodes">
-                              {group.map((p) => (
-                                <button
-                                  key={p.id}
-                                  ref={setNodeRef(p.id)}
-                                  className={[
-                                    "mapnode",
-                                    `mapnode--${profileClass(p)}`,
-                                    p.status === "draft" ? "mapnode--draft" : "",
-                                    selectedId === p.id ? "mapnode--selected" : "",
-                                    relatedIds.has(p.id) ? "mapnode--related" : "",
-                                  ].join(" ")}
-                                  onClick={() =>
-                                    setSelectedId(selectedId === p.id ? null : p.id)
-                                  }
-                                  title={p.label}
-                                >
-                                  {p.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    {hasThemes
+                      ? themes.map((th) => {
+                          const themePoints = zonePoints.filter((p) => (p.theme ?? "") === th);
+                          return (
+                            <details
+                              key={th || "_other"}
+                              className="argmap__theme"
+                              open={themes.length <= 3 || q !== ""}
+                            >
+                              <summary>
+                                {th || t("themeOther")}{" "}
+                                <span className="argmap__theme-count">{themePoints.length}</span>
+                              </summary>
+                              {renderSlotGroups(themePoints, th || "_other")}
+                            </details>
+                          );
+                        })
+                      : renderSlotGroups(zonePoints, "_all")}
                   </section>
                 );
               })}
@@ -364,7 +441,7 @@ export function ArgumentMap({
                     </span>
                     {selected.perGroup.map((g) => (
                       <div key={g.group} className="argmap__campbar">
-                        <span>G{g.group}</span>
+                        <span title={campLabel(g.group)}>{campLabel(g.group)}</span>
                         <span className="argmap__campbar-track">
                           <i style={{ width: `${Math.round(g.pa * 100)}%` }} />
                           <em />

@@ -50,6 +50,7 @@ export const points = pgTable("points", {
   label: text("label").notNull(),
   summary: text("summary"),
   finding: text("finding"),
+  theme: text("theme"),
   status: text("status").notNull().default("draft"),
   mergedInto: uuid("merged_into"),
   createdBy: text("created_by").notNull(),

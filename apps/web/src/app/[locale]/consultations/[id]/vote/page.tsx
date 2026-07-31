@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
@@ -64,15 +66,24 @@ export default async function VotePage({
     }
   }
 
-  const current = deck.find((s) => !myVotes.has(s.id));
+  // Per-participant deterministic shuffle: everyone sees a different order,
+  // so early statements don't accumulate all the votes; reloads keep the
+  // order stable for the same participant.
+  const seed = token ?? "anonymous";
+  const shuffled = [...deck].sort((a, b) => {
+    const ha = createHash("sha256").update(seed + a.id).digest("hex");
+    const hb = createHash("sha256").update(seed + b.id).digest("hex");
+    return ha < hb ? -1 : 1;
+  });
+  const current = shuffled.find((s) => !myVotes.has(s.id));
   const done = deck.length - deck.filter((s) => !myVotes.has(s.id)).length;
-  const voted = deck.filter((s) => myVotes.has(s.id));
+  const voted = shuffled.filter((s) => myVotes.has(s.id));
   const voteGlyph = (v: number) => (v === 1 ? "✓" : v === -1 ? "✗" : "–");
 
   return (
     <main className="page">
       <h1>{t("title")}: {consultation.title}</h1>
-      <p className="vote-intro">{t("intro")}</p>
+      <p className="vote-intro">{t("intro")} {t("stopAnytime")}</p>
       <div className="vote-progress">
         <span>{t("progress", { done, total: deck.length })}</span>
         <span className="vote-progressbar">
