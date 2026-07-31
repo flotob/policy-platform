@@ -5,11 +5,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 
-const migrationsDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "migrations",
-);
+// MIGRATIONS_DIR override lets the prod image run this file from anywhere.
+const migrationsDir =
+  process.env.MIGRATIONS_DIR ??
+  join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
 const url = process.env.DATABASE_URL;
 if (!url) {
