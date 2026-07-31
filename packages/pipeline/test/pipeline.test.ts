@@ -10,10 +10,35 @@ import { FakeProvider } from "@policy/llm";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { runForSubmission } from "../src/pipeline.ts";
+import { chunkText, runForSubmission } from "../src/pipeline.ts";
 import { generateStatementsForPoint } from "../src/statements.ts";
 
 const url = process.env.DATABASE_URL;
+
+describe("chunkText", () => {
+  it("returns short text as a single chunk", () => {
+    expect(chunkText("hello", 100)).toEqual(["hello"]);
+  });
+
+  it("splits at paragraph boundaries without losing content", () => {
+    const paras = Array.from({ length: 10 }, (_, i) => `Absatz ${i} ${"x".repeat(50)}`);
+    const text = paras.join("\n\n");
+    const chunks = chunkText(text, 150);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const c of chunks) expect(c.length).toBeLessThanOrEqual(150);
+    // Every paragraph survives verbatim in exactly one chunk.
+    for (const p of paras) {
+      expect(chunks.filter((c) => c.includes(p))).toHaveLength(1);
+    }
+  });
+
+  it("hard-splits a single oversized paragraph", () => {
+    const text = "y".repeat(450);
+    const chunks = chunkText(text, 100);
+    expect(chunks.join("")).toBe(text);
+    for (const c of chunks) expect(c.length).toBeLessThanOrEqual(100);
+  });
+});
 
 describe.skipIf(!url)("decomposition pipeline (db-backed)", () => {
   let db: Db;

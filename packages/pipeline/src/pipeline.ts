@@ -16,6 +16,7 @@ import {
   pointEdges,
   points,
   pointSources,
+  sql,
   submissions,
   auditLog,
   type Db,
@@ -41,7 +42,41 @@ export interface PipelineRunResult {
   candidates: number;
   created: number;
   matched: number;
+  /** Number of text windows the submission was processed in (1 = no split). */
+  chunks: number;
+  /** @deprecated always false since chunking; kept for caller compatibility. */
   truncated: boolean;
+}
+
+/**
+ * Split a long text into windows at paragraph boundaries. Every window is
+ * fully processed — nothing is dropped or summarized; cross-window
+ * duplicates are folded by the matcher like any cross-submission repeat.
+ */
+export function chunkText(text: string, maxChars = 20_000): string[] {
+  if (text.length <= maxChars) return [text];
+  const chunks: string[] = [];
+  let current = "";
+  for (const para of text.split(/\n{2,}/)) {
+    let piece = para;
+    // A single paragraph longer than the window is hard-split as a last resort.
+    while (piece.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      chunks.push(piece.slice(0, maxChars));
+      piece = piece.slice(maxChars);
+    }
+    if (current && current.length + piece.length + 2 > maxChars) {
+      chunks.push(current);
+      current = piece;
+    } else {
+      current = current ? `${current}\n\n${piece}` : piece;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
 }
 
 export async function runForSubmission(
@@ -57,42 +92,49 @@ export async function runForSubmission(
   if (!submission) throw new Error(`submission ${submissionId} not found`);
   if (!submission.text) throw new Error(`submission ${submissionId} has no text`);
 
-  const { prompt, truncated } = decomposePrompt(submission.text);
-  const decomposition = await provider.generateStructured({
-    system: DECOMPOSE_SYSTEM,
-    prompt,
-    schema: decompositionJsonSchema,
-    model,
-  });
-  const parsed = decompositionOutput.parse(decomposition.output);
-  const method = `${decomposition.provenance.provider}:${decomposition.provenance.model}`;
-
+  const chunks = chunkText(submission.text);
+  let method = "";
+  let totalCandidates = 0;
   let created = 0;
   let matchedCount = 0;
-  const pointIdByCandidate: string[] = [];
+  let edgeCount = 0;
 
-  // Snapshot BEFORE the loop: candidates from the same submission never match
-  // against each other — the decomposition prompt already dedupes within a
-  // document, and intra-document matching would risk false merges.
-  const existing = await db
-    .select({
-      id: points.id,
-      label: points.label,
-      summary: points.summary,
-    })
-    .from(points)
-    .where(
-      and(
-        eq(points.consultationId, submission.consultationId),
-        inArray(points.status, ["draft", "released"]),
-        // Questionnaire pseudo-points are question texts, not claims — a
-        // free-text argument must never be folded into one.
-        ne(points.createdBy, "import:questionnaire"),
-      ),
-    )
-    .orderBy(points.createdAt);
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const { prompt } = decomposePrompt(chunks[chunkIndex]!);
+    const decomposition = await provider.generateStructured({
+      system: DECOMPOSE_SYSTEM,
+      prompt,
+      schema: decompositionJsonSchema,
+      model,
+    });
+    const parsed = decompositionOutput.parse(decomposition.output);
+    method = `${decomposition.provenance.provider}:${decomposition.provenance.model}`;
+    totalCandidates += parsed.points.length;
+    const pointIdByCandidate: string[] = [];
 
-  for (const candidate of parsed.points) {
+    // Snapshot BEFORE the candidate loop: candidates from the same chunk never
+    // match against each other — the decomposition prompt already dedupes
+    // within a window, and sibling matching would risk false merges. Points
+    // from EARLIER chunks are included, so cross-window repeats fold together.
+    const existing = await db
+      .select({
+        id: points.id,
+        label: points.label,
+        summary: points.summary,
+      })
+      .from(points)
+      .where(
+        and(
+          eq(points.consultationId, submission.consultationId),
+          inArray(points.status, ["draft", "released"]),
+          // Questionnaire pseudo-points are question texts, not claims — a
+          // free-text argument must never be folded into one.
+          ne(points.createdBy, "import:questionnaire"),
+        ),
+      )
+      .orderBy(points.createdAt);
+
+    for (const candidate of parsed.points) {
 
     let outcome: "matched" | "new" = "new";
     let matchedPointId: string | null = null;
@@ -141,53 +183,62 @@ export async function runForSubmission(
       created++;
     }
 
-    pointIdByCandidate.push(pointId);
+      pointIdByCandidate.push(pointId);
 
-    const spanStart = submission.text.indexOf(candidate.quote);
-    await db.insert(pointSources).values({
-      tenantId: submission.tenantId,
-      pointId,
-      submissionId: submission.id,
-      quote: candidate.quote,
-      spanStart: spanStart >= 0 ? spanStart : null,
-      spanEnd: spanStart >= 0 ? spanStart + candidate.quote.length : null,
-    });
+      // Reruns and cross-chunk matches must not duplicate a source row.
+      const dupSource = await db.execute(sql`
+        SELECT 1 FROM point_sources
+        WHERE point_id = ${pointId} AND submission_id = ${submission.id}
+          AND quote = ${candidate.quote} LIMIT 1
+      `);
+      if (dupSource.rows.length === 0) {
+        const spanStart = submission.text.indexOf(candidate.quote);
+        await db.insert(pointSources).values({
+          tenantId: submission.tenantId,
+          pointId,
+          submissionId: submission.id,
+          quote: candidate.quote,
+          spanStart: spanStart >= 0 ? spanStart : null,
+          spanEnd: spanStart >= 0 ? spanStart + candidate.quote.length : null,
+        });
+      }
 
-    await db.insert(matchDecisions).values({
-      tenantId: submission.tenantId,
-      consultationId: submission.consultationId,
-      submissionId: submission.id,
-      candidateLabel: candidate.label,
-      candidateSummary: candidate.summary,
-      outcome,
-      matchedPoint: outcome === "matched" ? matchedPointId : null,
-      confidence,
-      method: existing.length > 0 ? method : "auto:first-points",
-      provenance: {
-        decomposition: decomposition.provenance,
-        match: matchProvenance,
-        truncated,
-      },
-    });
-  }
-
-  // Argumentative relations between the submission's candidates, mapped to
-  // their (possibly matched) point ids. Idempotent via the unique constraint.
-  let edgeCount = 0;
-  for (const rel of parsed.relations) {
-    const fromId = pointIdByCandidate[rel.from];
-    const toId = pointIdByCandidate[rel.to];
-    if (!fromId || !toId || fromId === toId) continue;
-    await db
-      .insert(pointEdges)
-      .values({
+      await db.insert(matchDecisions).values({
         tenantId: submission.tenantId,
-        fromPoint: fromId,
-        toPoint: toId,
-        kind: rel.kind,
-      })
-      .onConflictDoNothing();
-    edgeCount++;
+        consultationId: submission.consultationId,
+        submissionId: submission.id,
+        candidateLabel: candidate.label,
+        candidateSummary: candidate.summary,
+        outcome,
+        matchedPoint: outcome === "matched" ? matchedPointId : null,
+        confidence,
+        method: existing.length > 0 ? method : "auto:first-points",
+        provenance: {
+          decomposition: decomposition.provenance,
+          match: matchProvenance,
+          chunk: chunks.length > 1 ? { index: chunkIndex, of: chunks.length } : undefined,
+          truncated: false,
+        },
+      });
+    }
+
+    // Argumentative relations between this chunk's candidates, mapped to
+    // their (possibly matched) point ids. Idempotent via unique constraint.
+    for (const rel of parsed.relations) {
+      const fromId = pointIdByCandidate[rel.from];
+      const toId = pointIdByCandidate[rel.to];
+      if (!fromId || !toId || fromId === toId) continue;
+      await db
+        .insert(pointEdges)
+        .values({
+          tenantId: submission.tenantId,
+          fromPoint: fromId,
+          toPoint: toId,
+          kind: rel.kind,
+        })
+        .onConflictDoNothing();
+      edgeCount++;
+    }
   }
 
   await db.insert(auditLog).values({
@@ -196,15 +247,22 @@ export async function runForSubmission(
     action: "submission.decompose",
     subjectKind: "submission",
     subjectId: submission.id,
-    payload: { candidates: parsed.points.length, created, matched: matchedCount, edges: edgeCount, truncated },
+    payload: {
+      candidates: totalCandidates,
+      created,
+      matched: matchedCount,
+      edges: edgeCount,
+      chunks: chunks.length,
+    },
   });
 
   return {
     submissionId,
-    candidates: parsed.points.length,
+    candidates: totalCandidates,
     created,
     matched: matchedCount,
-    truncated,
+    chunks: chunks.length,
+    truncated: false,
   };
 }
 

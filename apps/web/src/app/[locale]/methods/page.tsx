@@ -104,10 +104,10 @@ export default async function MethodsPage({
     },
     {
       name: de ? "Textfenster" : "Text windows",
-      value: de ? "24k Zeichen (Dekomposition) · 20k (Haltung)" : "24k chars (decomposition) · 20k (stance)",
+      value: de ? "~20k Zeichen je Fenster" : "~20k chars per window",
       expl: de
-        ? "Längere Stellungnahmen werden für den jeweiligen LLM-Aufruf gekürzt; die Kürzung wird in der Provenienz vermerkt."
-        : "Longer submissions are truncated for the respective LLM call; the truncation is recorded in provenance.",
+        ? "Lange Stellungnahmen werden an Absatzgrenzen in Fenster zerlegt und VOLLSTÄNDIG verarbeitet — nichts wird abgeschnitten oder zusammengefasst. Wiederholt ein späteres Fenster einen Punkt, führt das Matching ihn mit dem bestehenden zusammen; bei der Haltungs-Inferenz werden die Fenster-Urteile vereinigt (irgendwo Zustimmung → Zustimmung; Zustimmung UND Ablehnung im selben Text → Enthaltung). Fensterzugehörigkeit steht in der Provenienz."
+        : "Long submissions are split into windows at paragraph boundaries and processed IN FULL — nothing is cut off or summarized. If a later window repeats a point, matching folds it into the existing one; for stance inference the window verdicts merge (agreement anywhere → agree; both agreement AND rejection in the same text → pass). Window membership is recorded in provenance.",
     },
     {
       name: de ? "Modell" : "Model",

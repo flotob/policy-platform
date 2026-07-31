@@ -18,6 +18,7 @@
 import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider } from "@policy/llm";
 
+import { chunkText } from "../src/pipeline.ts";
 import { STANCE_SYSTEM, stancePrompt } from "../src/prompts.ts";
 import { stanceJsonSchema, stanceOutput } from "../src/schemas.ts";
 
@@ -78,32 +79,47 @@ async function main() {
     language: string | null; text: string;
   }[]) {
     const started = Date.now();
-    const votes: { statementId: string; value: 1 | -1 }[] = [];
-    let passes = 0;
+    // Long submissions are read in FULL as text windows; per statement the
+    // windows' verdicts merge: any agree → agree, any disagree → disagree,
+    // both (the text argues both ways) → pass.
+    const textWindows = chunkText(sub.text, 20_000);
+    const agreeSet = new Set<string>();
+    const disagreeSet = new Set<string>();
     let failed = false;
-    for (let offset = 0; offset < statements.length; offset += chunkSize) {
-      const chunk = statements.slice(offset, offset + chunkSize);
-      try {
-        const result = await provider.generateStructured({
-          system: STANCE_SYSTEM,
-          prompt: stancePrompt(sub.text, chunk.map((s) => s.text)),
-          schema: stanceJsonSchema,
-        });
-        const parsed = stanceOutput.parse(result.output);
-        for (const s of parsed.stances) {
-          const statement = chunk[s.index];
-          if (!statement) continue;
-          if (s.stance === "agree") votes.push({ statementId: statement.id, value: 1 });
-          else if (s.stance === "disagree") votes.push({ statementId: statement.id, value: -1 });
-          else passes++;
+    for (const window of textWindows) {
+      for (let offset = 0; offset < statements.length; offset += chunkSize) {
+        const chunk = statements.slice(offset, offset + chunkSize);
+        try {
+          const result = await provider.generateStructured({
+            system: STANCE_SYSTEM,
+            prompt: stancePrompt(window, chunk.map((s) => s.text)),
+            schema: stanceJsonSchema,
+          });
+          const parsed = stanceOutput.parse(result.output);
+          for (const s of parsed.stances) {
+            const statement = chunk[s.index];
+            if (!statement) continue;
+            if (s.stance === "agree") agreeSet.add(statement.id);
+            else if (s.stance === "disagree") disagreeSet.add(statement.id);
+          }
+        } catch (err) {
+          console.log(`  chunk FAILED: ${err instanceof Error ? err.message : err}`);
+          failed = true;
+          break;
         }
-      } catch (err) {
-        console.log(`  chunk FAILED: ${err instanceof Error ? err.message : err}`);
-        failed = true;
-        break;
       }
+      if (failed) break;
     }
     if (failed) continue; // no participant row — submission retried on rerun
+
+    const votes: { statementId: string; value: 1 | -1 }[] = [];
+    for (const st of statements) {
+      const a = agreeSet.has(st.id);
+      const d = disagreeSet.has(st.id);
+      if (a && !d) votes.push({ statementId: st.id, value: 1 });
+      else if (d && !a) votes.push({ statementId: st.id, value: -1 });
+    }
+    const passes = statements.length - votes.length;
 
     const pRes = await db.execute(sql`
       INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language)

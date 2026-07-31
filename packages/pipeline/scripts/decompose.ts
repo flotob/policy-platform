@@ -27,6 +27,11 @@ async function main() {
   const limit = Number(arg("limit") ?? 3);
   const model = arg("model");
 
+  // --retruncated: reprocess submissions whose earlier runs were cut at the
+  // old truncation window — chunking now reads them fully; the matcher and
+  // the point_sources guard keep reruns duplicate-free.
+  const retruncated = process.argv.includes("--retruncated");
+
   const db = createDb(url);
   const rows = await db.execute(sql`
     SELECT s.id, s.author_org, length(s.text) AS chars
@@ -34,7 +39,10 @@ async function main() {
     JOIN consultations c ON c.id = s.consultation_id
     WHERE (c.id::text = ${consultation} OR c.source_ref = ${consultation})
       AND s.text IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM match_decisions m WHERE m.submission_id = s.id)
+      AND ${retruncated
+        ? sql`EXISTS (SELECT 1 FROM match_decisions m WHERE m.submission_id = s.id
+                      AND (m.provenance->>'truncated')::boolean = true)`
+        : sql`NOT EXISTS (SELECT 1 FROM match_decisions m WHERE m.submission_id = s.id)`}
     ORDER BY length(s.text) ASC
     LIMIT ${limit}
   `);
@@ -47,7 +55,7 @@ async function main() {
       const result = await runForSubmission(db, provider, row.id, model);
       console.log(
         `  ${result.candidates} candidates → ${result.created} new points, ` +
-          `${result.matched} matched${result.truncated ? " (text truncated)" : ""} ` +
+          `${result.matched} matched${result.chunks > 1 ? ` (${result.chunks} chunks)` : ""} ` +
           `[${Math.round((Date.now() - started) / 1000)}s]`,
       );
     } catch (err) {
