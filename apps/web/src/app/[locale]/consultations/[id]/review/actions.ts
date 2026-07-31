@@ -105,10 +105,12 @@ export async function reviewStatements(formData: FormData) {
     decision: formData.get("decision"),
   });
   const db = getDb();
+  // All locales of the point transition together, from any prior status —
+  // the workbench allows withdrawing and re-releasing.
   const updated = await db
     .update(statements)
     .set({ status: decision })
-    .where(and(eq(statements.pointId, pointId), eq(statements.status, "draft")))
+    .where(eq(statements.pointId, pointId))
     .returning({ id: statements.id, tenantId: statements.tenantId, locale: statements.locale });
   if (updated.length > 0) {
     await db.insert(auditLog).values({
