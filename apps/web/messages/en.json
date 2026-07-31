@@ -38,7 +38,8 @@
     "diagnosis_mixed": "Mixed — both factual and value questions divide the camps.",
     "campLegend": "The camps",
     "campMembers": "members",
-    "voteCta": "Vote on the statements"
+    "voteCta": "Vote on the statements",
+    "reviewCta": "Editorial review"
   },
   "MapView": {
     "mapMode": "Map",

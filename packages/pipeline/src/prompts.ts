@@ -41,6 +41,57 @@ export function decomposePrompt(text: string, maxChars = 24_000): {
   };
 }
 
+export const AI_REVIEW_POINTS_SYSTEM = `You are the AI editor of a public argument map. Decide for each numbered draft point whether to RELEASE it onto the public map or REJECT it.
+
+Release when the point is a single coherent claim, comprehensible on its own, neutrally phrased, and on-topic for the consultation. Minor stylistic roughness is fine.
+
+Reject when the point is: an unintelligible fragment; several distinct claims mashed together; pure meta-commentary (greetings, thanks, process complaints without substance); personal data or an attack on a person; or plainly off-topic.
+
+When in doubt, release — a released point can still be voted down or rejected later, but a wrongly rejected point silences a voice. Give a short reason either way.`;
+
+export const AI_REVIEW_STATEMENTS_SYSTEM = `You are the AI editor of a public argument map. For each numbered point you get its label plus the generated votable statement in German (de) and English (en). Decide whether to RELEASE the statement pair for public voting or REJECT it (it will be regenerated).
+
+Release when both versions state the point's claim as ONE clear declarative sentence a reader can agree or disagree with, keep the original polarity, and say the same thing in both languages.
+
+Reject when a version is a question, hedged into unvotability, contains multiple claims, flips or softens the polarity, or the two languages diverge in meaning. Give a short reason either way.`;
+
+export function aiReviewPrompt(
+  consultationTitle: string,
+  items: string[],
+): string {
+  return (
+    `Consultation: ${consultationTitle}\n\n` +
+    items.map((s, i) => `${i}. ${s}`).join("\n") +
+    `\n\nGive a verdict for EVERY index from 0 to ${items.length - 1}.`
+  );
+}
+
+export const STANCE_SYSTEM = `You determine the stance of ONE consultation submission toward statements from the consultation's argument map.
+
+For each numbered statement:
+- "agree": the submission's text argues for or clearly supports this claim.
+- "disagree": the submission's text argues against or clearly contradicts this claim.
+- "pass": the submission does not address the claim, or its position is unclear.
+
+Judge ONLY from the submission text. Do not guess from the author's presumed interests. Statements and submission may be in different languages — judge the meaning.`;
+
+export function stancePrompt(
+  submissionText: string,
+  statements: string[],
+  maxChars = 20_000,
+): string {
+  const body =
+    submissionText.length > maxChars
+      ? submissionText.slice(0, maxChars)
+      : submissionText;
+  return (
+    `Submission text:\n---\n${body}\n---\n\n` +
+    `Statements:\n` +
+    statements.map((s, i) => `${i}. ${s}`).join("\n") +
+    `\n\nGive a stance for EVERY index from 0 to ${statements.length - 1}.`
+  );
+}
+
 export const RELATIONS_SYSTEM = `You identify argumentative relations between points that were extracted from ONE consultation submission.
 
 Relation kinds:

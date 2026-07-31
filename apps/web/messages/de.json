@@ -38,7 +38,8 @@
     "diagnosis_mixed": "Gemischt — sowohl Tatsachen- als auch Wertfragen trennen die Lager.",
     "campLegend": "Die Lager",
     "campMembers": "Mitglieder",
-    "voteCta": "Über die Statements abstimmen"
+    "voteCta": "Über die Statements abstimmen",
+    "reviewCta": "Redaktion"
   },
   "MapView": {
     "mapMode": "Karte",

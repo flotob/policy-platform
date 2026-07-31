@@ -58,6 +58,35 @@ export const relationsOutput = z
   })
   .strict();
 
+/** AI-editor verdict on one item of a numbered batch. */
+export const reviewVerdict = z
+  .object({
+    index: z.number().int().nonnegative(),
+    decision: z.enum(["release", "reject"]),
+    reason: z.string().max(300),
+  })
+  .strict();
+
+export const aiReviewOutput = z
+  .object({
+    verdicts: z.array(reviewVerdict).max(40),
+  })
+  .strict();
+
+/** Inferred stance of a submission toward one statement of the map. */
+export const stanceVerdict = z
+  .object({
+    index: z.number().int().nonnegative(),
+    stance: z.enum(["agree", "disagree", "pass"]),
+  })
+  .strict();
+
+export const stanceOutput = z
+  .object({
+    stances: z.array(stanceVerdict).max(40),
+  })
+  .strict();
+
 export const statementOutput = z
   .object({
     /** Votable statement in German — one declarative sentence. */
@@ -85,3 +114,5 @@ export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
 export const statementJsonSchema = toProviderSchema(statementOutput);
 export const relationsJsonSchema = toProviderSchema(relationsOutput);
+export const aiReviewJsonSchema = toProviderSchema(aiReviewOutput);
+export const stanceJsonSchema = toProviderSchema(stanceOutput);

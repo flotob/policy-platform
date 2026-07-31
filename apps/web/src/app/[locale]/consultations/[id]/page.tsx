@@ -107,6 +107,13 @@ export default async function MapPage({
       >
         {tReport("reportCta")}
       </Link>
+      <Link
+        className="button"
+        style={{ background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
+        href={`/${locale}/consultations/${consultation.id}/review`}
+      >
+        {t("reviewCta")}
+      </Link>
     </p>
   );
 
