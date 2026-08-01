@@ -97,7 +97,15 @@
     "themeOther": "Weitere",
     "filterHint": "Klicken filtert die Karte",
     "themesHeading": "Themen",
-    "clearFilters": "Filter zurücksetzen"
+    "clearFilters": "Filter zurücksetzen",
+    "zonesMode": "Zonen",
+    "scatterBottom": "geringe Zustimmung insgesamt — offen oder umstritten",
+    "scatterEmpty": "Noch keine Voten — die Konfliktkarte entsteht mit der ersten Analyse.",
+    "scatterUnvoted": "{n} Punkte ohne Voten (nur in Zonen/Liste sichtbar)",
+    "kindFact": "Tatsache",
+    "kindValue": "Wertung",
+    "kindDesign": "Ausgestaltung",
+    "kindGap": "Lücke"
   },
   "Report": {
     "title": "Bericht",

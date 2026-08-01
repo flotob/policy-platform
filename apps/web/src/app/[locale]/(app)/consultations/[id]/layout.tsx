@@ -30,9 +30,6 @@ export default async function AppLayout({
   if (consRes.rows.length === 0) notFound();
   const consultation = consRes.rows[0] as { id: string; title: string };
 
-  const listRes = await db.execute(
-    sql`SELECT id, title FROM consultations ORDER BY created_at DESC`,
-  );
   const statsRes = await db.execute(sql`
     SELECT
       (SELECT count(*) FROM points p WHERE p.consultation_id = ${consultation.id}
@@ -59,11 +56,7 @@ export default async function AppLayout({
 
   return (
     <div className="appshell">
-      <AppTopBar
-        locale={locale}
-        currentId={consultation.id}
-        consultations={listRes.rows as { id: string; title: string }[]}
-      />
+      <AppTopBar locale={locale} currentId={consultation.id} title={consultation.title} />
       <div className="appshell__main">{children}</div>
       <footer className="appshell__status">
         <span><strong>{stats.points}</strong> {t("points")}</span>

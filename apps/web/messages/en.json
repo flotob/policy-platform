@@ -97,7 +97,15 @@
     "themeOther": "Other",
     "filterHint": "Click to filter the map",
     "themesHeading": "Themes",
-    "clearFilters": "Clear filters"
+    "clearFilters": "Clear filters",
+    "zonesMode": "Zones",
+    "scatterBottom": "low overall agreement — open or contested",
+    "scatterEmpty": "No votes yet — the conflict map appears with the first analysis.",
+    "scatterUnvoted": "{n} points without votes (visible in Zones/List)",
+    "kindFact": "Fact",
+    "kindValue": "Value",
+    "kindDesign": "Design",
+    "kindGap": "Gap"
   },
   "Report": {
     "title": "Report",

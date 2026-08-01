@@ -70,6 +70,158 @@ function slotKey(slot: MapPoint["slot"]): string {
   return slot ?? "none";
 }
 
+/** Deterministic 0..1 jitter from a point id (stable across renders). */
+function hashJitter(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+/**
+ * The conflict field: horizontal = which camp a point belongs to (camp A
+ * territory left, camp B right, shared ground in the middle), vertical =
+ * overall agreement. Dot size = weight (sources + votes), color = zone.
+ */
+function ScatterField({
+  points,
+  edges,
+  selectedId,
+  relatedIds,
+  onSelect,
+  campLabel,
+  nodeText,
+  t,
+}: {
+  points: MapPoint[];
+  edges: MapEdgeData[];
+  selectedId: string | null;
+  relatedIds: Set<string>;
+  onSelect: (id: string | null) => void;
+  campLabel: (g: number) => string;
+  nodeText: (p: MapPoint) => string;
+  t: ReturnType<typeof useTranslations<"MapView">>;
+}) {
+  const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 2);
+  if (voted.length === 0) return <p className="placeholder-note">{t("scatterEmpty")}</p>;
+
+  const nsByGroup = new Map<number, number>();
+  for (const p of voted)
+    for (const g of p.perGroup!) nsByGroup.set(g.group, (nsByGroup.get(g.group) ?? 0) + g.ns);
+  const top2 = [...nsByGroup.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map((e) => e[0]);
+  const [gA, gB] = top2.sort((a, b) => a - b) as [number, number];
+
+  const W = 1000;
+  const H = 640;
+  const M = 46;
+  const PW = W - 2 * M;
+  const PH = H - 2 * M - 26;
+  const coords = voted.map((p) => {
+    const paA = p.perGroup!.find((g) => g.group === gA)?.pa ?? 0;
+    const paB = p.perGroup!.find((g) => g.group === gB)?.pa ?? 0;
+    // Unweighted mean of the two camps: top of the field = BOTH camps
+    // agree (a bridge), independent of camp sizes.
+    const overall = (paA + paB) / 2;
+    return {
+      p,
+      paA,
+      paB,
+      x: M + ((paB - paA + 1) / 2) * PW + (hashJitter(p.id) - 0.5) * 26,
+      y: M + (1 - overall) * PH + (hashJitter(p.id + "y") - 0.5) * 26,
+      r: 4 + Math.min(9, Math.sqrt(pointWeight(p)) * 1.4),
+    };
+  });
+  const byId = new Map(coords.map((c) => [c.p.id, c]));
+  const labeled = new Set(
+    [...coords]
+      .sort((a, b) => pointWeight(b.p) - pointWeight(a.p))
+      .slice(0, 14)
+      .map((c) => c.p.id),
+  );
+  if (selectedId) labeled.add(selectedId);
+  const selEdges = selectedId
+    ? edges.filter(
+        (e) =>
+          (e.from === selectedId || e.to === selectedId) &&
+          byId.has(e.from) &&
+          byId.has(e.to),
+      )
+    : [];
+
+  return (
+    <div className="scatter">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img">
+        <line x1={W / 2} y1={M} x2={W / 2} y2={M + PH} className="scatter__guide" />
+        <line
+          x1={M} y1={M + 0.4 * PH} x2={W - M} y2={M + 0.4 * PH}
+          className="scatter__guide scatter__guide--bridge"
+        />
+        <text x={W - M} y={M + 0.4 * PH - 7} textAnchor="end" className="scatter__caption">
+          {t("bridgeThreshold")}
+        </text>
+        <text x={M} y={M - 16} className="scatter__camp">◀ {campLabel(gA)}</text>
+        <text x={W - M} y={M - 16} textAnchor="end" className="scatter__camp">
+          {campLabel(gB)} ▶
+        </text>
+        <text x={W / 2} y={M + PH + 24} textAnchor="middle" className="scatter__caption">
+          {t("scatterBottom")}
+        </text>
+        {selEdges.map((e) => {
+          const f = byId.get(e.from)!;
+          const o = byId.get(e.to)!;
+          return (
+            <line
+              key={`${e.from}-${e.to}-${e.kind}`}
+              x1={f.x} y1={f.y} x2={o.x} y2={o.y}
+              className={`mapedge mapedge--${e.kind === "supports" ? "supports" : "attack"}`}
+            />
+          );
+        })}
+        {coords.map((c) => (
+          <g
+            key={c.p.id}
+            className="scatter__dotg"
+            onClick={() => onSelect(c.p.id === selectedId ? null : c.p.id)}
+          >
+            <circle
+              cx={c.x}
+              cy={c.y}
+              r={c.r}
+              className={[
+                "scatter__dot",
+                `scatter__dot--${c.p.kind}`,
+                selectedId === c.p.id ? "scatter__dot--sel" : "",
+                relatedIds.has(c.p.id) ? "scatter__dot--rel" : "",
+              ].join(" ")}
+            />
+            {labeled.has(c.p.id) && (
+              <text x={c.x} y={c.y + c.r + 11} textAnchor="middle" className="scatter__label">
+                {nodeText(c.p).slice(0, 34)}
+                {nodeText(c.p).length > 34 ? "…" : ""}
+              </text>
+            )}
+            <title>
+              {`${nodeText(c.p)}\n${campLabel(gA)}: ${Math.round(c.paA * 100)}% · ${campLabel(gB)}: ${Math.round(c.paB * 100)}%`}
+            </title>
+          </g>
+        ))}
+      </svg>
+      <div className="scatter__footer">
+        <span className="scatter__legend">
+          <i className="dot scatter__key--fact" /> {t("kindFact")}
+          <i className="dot scatter__key--value" /> {t("kindValue")}
+          <i className="dot scatter__key--design" /> {t("kindDesign")}
+          <i className="dot scatter__key--gap" /> {t("kindGap")}
+        </span>
+        {points.length > voted.length && (
+          <span className="scatter__note">
+            {t("scatterUnvoted", { n: points.length - voted.length })}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ArgumentMap({
   title,
   points,
@@ -85,7 +237,10 @@ export function ArgumentMap({
 }) {
   const t = useTranslations("MapView");
   const tMap = useTranslations("Map");
-  const [mode, setMode] = useState<"map" | "list">("map");
+  const hasVotes = points.some((p) => (p.perGroup?.length ?? 0) >= 2);
+  const [mode, setMode] = useState<"scatter" | "map" | "list">(
+    hasVotes ? "scatter" : "map",
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -257,11 +412,19 @@ export function ArgumentMap({
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="argmap__modes">
+          {hasVotes && (
+            <button
+              className={`argmap__mode ${mode === "scatter" ? "argmap__mode--on" : ""}`}
+              onClick={() => setMode("scatter")}
+            >
+              {t("mapMode")}
+            </button>
+          )}
           <button
             className={`argmap__mode ${mode === "map" ? "argmap__mode--on" : ""}`}
             onClick={() => setMode("map")}
           >
-            {t("mapMode")}
+            {t("zonesMode")}
           </button>
           <button
             className={`argmap__mode ${mode === "list" ? "argmap__mode--on" : ""}`}
@@ -369,6 +532,18 @@ export function ArgumentMap({
                   <span className="argmap__spine-eyebrow argmap__spine-eyebrow--themes">
                     {t("themesHeading")}
                   </span>
+                  {filtering && (
+                    <button
+                      className="argmap__clearfilter"
+                      onClick={() => {
+                        setSlotFilter(null);
+                        setThemeFilter(null);
+                        setQuery("");
+                      }}
+                    >
+                      {t("clearFilters")} ({visiblePoints.length})
+                    </button>
+                  )}
                   <div className="argmap__themetree">
                     {allThemes.map((th) => (
                       <button
@@ -383,20 +558,22 @@ export function ArgumentMap({
                   </div>
                 </>
               )}
-              {filtering && (
-                <button
-                  className="argmap__clearfilter"
-                  onClick={() => {
-                    setSlotFilter(null);
-                    setThemeFilter(null);
-                    setQuery("");
-                  }}
-                >
-                  {t("clearFilters")} ({visiblePoints.length})
-                </button>
-              )}
             </aside>
 
+            {mode === "scatter" ? (
+              <div className="argmap__zones">
+                <ScatterField
+                  points={visiblePoints}
+                  edges={edges}
+                  selectedId={selectedId}
+                  relatedIds={relatedIds}
+                  onSelect={setSelectedId}
+                  campLabel={campLabel}
+                  nodeText={nodeText}
+                  t={t}
+                />
+              </div>
+            ) : (
             <div className="argmap__zones">
               {ZONES.map(({ kind, className }) => {
                 const zonePoints = visiblePoints.filter((p) => p.kind === kind);
@@ -487,6 +664,7 @@ export function ArgumentMap({
                 );
               })}
             </div>
+            )}
           </div>
 
           <aside className="argmap__detail">

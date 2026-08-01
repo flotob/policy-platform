@@ -684,7 +684,7 @@ code {
 
 .argmap__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 28vw, 520px);
   gap: 1.2rem;
   align-items: start;
 }
@@ -696,7 +696,7 @@ code {
 .argmap__canvas {
   position: relative;
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 1.2rem;
   align-items: start;
 }
@@ -1553,3 +1553,99 @@ code {
     overflow-y: visible;
   }
 }
+
+
+/* ——— conflict-field scatter ——— */
+
+.scatter svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.scatter__guide {
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.scatter__guide--bridge {
+  stroke: var(--teal);
+  stroke-dasharray: 6 5;
+  opacity: 0.7;
+}
+
+.scatter__camp {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-serif);
+  fill: var(--ink);
+}
+
+.scatter__caption {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.scatter__dotg {
+  cursor: pointer;
+}
+
+.scatter__dot {
+  stroke: var(--card);
+  stroke-width: 1.2;
+  opacity: 0.88;
+}
+
+.scatter__dot--fact { fill: var(--blue); }
+.scatter__dot--value { fill: var(--amber); }
+.scatter__dot--design { fill: var(--teal); }
+.scatter__dot--gap { fill: var(--muted); }
+
+.scatter__dot--sel {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  opacity: 1;
+}
+
+.scatter__dot--rel {
+  stroke: var(--blue);
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+
+.scatter__dotg:hover .scatter__dot {
+  opacity: 1;
+  stroke: var(--ink);
+}
+
+.scatter__label {
+  font-size: 10px;
+  fill: var(--ink-soft);
+  pointer-events: none;
+}
+
+.scatter__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.scatter__legend {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.scatter__legend .dot { margin-left: 0.7rem; }
+.scatter__legend .dot:first-child { margin-left: 0; }
+.scatter__key--fact { background: var(--blue); }
+.scatter__key--value { background: var(--amber); }
+.scatter__key--design { background: var(--teal); }
+.scatter__key--gap { background: var(--muted); }

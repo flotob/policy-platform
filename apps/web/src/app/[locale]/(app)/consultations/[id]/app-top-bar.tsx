@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { LocaleSwitcher } from "@/components/LocaleSwitcher";
@@ -10,13 +10,12 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 export function AppTopBar({
   locale,
   currentId,
-  consultations,
+  title,
 }: {
   locale: string;
   currentId: string;
-  consultations: { id: string; title: string }[];
+  title: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const t = useTranslations("AppShell");
   const base = `/${locale}/consultations/${currentId}`;
@@ -32,21 +31,9 @@ export function AppTopBar({
       <Link href={`/${locale}`} className="wordmark wordmark--compact">
         policy
       </Link>
-      <select
-        className="appbar__switcher"
-        value={currentId}
-        aria-label={t("switcher")}
-        onChange={(e) => {
-          const rest = pathname?.endsWith("/vote") ? "/vote" : "";
-          router.push(`/${locale}/consultations/${e.target.value}${rest}`);
-        }}
-      >
-        {consultations.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.title}
-          </option>
-        ))}
-      </select>
+      <span className="appbar__title" title={title}>
+        {title}
+      </span>
       <nav className="appbar__views">
         {views.map((v) => {
           const active = v.exact ? pathname === v.href : pathname?.startsWith(v.href);
