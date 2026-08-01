@@ -20,7 +20,15 @@ export default async function VotePage({
   const { locale, id } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("Vote");
+  const tMapView = await getTranslations("MapView");
   const db = getDb();
+  const slotLabel = (slot: string | null) =>
+    slot === "P1" ? tMapView("slotP1")
+    : slot === "P2" ? tMapView("slotP2")
+    : slot === "P3" ? tMapView("slotP3")
+    : slot === "P4" ? tMapView("slotP4")
+    : slot === "conclusion" ? tMapView("slotConclusion")
+    : null;
 
   const consRes = await db.execute(
     sql`SELECT id, title FROM consultations WHERE id::text = ${id}`,
@@ -31,8 +39,11 @@ export default async function VotePage({
   // One votable statement per point: the canonical row (lowest locale) carries
   // the votes; display prefers the visitor's locale when a version exists.
   const stRes = await db.execute(sql`
-    SELECT canonical.id, p.kind, p.label,
-      COALESCE(loc.text, canonical.text) AS text
+    SELECT canonical.id, p.kind, p.slot, p.label, p.summary, p.theme,
+      COALESCE(loc.text, canonical.text) AS text,
+      (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
+       FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
+       WHERE ps.point_id = p.id) AS sources
     FROM (
       SELECT DISTINCT ON (st.point_id) st.id, st.point_id, st.text, st.created_at
       FROM statements st JOIN points p ON p.id = st.point_id
@@ -47,8 +58,12 @@ export default async function VotePage({
   const deck = stRes.rows as {
     id: string;
     kind: string;
+    slot: string | null;
     label: string;
+    summary: string | null;
+    theme: string | null;
     text: string;
+    sources: { quote: string | null; org: string | null }[] | null;
   }[];
   if (deck.length === 0) notFound();
 
@@ -94,7 +109,34 @@ export default async function VotePage({
       {current ? (
         <div className={`vote-card vote-card--${current.kind}`}>
           <span className={`badge badge--${current.kind}`}>{current.kind}</span>
+          {current.theme && <span className="vote-card__theme">{current.theme}</span>}
           <p className="vote-card__text">{current.text}</p>
+          <details className="vote-context">
+            <summary>{t("moreContext")}</summary>
+            <div className="vote-context__body">
+              {slotLabel(current.slot) && (
+                <p className="vote-context__slot">
+                  {t("contextSlot")}: <strong>{slotLabel(current.slot)}</strong>
+                </p>
+              )}
+              {current.summary && current.summary !== current.text && (
+                <p>{current.summary}</p>
+              )}
+              {(current.sources ?? [])
+                .filter((s) => s.quote)
+                .slice(0, 3)
+                .map((s, i) => (
+                  <blockquote key={i} className="quote">
+                    „{s.quote}"{s.org && <cite>— {s.org}</cite>}
+                  </blockquote>
+                ))}
+              {(current.sources?.length ?? 0) > 3 && (
+                <p className="vote-context__more">
+                  {t("contextSources", { n: current.sources!.length })}
+                </p>
+              )}
+            </div>
+          </details>
           <form action={castVote} className="vote-actions">
             <input type="hidden" name="statementId" value={current.id} />
             <button className="button vote-button vote-button--agree" name="value" value="1" type="submit">

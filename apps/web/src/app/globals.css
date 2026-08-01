@@ -99,7 +99,7 @@ code {
 }
 
 .site-header__inner {
-  max-width: 46rem;
+  max-width: 90rem;
   margin: 0 auto;
   padding: 0.85rem 1.25rem;
   display: flex;
@@ -156,9 +156,9 @@ code {
 }
 
 .page {
-  max-width: 46rem;
+  max-width: 90rem;
   margin: 0 auto;
-  padding: 2.5rem 1.25rem 4rem;
+  padding: 2.5rem clamp(1rem, 3vw, 2.5rem) 4rem;
 }
 
 .lede {
@@ -526,6 +526,7 @@ code {
 
 .report {
   max-width: 52rem;
+  margin-inline: auto;
 }
 
 .report__eyebrow {
@@ -610,11 +611,8 @@ code {
 
 /* ——— argument map (Landkarte) ——— */
 
-/* Break out of the narrow reading column: the map needs the viewport. */
 .argmap {
-  --argmap-width: min(96vw, 1360px);
-  width: var(--argmap-width);
-  margin-left: calc((100% - var(--argmap-width)) / 2);
+  width: 100%;
 }
 
 .argmap__toolbar {
@@ -997,6 +995,7 @@ code {
 
 .explainer {
   max-width: 48rem;
+  margin-inline: auto;
 }
 
 .explainer__lead {
@@ -1262,4 +1261,119 @@ code {
   cursor: pointer;
   color: var(--muted);
   line-height: 1;
+}
+
+
+/* ——— width discipline inside the wide container ——— */
+
+.home {
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+.consultation-card {
+  max-width: 56rem;
+}
+
+/* ——— vote context ——— */
+
+.vote-card__theme {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+}
+
+.vote-context {
+  margin: -0.6rem 0 1rem;
+}
+
+.vote-context > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--blue);
+  list-style: none;
+}
+
+.vote-context > summary::-webkit-details-marker { display: none; }
+.vote-context > summary::before { content: "▸ "; }
+.vote-context[open] > summary::before { content: "▾ "; }
+
+.vote-context__body {
+  border-left: 3px solid var(--line);
+  padding-left: 0.9rem;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.vote-context__slot,
+.vote-context__more {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ——— mobile ——— */
+
+@media (max-width: 760px) {
+  .site-header__inner {
+    flex-wrap: wrap;
+    row-gap: 0.3rem;
+  }
+  .site-nav {
+    flex-wrap: wrap;
+    row-gap: 0.3rem;
+  }
+  .ctabs__bar {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ctabs__tab {
+    white-space: nowrap;
+  }
+  .argmap__toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .argmap__search {
+    width: 100%;
+  }
+  .argmap__canvas {
+    grid-template-columns: 1fr;
+  }
+  .argmap__spine {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 0.4rem;
+  }
+  .argmap__measure {
+    grid-column: 1 / -1;
+    margin-bottom: 0.2rem;
+  }
+  .argmap__spine-eyebrow {
+    grid-column: 1 / -1;
+  }
+  .argmap__slotgroup {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+  .argmap__detail {
+    position: static;
+    max-height: none;
+  }
+  .mapnode {
+    max-width: 100%;
+  }
+  .home__hero h1 {
+    font-size: 2rem;
+  }
+  .home__ctas {
+    flex-wrap: wrap;
+  }
+  .vote-actions .button {
+    flex: 1 1 auto;
+  }
 }

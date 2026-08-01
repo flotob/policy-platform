@@ -262,28 +262,55 @@ export function ArgumentMap({
           {ZONES.map(({ kind, className }) => {
             const list = visiblePoints.filter((p) => p.kind === kind);
             if (list.length === 0) return null;
+            // Same theme clusters as the map — the zoom level applies to
+            // both presentations.
+            const listThemes = [...new Set(list.map((p) => p.theme ?? ""))].sort(
+              (a, b) =>
+                list.filter((p) => (p.theme ?? "") === b).length -
+                list.filter((p) => (p.theme ?? "") === a).length,
+            );
+            const hasThemes = listThemes.some((th) => th !== "");
+            const renderChips = (chips: MapPoint[]) =>
+              chips.map((p) => (
+                <details key={p.id} className={`chip chip--${className}`}>
+                  <summary>
+                    <span className="chip__label">{p.label}</span>
+                    {p.slot && <span className={`badge badge--${className}`}>{p.slot}</span>}
+                    {p.status === "draft" && <span className="badge badge--draft">{t("draft")}</span>}
+                  </summary>
+                  <div className="chip__detail">
+                    {p.summary && <p>{p.summary}</p>}
+                    {p.sources.slice(0, 3).map((s, i) =>
+                      s.quote ? (
+                        <blockquote key={i} className="quote">
+                          „{s.quote}"{s.org && <cite>— {s.org}</cite>}
+                        </blockquote>
+                      ) : null,
+                    )}
+                  </div>
+                </details>
+              ));
             return (
               <section key={kind} className={`map-section map-section--${className}`}>
                 <h2>{zoneTitle(kind)} ({list.length})</h2>
-                {list.map((p) => (
-                  <details key={p.id} className={`chip chip--${className}`}>
-                    <summary>
-                      <span className="chip__label">{p.label}</span>
-                      {p.slot && <span className={`badge badge--${className}`}>{p.slot}</span>}
-                      {p.status === "draft" && <span className="badge badge--draft">{t("draft")}</span>}
-                    </summary>
-                    <div className="chip__detail">
-                      {p.summary && <p>{p.summary}</p>}
-                      {p.sources.slice(0, 3).map((s, i) =>
-                        s.quote ? (
-                          <blockquote key={i} className="quote">
-                            „{s.quote}"{s.org && <cite>— {s.org}</cite>}
-                          </blockquote>
-                        ) : null,
-                      )}
-                    </div>
-                  </details>
-                ))}
+                {hasThemes
+                  ? listThemes.map((th) => {
+                      const themePoints = list.filter((p) => (p.theme ?? "") === th);
+                      return (
+                        <details
+                          key={th || "_other"}
+                          className="argmap__theme"
+                          open={listThemes.length <= 3 || q !== ""}
+                        >
+                          <summary>
+                            {th || t("themeOther")}{" "}
+                            <span className="argmap__theme-count">{themePoints.length}</span>
+                          </summary>
+                          {renderChips(themePoints)}
+                        </details>
+                      );
+                    })
+                  : renderChips(list)}
               </section>
             );
           })}

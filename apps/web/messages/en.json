@@ -134,7 +134,10 @@
     "done": "That was all — thank you. Your votes flow into the next analysis.",
     "backToMap": "Back to the map",
     "yourVotes": "Your votes",
-    "stopAnytime": "Stop anytime — every vote counts, and the order is shuffled differently for everyone."
+    "stopAnytime": "Stop anytime — every vote counts, and the order is shuffled differently for everyone.",
+    "moreContext": "More context on this statement",
+    "contextSlot": "Part of the core argument",
+    "contextSources": "… and {n} occurrences across the submissions in total"
   },
   "Home": {
     "eyebrow": "An open-source tool for real participation",

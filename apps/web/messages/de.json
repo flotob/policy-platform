@@ -134,7 +134,10 @@
     "done": "Das war alles — danke. Ihre Voten fließen in die nächste Analyse ein.",
     "backToMap": "Zurück zur Landkarte",
     "yourVotes": "Ihre Voten",
-    "stopAnytime": "Sie können jederzeit aufhören — jedes Votum zählt, die Reihenfolge ist für alle unterschiedlich gemischt."
+    "stopAnytime": "Sie können jederzeit aufhören — jedes Votum zählt, die Reihenfolge ist für alle unterschiedlich gemischt.",
+    "moreContext": "Mehr Kontext zu diesem Statement",
+    "contextSlot": "Teil des Grundarguments",
+    "contextSources": "… und {n} Fundstellen insgesamt in den Stellungnahmen"
   },
   "Home": {
     "eyebrow": "Ein Open-Source-Werkzeug für echte Beteiligung",
