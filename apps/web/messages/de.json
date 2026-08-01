@@ -94,7 +94,10 @@
     "pass": "Enthaltung",
     "searchPlaceholder": "Punkte durchsuchen …",
     "showMore": "weitere",
-    "themeOther": "Weitere"
+    "themeOther": "Weitere",
+    "filterHint": "Klicken filtert die Karte",
+    "themesHeading": "Themen",
+    "clearFilters": "Filter zurücksetzen"
   },
   "Report": {
     "title": "Bericht",
@@ -150,5 +153,13 @@
     "zoneCouncilTitle": "Zone des Rates",
     "zoneCouncilText": "Wertfragen, die kein Gutachten der Welt entscheidet — hier muss Politik entscheiden und verantworten.",
     "liveHeading": "Live-Konsultationen"
+  },
+  "AppShell": {
+    "viewMap": "Karte",
+    "viewVote": "Abstimmen",
+    "viewReview": "Redaktion",
+    "viewReport": "Bericht",
+    "switcher": "Konsultation wechseln",
+    "analysis": "Analyse"
   }
 }

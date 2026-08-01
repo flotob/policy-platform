@@ -89,17 +89,32 @@ export function ArgumentMap({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  // Structure-tree filters: click a slot or theme in the left panel to
+  // narrow the canvas to it.
+  const [slotFilter, setSlotFilter] = useState<string | null>(null);
+  const [themeFilter, setThemeFilter] = useState<string | null>(null);
   const campLabel = (g: number) => campNames?.[String(g)]?.name ?? `G${g}`;
   const nodeText = (p: MapPoint) => p.statement ?? p.label;
   const q = query.trim().toLowerCase();
-  const visiblePoints = q
-    ? points.filter(
-        (p) =>
-          p.label.toLowerCase().includes(q) ||
-          (p.statement ?? "").toLowerCase().includes(q) ||
-          (p.summary ?? "").toLowerCase().includes(q),
-      )
-    : points;
+  const filtering = q !== "" || slotFilter !== null || themeFilter !== null;
+  const visiblePoints = points.filter((p) => {
+    if (
+      q &&
+      !p.label.toLowerCase().includes(q) &&
+      !(p.statement ?? "").toLowerCase().includes(q) &&
+      !(p.summary ?? "").toLowerCase().includes(q)
+    )
+      return false;
+    if (slotFilter && slotKey(p.slot) !== slotFilter) return false;
+    if (themeFilter && (p.theme ?? "") !== themeFilter) return false;
+    return true;
+  });
+  const allThemes = [...new Set(points.map((p) => p.theme).filter(Boolean))] as string[];
+  allThemes.sort(
+    (a, b) =>
+      points.filter((p) => p.theme === b).length -
+      points.filter((p) => p.theme === a).length,
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [paths, setPaths] = useState<{ d: string; cls: string; key: string }[]>([]);
@@ -300,7 +315,7 @@ export function ArgumentMap({
                         <details
                           key={th || "_other"}
                           className="argmap__theme"
-                          open={listThemes.length <= 3 || q !== ""}
+                          open={listThemes.length <= 3 || filtering}
                         >
                           <summary>
                             {th || t("themeOther")}{" "}
@@ -334,15 +349,52 @@ export function ArgumentMap({
                 <button
                   key={s}
                   ref={setNodeRef(`slot:${s}`)}
-                  className={`argmap__slot ${selected?.slot === s ? "argmap__slot--active" : ""} ${s === "conclusion" ? "argmap__slot--conclusion" : ""}`}
-                  onClick={() => setSelectedId(null)}
+                  className={`argmap__slot ${slotFilter === s || selected?.slot === s ? "argmap__slot--active" : ""} ${s === "conclusion" ? "argmap__slot--conclusion" : ""}`}
+                  onClick={() => setSlotFilter(slotFilter === s ? null : s)}
+                  title={t("filterHint")}
                 >
                   {slotLabel(s)}
                 </button>
               ))}
-              <div ref={setNodeRef("slot:none")} className="argmap__slot argmap__slot--none">
+              <button
+                ref={setNodeRef("slot:none")}
+                className={`argmap__slot argmap__slot--none ${slotFilter === "none" ? "argmap__slot--active" : ""}`}
+                onClick={() => setSlotFilter(slotFilter === "none" ? null : "none")}
+              >
                 {t("slotNone")}
-              </div>
+              </button>
+
+              {allThemes.length > 0 && (
+                <>
+                  <span className="argmap__spine-eyebrow argmap__spine-eyebrow--themes">
+                    {t("themesHeading")}
+                  </span>
+                  <div className="argmap__themetree">
+                    {allThemes.map((th) => (
+                      <button
+                        key={th}
+                        className={`argmap__themelink ${themeFilter === th ? "argmap__themelink--on" : ""}`}
+                        onClick={() => setThemeFilter(themeFilter === th ? null : th)}
+                      >
+                        <span>{th}</span>
+                        <em>{points.filter((p) => p.theme === th).length}</em>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {filtering && (
+                <button
+                  className="argmap__clearfilter"
+                  onClick={() => {
+                    setSlotFilter(null);
+                    setThemeFilter(null);
+                    setQuery("");
+                  }}
+                >
+                  {t("clearFilters")} ({visiblePoints.length})
+                </button>
+              )}
             </aside>
 
             <div className="argmap__zones">
@@ -365,7 +417,7 @@ export function ArgumentMap({
                       if (group.length === 0) return null;
                       const groupKey = `${kind}:${themeKey}:${slotKey(slot)}`;
                       const expanded =
-                        q !== "" || expandedGroups.has(groupKey) || group.length <= GROUP_LIMIT;
+                        filtering || expandedGroups.has(groupKey) || group.length <= GROUP_LIMIT;
                       const shown = expanded ? group : group.slice(0, GROUP_LIMIT);
                       return (
                         <div key={groupKey} className="argmap__slotgroup">
@@ -420,7 +472,7 @@ export function ArgumentMap({
                             <details
                               key={th || "_other"}
                               className="argmap__theme"
-                              open={themes.length <= 3 || q !== ""}
+                              open={themes.length <= 3 || filtering}
                             >
                               <summary>
                                 {th || t("themeOther")}{" "}

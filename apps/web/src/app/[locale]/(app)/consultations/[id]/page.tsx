@@ -89,37 +89,7 @@ export default async function MapPage({
   `);
   const analysis = (runRes.rows[0]?.result ?? null) as Analysis | null;
 
-  const votableRes = await db.execute(sql`
-    SELECT count(*)::int AS n FROM statements st
-    JOIN points p ON p.id = st.point_id
-    WHERE p.consultation_id = ${consultation.id} AND st.status = 'released'
-  `);
-  const votable = (votableRes.rows[0] as { n: number }).n > 0;
-  const tReport = await getTranslations("Report");
-  const voteCta = (
-    <p style={{ display: "flex", gap: "0.6rem" }}>
-      {votable && (
-        <Link className="button" href={`/${locale}/consultations/${consultation.id}/vote`}>
-          {t("voteCta")}
-        </Link>
-      )}
-      <Link
-        className="button"
-        style={{ background: "transparent", color: "var(--ink)", border: "1px solid var(--line)" }}
-        href={`/${locale}/consultations/${consultation.id}/report`}
-      >
-        {tReport("reportCta")}
-      </Link>
-      <Link
-        className="button"
-        prefetch={false}
-        style={{ background: "transparent", color: "var(--muted)", border: "1px solid var(--line)" }}
-        href={`/${locale}/consultations/${consultation.id}/review`}
-      >
-        {t("reviewCta")}
-      </Link>
-    </p>
-  );
+  // Vote/report/review live in the app shell's top bar now.
 
   // Decomposed argument points (excluding questionnaire pseudo-points, which
   // are the analyzed statements themselves) with their canonical statement.
@@ -324,15 +294,7 @@ export default async function MapPage({
     );
 
     return (
-      <main className="page">
-        <h1>{consultation.title}</h1>
-        <div className="stat-strip">
-          <span><strong>{analysis.matrix.participants}</strong> {t("participants")}</span>
-          <span><strong>{analysis.matrix.votes}</strong> {t("votes")}</span>
-          <span><strong>{analysis.clustering.k}</strong> {t("camps")}</span>
-          <span>Silhouette <strong>{analysis.clustering.silhouette.toFixed(2)}</strong></span>
-        </div>
-        {voteCta}
+      <main className="appview">
         <ConsultationTabs
           tabs={[
             ...(zonesBlock
@@ -357,27 +319,15 @@ export default async function MapPage({
 
   // No analysis: decomposed argument map only.
   if (mapPoints.length === 0) {
-    const subCount = await db.execute(
-      sql`SELECT count(*)::int AS n FROM submissions WHERE consultation_id = ${consultation.id}`,
-    );
     return (
-      <main className="page">
-        <h1>{consultation.title}</h1>
-        <div className="stat-strip">
-          <span><strong>{(subCount.rows[0] as { n: number }).n}</strong> Stellungnahmen</span>
-        </div>
+      <main className="appview">
         <p className="placeholder-note">{t("noAnalysis")}</p>
       </main>
     );
   }
 
   return (
-    <main className="page">
-      <h1>{consultation.title}</h1>
-      <div className="stat-strip">
-        <span><strong>{mapPoints.length}</strong> {t("points")}</span>
-      </div>
-      {voteCta}
+    <main className="appview">
       <ConsultationTabs
         tabs={[{
           key: "map",

@@ -94,7 +94,10 @@
     "pass": "pass",
     "searchPlaceholder": "Search points …",
     "showMore": "more",
-    "themeOther": "Other"
+    "themeOther": "Other",
+    "filterHint": "Click to filter the map",
+    "themesHeading": "Themes",
+    "clearFilters": "Clear filters"
   },
   "Report": {
     "title": "Report",
@@ -150,5 +153,13 @@
     "zoneCouncilTitle": "Zone of the council",
     "zoneCouncilText": "Value questions no study can decide — politics must decide and own these.",
     "liveHeading": "Live consultations"
+  },
+  "AppShell": {
+    "viewMap": "Map",
+    "viewVote": "Vote",
+    "viewReview": "Review",
+    "viewReport": "Report",
+    "switcher": "Switch consultation",
+    "analysis": "Analysis"
   }
 }
