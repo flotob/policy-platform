@@ -1835,3 +1835,15 @@ code {
 .overview__method li {
   margin: 0.45rem 0;
 }
+
+
+.scatter__triangle {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.scatter__dot--bridge {
+  stroke: var(--teal);
+  stroke-width: 2.5;
+}

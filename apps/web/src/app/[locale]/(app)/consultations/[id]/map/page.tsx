@@ -110,7 +110,6 @@ export default async function MapPage({
       AND loc.locale = ${locale} AND loc.status = 'released'
     WHERE p.consultation_id = ${consultation.id}
       AND p.status IN ('draft', 'released')
-      AND p.created_by <> 'import:questionnaire'
     ORDER BY p.created_at
   `);
   const rawPoints = pointsRes.rows as {

@@ -106,7 +106,9 @@
     "kindValue": "Wertung",
     "kindDesign": "Ausgestaltung",
     "kindGap": "Lücke",
-    "noVotesCamp": "noch keine Voten aus diesem Lager"
+    "noVotesCamp": "noch keine Voten aus diesem Lager",
+    "triangleCenter": "Mitte: alle Lager ähnlich",
+    "triangleLegend": "Deckkraft = Zustimmung des skeptischsten Lagers · heller Ring = Brücke (alle Lager ≥ 60 %)"
   },
   "Report": {
     "title": "Bericht",

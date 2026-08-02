@@ -106,7 +106,9 @@
     "kindValue": "Value",
     "kindDesign": "Design",
     "kindGap": "Gap",
-    "noVotesCamp": "no votes from this camp yet"
+    "noVotesCamp": "no votes from this camp yet",
+    "triangleCenter": "center: all camps alike",
+    "triangleLegend": "opacity = the most skeptical camp's agreement · bright ring = bridge (every camp ≥ 60%)"
   },
   "Report": {
     "title": "Report",

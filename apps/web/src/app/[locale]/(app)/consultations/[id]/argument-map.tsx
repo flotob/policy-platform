@@ -78,6 +78,140 @@ function hashJitter(id: string): number {
 }
 
 /**
+ * Barycentric triangle for THREE camps: each camp is a corner; a point sits
+ * at the weighted average of the corners by relative agreement. Center =
+ * all camps agree alike; an edge = two camps share it against the third.
+ * Dot opacity = the WEAKEST camp's agreement (the bridge criterion);
+ * a teal ring marks true bridges (every camp ≥ 60%).
+ */
+function TriangleField({
+  points,
+  selectedId,
+  relatedIds,
+  onSelect,
+  campLabel,
+  nodeText,
+  t,
+}: {
+  points: MapPoint[];
+  selectedId: string | null;
+  relatedIds: Set<string>;
+  onSelect: (id: string | null) => void;
+  campLabel: (g: number) => string;
+  nodeText: (p: MapPoint) => string;
+  t: ReturnType<typeof useTranslations<"MapView">>;
+}) {
+  const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 3);
+  if (voted.length === 0) return <p className="placeholder-note">{t("scatterEmpty")}</p>;
+  const groups = [...new Set(voted.flatMap((p) => p.perGroup!.map((g) => g.group)))]
+    .sort((a, b) => a - b)
+    .slice(0, 3) as [number, number, number];
+
+  const W = 1000;
+  const H = 780;
+  const cTop: [number, number] = [W / 2, 64];
+  const cLeft: [number, number] = [96, H - 110];
+  const cRight: [number, number] = [W - 96, H - 110];
+  const corners = [cTop, cLeft, cRight];
+  const GAMMA = 2.5; // sharpen relative weights so dots spread from center
+  const coords = voted.map((p) => {
+    const pas = groups.map((g) => p.perGroup!.find((x) => x.group === g)?.pa ?? 0);
+    const powed = pas.map((v) => Math.pow(Math.max(v, 0.001), GAMMA));
+    const sum = powed.reduce((s, v) => s + v, 0);
+    const w = powed.map((v) => v / sum);
+    const minPa = Math.min(...pas);
+    const round2 = (v: number) => Math.round(v * 100) / 100;
+    return {
+      p,
+      pas,
+      minPa,
+      x: round2(corners.reduce((s, c, i) => s + c[0] * w[i]!, 0) + (hashJitter(p.id) - 0.5) * 22),
+      y: round2(corners.reduce((s, c, i) => s + c[1] * w[i]!, 0) + (hashJitter(p.id + "y") - 0.5) * 22),
+      r: round2(4 + Math.min(9, Math.sqrt(pointWeight(p)) * 0.6)),
+    };
+  });
+  const labeled = new Set(
+    [...coords]
+      .sort((a, b) => pointWeight(b.p) - pointWeight(a.p))
+      .slice(0, 12)
+      .map((c) => c.p.id),
+  );
+  if (selectedId) labeled.add(selectedId);
+
+  return (
+    <div className="scatter">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img">
+        <polygon
+          points={corners.map((c) => c.join(",")).join(" ")}
+          className="scatter__triangle"
+        />
+        <text x={cTop[0]} y={cTop[1] - 18} textAnchor="middle" className="scatter__camp">
+          {campLabel(groups[0])}
+        </text>
+        <text x={cLeft[0] - 6} y={cLeft[1] + 34} textAnchor="start" className="scatter__camp">
+          {campLabel(groups[1])}
+        </text>
+        <text x={cRight[0] + 6} y={cRight[1] + 34} textAnchor="end" className="scatter__camp">
+          {campLabel(groups[2])}
+        </text>
+        <text
+          x={(cTop[0] + cLeft[0] + cRight[0]) / 3}
+          y={(cTop[1] + cLeft[1] + cRight[1]) / 3 + 4}
+          textAnchor="middle"
+          className="scatter__caption"
+        >
+          {t("triangleCenter")}
+        </text>
+        {coords.map((c) => (
+          <g
+            key={c.p.id}
+            className="scatter__dotg"
+            onClick={() => onSelect(c.p.id === selectedId ? null : c.p.id)}
+          >
+            <circle
+              cx={c.x}
+              cy={c.y}
+              r={c.r}
+              style={{ opacity: Math.round((0.35 + 0.65 * c.minPa) * 100) / 100 }}
+              className={[
+                "scatter__dot",
+                `scatter__dot--${c.p.kind}`,
+                c.minPa >= 0.6 ? "scatter__dot--bridge" : "",
+                selectedId === c.p.id ? "scatter__dot--sel" : "",
+                relatedIds.has(c.p.id) ? "scatter__dot--rel" : "",
+              ].join(" ")}
+            />
+            {labeled.has(c.p.id) && (
+              <text x={c.x} y={c.y + c.r + 11} textAnchor="middle" className="scatter__label">
+                {c.p.label.slice(0, 34)}
+                {c.p.label.length > 34 ? "…" : ""}
+              </text>
+            )}
+            <title>
+              {`${nodeText(c.p)}\n${groups.map((g, i) => `${campLabel(g)}: ${Math.round(c.pas[i]! * 100)}%`).join(" · ")}`}
+            </title>
+          </g>
+        ))}
+      </svg>
+      <div className="scatter__footer">
+        <span className="scatter__legend">
+          <i className="dot scatter__key--fact" /> {t("kindFact")}
+          <i className="dot scatter__key--value" /> {t("kindValue")}
+          <i className="dot scatter__key--design" /> {t("kindDesign")}
+          <i className="dot scatter__key--gap" /> {t("kindGap")}
+        </span>
+        <span className="scatter__note">{t("triangleLegend")}</span>
+        {points.length > voted.length && (
+          <span className="scatter__note">
+            {t("scatterUnvoted", { n: points.length - voted.length })}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * The conflict field: horizontal = which camp a point belongs to (camp A
  * territory left, camp B right, shared ground in the middle), vertical =
  * overall agreement. Dot size = weight (sources + votes), color = zone.
@@ -121,13 +255,14 @@ function ScatterField({
     // Unweighted mean of the two camps: top of the field = BOTH camps
     // agree (a bridge), independent of camp sizes.
     const overall = (paA + paB) / 2;
+    const round2 = (v: number) => Math.round(v * 100) / 100;
     return {
       p,
       paA,
       paB,
-      x: M + ((paB - paA + 1) / 2) * PW + (hashJitter(p.id) - 0.5) * 26,
-      y: M + (1 - overall) * PH + (hashJitter(p.id + "y") - 0.5) * 26,
-      r: 4 + Math.min(9, Math.sqrt(pointWeight(p)) * 1.4),
+      x: round2(M + ((paB - paA + 1) / 2) * PW + (hashJitter(p.id) - 0.5) * 26),
+      y: round2(M + (1 - overall) * PH + (hashJitter(p.id + "y") - 0.5) * 26),
+      r: round2(4 + Math.min(9, Math.sqrt(pointWeight(p)) * 1.4)),
     };
   });
   const byId = new Map(coords.map((c) => [c.p.id, c]));
@@ -195,8 +330,8 @@ function ScatterField({
             />
             {labeled.has(c.p.id) && (
               <text x={c.x} y={c.y + c.r + 11} textAnchor="middle" className="scatter__label">
-                {nodeText(c.p).slice(0, 34)}
-                {nodeText(c.p).length > 34 ? "…" : ""}
+                {c.p.label.slice(0, 34)}
+                {c.p.label.length > 34 ? "…" : ""}
               </text>
             )}
             <title>
@@ -238,6 +373,7 @@ export function ArgumentMap({
   const t = useTranslations("MapView");
   const tMap = useTranslations("Map");
   const hasVotes = points.some((p) => (p.perGroup?.length ?? 0) >= 2);
+  const campCount = new Set(points.flatMap((p) => (p.perGroup ?? []).map((g) => g.group))).size;
   const [mode, setMode] = useState<"scatter" | "map" | "list">(
     hasVotes ? "scatter" : "map",
   );
@@ -562,16 +698,28 @@ export function ArgumentMap({
 
             {mode === "scatter" ? (
               <div className="argmap__zones">
-                <ScatterField
-                  points={visiblePoints}
-                  edges={edges}
-                  selectedId={selectedId}
-                  relatedIds={relatedIds}
-                  onSelect={setSelectedId}
-                  campLabel={campLabel}
-                  nodeText={nodeText}
-                  t={t}
-                />
+                {campCount >= 3 ? (
+                  <TriangleField
+                    points={visiblePoints}
+                    selectedId={selectedId}
+                    relatedIds={relatedIds}
+                    onSelect={setSelectedId}
+                    campLabel={campLabel}
+                    nodeText={nodeText}
+                    t={t}
+                  />
+                ) : (
+                  <ScatterField
+                    points={visiblePoints}
+                    edges={edges}
+                    selectedId={selectedId}
+                    relatedIds={relatedIds}
+                    onSelect={setSelectedId}
+                    campLabel={campLabel}
+                    nodeText={nodeText}
+                    t={t}
+                  />
+                )}
               </div>
             ) : (
             <div className="argmap__zones">
