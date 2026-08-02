@@ -4,7 +4,8 @@ import { getFormatter, getTranslations, setRequestLocale } from "next-intl/serve
 import { sql } from "@policy/db";
 
 import { getDb } from "@/lib/db";
-import { AppTopBar } from "./app-top-bar";
+import { SiteHeader } from "@/components/SiteHeader";
+import { ConsultationBar } from "./app-top-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,8 @@ export default async function AppLayout({
 
   return (
     <div className="appshell">
-      <AppTopBar locale={locale} currentId={consultation.id} title={consultation.title} />
+      <SiteHeader />
+      <ConsultationBar locale={locale} currentId={consultation.id} title={consultation.title} />
       <div className="appshell__main">{children}</div>
       <footer className="appshell__status">
         <span><strong>{stats.points}</strong> {t("points")}</span>

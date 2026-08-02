@@ -1406,7 +1406,7 @@ code {
 .appshell {
   height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
 }
 
 .appshell__main {
@@ -1671,3 +1671,167 @@ code {
 .scatter__key--value { background: var(--amber); }
 .scatter__key--design { background: var(--teal); }
 .scatter__key--gap { background: var(--muted); }
+
+
+/* ——— consultation overview (exec summary) ——— */
+
+.button--secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.overview {
+  max-width: 60rem;
+  margin-inline: auto;
+}
+
+.overview__head {
+  padding-top: 1rem;
+}
+
+.overview__meta {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  margin: -0.3rem 0 0.8rem;
+}
+
+.overview__lead {
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  max-width: 46rem;
+}
+
+.overview__ctas {
+  display: flex;
+  gap: 0.7rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.overview__section {
+  margin: 2.2rem 0;
+}
+
+.overview__section h2 {
+  border-bottom: 2px solid var(--line);
+  padding-bottom: 0.3rem;
+  font-size: 1.15rem;
+}
+
+.overview__camps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 0.9rem;
+}
+
+.overview__camp {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+}
+
+.overview__camp h3 {
+  font-size: 1.02rem;
+  margin-bottom: 0.2rem;
+}
+
+.overview__camp-size {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.overview__camp p:last-child {
+  margin-bottom: 0;
+  font-size: 0.92rem;
+}
+
+.overview__note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  max-width: 48rem;
+  margin-top: 0.9rem;
+}
+
+.overview__list {
+  padding-left: 1.4rem;
+}
+
+.overview__list li {
+  margin: 0.55rem 0;
+}
+
+.overview__figures {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.overview__themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.overview__themechip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0.25rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+.overview__themechip em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.overview__zones {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.9rem;
+}
+
+.overview__zonecard {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top-width: 3px;
+  border-radius: 10px;
+  padding: 0.9rem 1.1rem;
+}
+
+.overview__zonecard--fact { border-top-color: var(--blue); }
+.overview__zonecard--value { border-top-color: var(--amber); }
+.overview__zonecard--design { border-top-color: var(--teal); }
+.overview__zonecard--gap { border-top-color: var(--muted); }
+
+.overview__zonecard strong {
+  font-size: 1.5rem;
+  font-family: var(--font-serif);
+}
+
+.overview__zonecard h3 {
+  font-size: 0.92rem;
+  margin: 0.1rem 0 0.2rem;
+}
+
+.overview__zonecard p {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+}
+
+.overview__method {
+  padding-left: 1.4rem;
+  max-width: 48rem;
+}
+
+.overview__method li {
+  margin: 0.45rem 0;
+}

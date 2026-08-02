@@ -4,10 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { LocaleSwitcher } from "@/components/LocaleSwitcher";
-import { ThemeToggle } from "@/components/ThemeToggle";
-
-export function AppTopBar({
+/** Second-level bar: the consultation's identity and its views. */
+export function ConsultationBar({
   locale,
   currentId,
   title,
@@ -20,17 +18,14 @@ export function AppTopBar({
   const t = useTranslations("AppShell");
   const base = `/${locale}/consultations/${currentId}`;
   const views = [
-    { href: base, label: t("viewMap"), exact: true },
+    { href: base, label: t("viewOverview"), exact: true },
+    { href: `${base}/map`, label: t("viewMap"), exact: false },
     { href: `${base}/vote`, label: t("viewVote"), exact: false },
     { href: `${base}/review`, label: t("viewReview"), exact: false, prefetch: false },
-    { href: `${base}/report`, label: t("viewReport"), exact: false },
   ];
 
   return (
-    <header className="appbar">
-      <Link href={`/${locale}`} className="wordmark wordmark--compact">
-        policy
-      </Link>
+    <div className="appbar">
       <span className="appbar__title" title={title}>
         {title}
       </span>
@@ -49,10 +44,6 @@ export function AppTopBar({
           );
         })}
       </nav>
-      <div className="appbar__meta">
-        <LocaleSwitcher />
-        <ThemeToggle />
-      </div>
-    </header>
+    </div>
   );
 }
