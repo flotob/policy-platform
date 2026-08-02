@@ -105,7 +105,8 @@
     "kindFact": "Tatsache",
     "kindValue": "Wertung",
     "kindDesign": "Ausgestaltung",
-    "kindGap": "Lücke"
+    "kindGap": "Lücke",
+    "noVotesCamp": "noch keine Voten aus diesem Lager"
   },
   "Report": {
     "title": "Bericht",

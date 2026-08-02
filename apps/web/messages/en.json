@@ -105,7 +105,8 @@
     "kindFact": "Fact",
     "kindValue": "Value",
     "kindDesign": "Design",
-    "kindGap": "Gap"
+    "kindGap": "Gap",
+    "noVotesCamp": "no votes from this camp yet"
   },
   "Report": {
     "title": "Report",

@@ -916,16 +916,38 @@ code {
 .argmap__verdict--open, .argmap__verdict--gap { color: var(--muted); }
 
 .argmap__campbar {
-  display: grid;
-  grid-template-columns: 2rem 1fr auto;
-  gap: 0.5rem;
+  margin: 0.55rem 0;
+}
+
+.argmap__campbar-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 0.25rem;
+}
+
+.argmap__campbar-row {
+  display: flex;
   align-items: center;
+  gap: 0.6rem;
+}
+
+.argmap__campbar-row--empty {
   font-size: 0.78rem;
-  margin: 0.25rem 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.argmap__campbar-val {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
 }
 
 .argmap__campbar-track {
   position: relative;
+  flex: 1;
   height: 9px;
   background: var(--gray-bg);
   border-radius: 5px;

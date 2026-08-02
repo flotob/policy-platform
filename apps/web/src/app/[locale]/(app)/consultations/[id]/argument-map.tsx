@@ -698,12 +698,22 @@ export function ArgumentMap({
                     </span>
                     {selected.perGroup.map((g) => (
                       <div key={g.group} className="argmap__campbar">
-                        <span title={campLabel(g.group)}>{campLabel(g.group)}</span>
-                        <span className="argmap__campbar-track">
-                          <i style={{ width: `${Math.round(g.pa * 100)}%` }} />
-                          <em />
-                        </span>
-                        <span>{Math.round(g.pa * 100)}% (n={g.ns})</span>
+                        <div className="argmap__campbar-name">{campLabel(g.group)}</div>
+                        {g.ns > 0 ? (
+                          <div className="argmap__campbar-row">
+                            <span className="argmap__campbar-track">
+                              <i style={{ width: `${Math.round(g.pa * 100)}%` }} />
+                              <em />
+                            </span>
+                            <span className="argmap__campbar-val">
+                              {Math.round(g.pa * 100)} % · n={g.ns}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="argmap__campbar-row argmap__campbar-row--empty">
+                            {t("noVotesCamp")}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
