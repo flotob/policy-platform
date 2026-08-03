@@ -3,6 +3,7 @@ import { DEFAULT_THRESHOLDS } from "@policy/math";
 import {
   AI_REVIEW_POINTS_SYSTEM,
   AI_REVIEW_STATEMENTS_SYSTEM,
+  BATCH_MATCH_SYSTEM,
   DECOMPOSE_SYSTEM,
   MATCH_SYSTEM,
   NAME_CAMPS_SYSTEM,
@@ -25,6 +26,7 @@ export const dynamic = "force-static";
 const PROMPTS: { key: string; de: string; en: string; text: string }[] = [
   { key: "decompose", de: "Dekomposition (Stellungnahme → Punkte)", en: "Decomposition (submission → points)", text: DECOMPOSE_SYSTEM },
   { key: "match", de: "Matching (bekannter Punkt oder neu?)", en: "Matching (known point or new?)", text: MATCH_SYSTEM },
+  { key: "batch-match", de: "Batch-Matching (ein Aufruf pro Abschnitt)", en: "Batch matching (one call per chunk)", text: BATCH_MATCH_SYSTEM },
   { key: "relations", de: "Bezüge (stützt / kritische Fragen)", en: "Relations (supports / critical questions)", text: RELATIONS_SYSTEM },
   { key: "statement", de: "Statement-Generierung (Punkt → abstimmbarer Satz)", en: "Statement generation (point → votable sentence)", text: STATEMENT_SYSTEM },
   { key: "review-points", de: "KI-Redaktion: Punkte", en: "AI editor: points", text: AI_REVIEW_POINTS_SYSTEM },
