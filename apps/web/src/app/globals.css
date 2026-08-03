@@ -1,11 +1,13 @@
 /* policy — app foundation
  *
  * Design language inherited from the concept demo (docs/landkarte1.html):
- * paper ground, ink text, Georgia serif for content, and the semantic zone
- * palette. The zone colors are MEANING, not decoration: blue = resolvable by
- * evidence (Gutachterzone), amber = politically decided (Ratszone),
- * teal = bridge/consensus, coral = value difference. Never use them for
- * anything else.
+ * paper ground, ink text, Georgia serif for content, and a semantic palette.
+ * Colors are MEANING, not decoration, and each color has ONE meaning:
+ * Befund vocabulary — teal = bridge/consensus, coral = conflict line,
+ * amber = warning (⚠), gray = gap/open. Kind/zone vocabulary — blue = fact
+ * (Gutachterzone, resolvable by evidence), violet = value (Ratszone,
+ * politically decided), magenta = design proposal. Never reuse a color
+ * across the two vocabularies.
  */
 
 :root {
@@ -23,6 +25,12 @@
   --amber-bg: #fbf3e0;
   --blue: #1e4a7a;
   --blue-bg: #edf2f8;
+  /* Kind-only colors (Value, Design): deliberately outside the Befund
+     vocabulary (teal=bridge, coral=conflict, amber=warning, gray=gap). */
+  --violet: #5f4497;
+  --violet-bg: #efeaf7;
+  --magenta: #a13c6e;
+  --magenta-bg: #f8eaf1;
   --gray-bg: #f1efe8;
   --ink-soft: #3a3d45;
   --line-strong: #c9c7bd;
@@ -327,8 +335,8 @@ code {
 .map-section--conflict > h2 { color: var(--coral); border-color: var(--coral); }
 .map-section--open > h2 { color: var(--muted); }
 .map-section--fact > h2 { color: var(--blue); border-color: var(--blue); }
-.map-section--value > h2 { color: var(--amber); border-color: var(--amber); }
-.map-section--design > h2 { color: var(--ink); }
+.map-section--value > h2 { color: var(--violet); border-color: var(--violet); }
+.map-section--design > h2 { color: var(--magenta); }
 
 .chip {
   background: var(--card);
@@ -344,8 +352,8 @@ code {
 .chip--conflict { border-left-color: var(--coral); }
 .chip--open { border-left-color: var(--line-strong); }
 .chip--fact { border-left-color: var(--blue); }
-.chip--value { border-left-color: var(--amber); }
-.chip--design { border-left-color: var(--ink); }
+.chip--value { border-left-color: var(--violet); }
+.chip--design { border-left-color: var(--magenta); }
 
 .chip summary {
   cursor: pointer;
@@ -441,8 +449,8 @@ code {
 }
 
 .badge--fact { background: var(--blue-bg); color: var(--blue); }
-.badge--value { background: var(--amber-bg); color: var(--amber); }
-.badge--design { background: var(--gray-bg); color: var(--ink); }
+.badge--value { background: var(--violet-bg); color: var(--violet); }
+.badge--design { background: var(--magenta-bg); color: var(--magenta); }
 .badge--draft { background: var(--coral-bg); color: var(--coral); }
 
 /* ——— voting ——— */
@@ -584,8 +592,8 @@ code {
 }
 
 .report__zone.map-section--fact { border-color: var(--blue); }
-.report__zone.map-section--value { border-color: var(--amber); }
-.report__zone.map-section--design { border-color: var(--teal); }
+.report__zone.map-section--value { border-color: var(--violet); }
+.report__zone.map-section--design { border-color: var(--magenta); }
 
 .report__footnote {
   margin-top: 3rem;
@@ -791,8 +799,8 @@ code {
 }
 
 .argmap__zone--fact { border-top: 3px solid var(--blue); background: linear-gradient(var(--blue-bg), var(--card) 60px); }
-.argmap__zone--value { border-top: 3px solid var(--amber); background: linear-gradient(var(--amber-bg), var(--card) 60px); }
-.argmap__zone--design { border-top: 3px solid var(--teal); background: linear-gradient(var(--teal-bg), var(--card) 60px); }
+.argmap__zone--value { border-top: 3px solid var(--violet); background: linear-gradient(var(--violet-bg), var(--card) 60px); }
+.argmap__zone--design { border-top: 3px solid var(--magenta); background: linear-gradient(var(--magenta-bg), var(--card) 60px); }
 .argmap__zone--gap { border-style: dashed; }
 
 .argmap__zone header {
@@ -1370,6 +1378,10 @@ code {
   --amber-bg: #352a15;
   --blue: #7da7d9;
   --blue-bg: #1c2836;
+  --violet: #a48fd8;
+  --violet-bg: #272033;
+  --magenta: #d783ab;
+  --magenta-bg: #33202a;
   --gray-bg: #26282e;
   --button-hover: #f7f5ef;
 }
@@ -1392,6 +1404,10 @@ code {
     --amber-bg: #352a15;
     --blue: #7da7d9;
     --blue-bg: #1c2836;
+    --violet: #a48fd8;
+    --violet-bg: #272033;
+    --magenta: #d783ab;
+    --magenta-bg: #33202a;
     --gray-bg: #26282e;
     --button-hover: #f7f5ef;
   }
@@ -1746,8 +1762,8 @@ code {
 }
 
 .scatter__dot--fact { fill: var(--blue); }
-.scatter__dot--value { fill: var(--amber); }
-.scatter__dot--design { fill: var(--teal); }
+.scatter__dot--value { fill: var(--violet); }
+.scatter__dot--design { fill: var(--magenta); }
 .scatter__dot--gap { fill: var(--muted); }
 
 .scatter__dot--sel {
@@ -1792,8 +1808,8 @@ code {
 .scatter__legend .dot { margin-left: 0.7rem; }
 .scatter__legend .dot:first-child { margin-left: 0; }
 .scatter__key--fact { background: var(--blue); }
-.scatter__key--value { background: var(--amber); }
-.scatter__key--design { background: var(--teal); }
+.scatter__key--value { background: var(--violet); }
+.scatter__key--design { background: var(--magenta); }
 .scatter__key--gap { background: var(--muted); }
 
 
@@ -1931,8 +1947,8 @@ code {
 }
 
 .overview__zonecard--fact { border-top-color: var(--blue); }
-.overview__zonecard--value { border-top-color: var(--amber); }
-.overview__zonecard--design { border-top-color: var(--teal); }
+.overview__zonecard--value { border-top-color: var(--violet); }
+.overview__zonecard--design { border-top-color: var(--magenta); }
 .overview__zonecard--gap { border-top-color: var(--muted); }
 
 .overview__zonecard strong {
