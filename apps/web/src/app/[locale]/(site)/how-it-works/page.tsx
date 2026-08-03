@@ -162,6 +162,21 @@ function content(locale: string, methodsHref: string): { title: string; lead: st
                   : "Camp profiles classify each point (bridge / conflict line / open) and diagnose the map as a whole — next section."}
               </li>
             </ol>
+            <p>
+              {de ? (
+                <>
+                  Die komplette Pipeline als Fließbild — Station für Station, mit jedem
+                  System-Prompt im Wortlaut zum Aufklappen — steht auf der{" "}
+                  <Link href={methodsHref}>Methodik-Seite</Link>.
+                </>
+              ) : (
+                <>
+                  The full pipeline as a flow diagram — station by station, every system
+                  prompt openable verbatim — lives on the{" "}
+                  <Link href={methodsHref}>methods page</Link>.
+                </>
+              )}
+            </p>
           </>
         ),
       },

@@ -1073,6 +1073,130 @@ code {
   white-space: nowrap;
 }
 
+/* Pipeline flow (methods page): vertical spine, numbered stations, artifact
+   labels on the connectors. Type colors: llm=blue, gate=amber, det=teal. */
+.pipe-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.1rem;
+  margin: 0.9rem 0 1.2rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.pipe-legend__item::before {
+  content: "";
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  margin-right: 0.4rem;
+  vertical-align: baseline;
+}
+
+.pipe-legend__item--llm::before { background: var(--blue); }
+.pipe-legend__item--gate::before { background: var(--amber); }
+.pipe-legend__item--det::before { background: var(--teal); }
+
+.pipe {
+  position: relative;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pipe::before {
+  content: "";
+  position: absolute;
+  left: 0.78rem;
+  top: 0.8rem;
+  bottom: 0.8rem;
+  width: 2px;
+  background: var(--line);
+}
+
+.pipe__stage {
+  position: relative;
+  padding: 0 0 0 2.6rem;
+}
+
+.pipe__dot {
+  position: absolute;
+  left: 0;
+  top: 0.05rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pipe__stage--llm .pipe__dot { border-color: var(--blue); color: var(--blue); }
+.pipe__stage--gate .pipe__dot { border-color: var(--amber); color: var(--amber); }
+.pipe__stage--det .pipe__dot { border-color: var(--teal); color: var(--teal); }
+
+.pipe__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  padding-top: 0.2rem;
+}
+
+.pipe__type {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  background: var(--gray-bg);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pipe__stage--llm .pipe__type { background: var(--blue-bg); color: var(--blue); }
+.pipe__stage--gate .pipe__type { background: var(--amber-bg); color: var(--amber); }
+.pipe__stage--det .pipe__type { background: var(--teal-bg); color: var(--teal); }
+
+.pipe__script {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pipe__desc {
+  margin: 0.35rem 0 0.4rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+.pipe__artifact {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin: 0.55rem 0 1.25rem;
+}
+
+.pipe__stage .methods__prompt {
+  max-width: 62ch;
+}
+
+@media (max-width: 600px) {
+  .pipe__script {
+    margin-left: 0;
+    flex-basis: 100%;
+    white-space: normal;
+  }
+}
+
 .methods__prompt {
   border: 1px solid var(--line);
   border-radius: 8px;
