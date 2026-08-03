@@ -4,6 +4,8 @@
  * Usage:
  *   DATABASE_URL=... pnpm --filter @policy/pipeline decompose -- \
  *     --consultation <source_ref|uuid> [--limit 2] [--model claude-sonnet-5]
+ *     [--batch-match]   O1: one match call per chunk (validate via
+ *                       replay-batch-match.ts before making this the default)
  *
  * Uses the Agent SDK provider (local Claude Code auth). Processes only
  * submissions without prior match decisions; sequential, politely paced.
@@ -31,6 +33,7 @@ async function main() {
   // old truncation window — chunking now reads them fully; the matcher and
   // the point_sources guard keep reruns duplicate-free.
   const retruncated = process.argv.includes("--retruncated");
+  const batchMatch = process.argv.includes("--batch-match");
 
   const db = createDb(url);
   const rows = await db.execute(sql`
@@ -52,7 +55,7 @@ async function main() {
     console.log(`→ ${row.author_org ?? row.id} (${row.chars} chars)…`);
     const started = Date.now();
     try {
-      const result = await runForSubmission(db, provider, row.id, model);
+      const result = await runForSubmission(db, provider, row.id, model, { batchMatch });
       console.log(
         `  ${result.candidates} candidates → ${result.created} new points, ` +
           `${result.matched} matched${result.chunks > 1 ? ` (${result.chunks} chunks)` : ""} ` +

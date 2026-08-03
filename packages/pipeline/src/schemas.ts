@@ -52,6 +52,24 @@ export const matchOutput = z
   })
   .strict();
 
+/** One verdict of a batch match call (throughput plan O1). */
+export const batchMatchVerdict = z
+  .object({
+    /** Index into the numbered candidate list. */
+    candidate_index: z.number().int().nonnegative(),
+    decision: z.enum(["matched", "new"]),
+    /** Index into the numbered list of existing points (when matched). */
+    matched_index: z.number().int().nonnegative().nullable(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
+export const batchMatchOutput = z
+  .object({
+    matches: z.array(batchMatchVerdict).max(30),
+  })
+  .strict();
+
 export const relationsOutput = z
   .object({
     relations: z.array(candidateRelation).max(60),
@@ -160,6 +178,7 @@ function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
 
 export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
+export const batchMatchJsonSchema = toProviderSchema(batchMatchOutput);
 export const statementJsonSchema = toProviderSchema(statementOutput);
 export const relationsJsonSchema = toProviderSchema(relationsOutput);
 export const aiReviewJsonSchema = toProviderSchema(aiReviewOutput);

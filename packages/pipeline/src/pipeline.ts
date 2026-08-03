@@ -24,12 +24,16 @@ import {
 import type { LlmProvider } from "@policy/llm";
 
 import {
+  BATCH_MATCH_SYSTEM,
+  batchMatchPrompt,
   DECOMPOSE_SYSTEM,
   decomposePrompt,
   MATCH_SYSTEM,
   matchPrompt,
 } from "./prompts.ts";
 import {
+  batchMatchOutput,
+  batchMatchJsonSchema,
   decompositionOutput,
   decompositionJsonSchema,
   matchOutput,
@@ -79,11 +83,27 @@ export function chunkText(text: string, maxChars = 20_000): string[] {
   return chunks;
 }
 
+interface MatchVerdict {
+  outcome: "matched" | "new";
+  matchedPointId: string | null;
+  confidence: number;
+}
+
+export interface RunOptions {
+  /**
+   * Throughput plan O1: one match call per decomposition chunk instead of
+   * one per candidate. Candidates a batch verdict misses (or answers with an
+   * invalid index) fall back to the per-candidate call.
+   */
+  batchMatch?: boolean;
+}
+
 export async function runForSubmission(
   db: Db,
   provider: LlmProvider,
   submissionId: string,
   model?: string,
+  options: RunOptions = {},
 ): Promise<PipelineRunResult> {
   const [submission] = await db
     .select()
@@ -134,14 +154,56 @@ export async function runForSubmission(
       )
       .orderBy(points.createdAt);
 
-    for (const candidate of parsed.points) {
+    // O1 batch matching: one call for the whole chunk. Invalid or missing
+    // verdicts drop out of the map and take the per-candidate fallback below.
+    const batchVerdicts = new Map<number, MatchVerdict>();
+    let batchProvenance: unknown = null;
+    if (options.batchMatch && existing.length > 0 && parsed.points.length > 0) {
+      try {
+        const batch = await provider.generateStructured({
+          system: BATCH_MATCH_SYSTEM,
+          prompt: batchMatchPrompt(parsed.points, existing),
+          schema: batchMatchJsonSchema,
+          model,
+        });
+        const decisions = batchMatchOutput.parse(batch.output);
+        batchProvenance = batch.provenance;
+        for (const v of decisions.matches) {
+          if (v.candidate_index >= parsed.points.length) continue;
+          if (batchVerdicts.has(v.candidate_index)) continue;
+          const valid =
+            v.decision === "matched" &&
+            v.matched_index !== null &&
+            v.matched_index < existing.length;
+          batchVerdicts.set(v.candidate_index, {
+            outcome: valid ? "matched" : "new",
+            matchedPointId: valid ? existing[v.matched_index!]!.id : null,
+            confidence: v.confidence,
+          });
+        }
+      } catch (err) {
+        console.log(
+          `  batch match failed (${err instanceof Error ? err.message : err}), ` +
+            `falling back to per-candidate calls`,
+        );
+      }
+    }
+
+    for (let ci = 0; ci < parsed.points.length; ci++) {
+      const candidate = parsed.points[ci]!;
 
     let outcome: "matched" | "new" = "new";
     let matchedPointId: string | null = null;
     let confidence: number | null = null;
     let matchProvenance: unknown = null;
 
-    if (existing.length > 0) {
+    const batched = batchVerdicts.get(ci);
+    if (batched) {
+      outcome = batched.outcome;
+      matchedPointId = batched.matchedPointId;
+      confidence = batched.confidence;
+      matchProvenance = { ...(batchProvenance as object), batch: true };
+    } else if (existing.length > 0) {
       const match = await provider.generateStructured({
         system: MATCH_SYSTEM,
         prompt: matchPrompt(candidate, existing),

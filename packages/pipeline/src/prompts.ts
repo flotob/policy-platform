@@ -169,6 +169,33 @@ The same point = the same claim content, even in different words, tone, or detai
 
 Be conservative about matching: when in doubt whether nuance is lost by merging, prefer "new". A false merge silently erases a voice; a false new point is cheaply merged later by editors.`;
 
+export const BATCH_MATCH_SYSTEM = `You decide, for EACH candidate point from a consultation submission, whether it is the SAME point as one already on the argument map, or a genuinely new point.
+
+The same point = the same claim content, even in different words, tone, or detail level. A different aspect, a narrower/broader claim with different implications, or a different mechanism = a new point.
+
+Be conservative about matching: when in doubt whether nuance is lost by merging, prefer "new". A false merge silently erases a voice; a false new point is cheaply merged later by editors.
+
+Judge every candidate independently against the existing map only — never match candidates to each other. Return exactly one verdict per candidate, using the candidate's number as candidate_index.`;
+
+export function batchMatchPrompt(
+  candidates: { label: string; summary: string }[],
+  existing: { label: string; summary: string | null }[],
+): string {
+  const candidateList = candidates
+    .map((c, i) => `${i}. ${c.label} — ${c.summary}`)
+    .join("\n");
+  const list = existing
+    .map((p, i) => `${i}. ${p.label} — ${p.summary ?? ""}`)
+    .join("\n");
+  return (
+    `Candidate points:\n${candidateList}\n\n` +
+    `Existing points on the map:\n${list}\n\n` +
+    `For every candidate: is it the same point as one of the existing ones? ` +
+    `If matched, give the existing point's number as matched_index; if new, matched_index = null. ` +
+    `One verdict per candidate, all ${candidates.length} of them.`
+  );
+}
+
 export function matchPrompt(
   candidate: { label: string; summary: string },
   existing: { label: string; summary: string | null }[],
