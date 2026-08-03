@@ -4,7 +4,11 @@
  * written back into analysis_runs.result.campNames (presentation metadata;
  * the deterministic analysis itself stays untouched).
  *
- * Usage: DATABASE_URL=... tsx scripts/name-camps.ts --consultation <ref>
+ * Usage: DATABASE_URL=... tsx scripts/name-camps.ts --consultation <ref> [--language en]
+ *
+ * The output language defaults to the consultation's dominant submission
+ * language — without the hint the model guesses from the bilingual
+ * statement labels (the AI WP got German camp names that way).
  */
 
 import { createDb, sql } from "@policy/db";
@@ -48,6 +52,23 @@ async function main() {
     };
   };
 
+  // Output language: explicit flag wins; otherwise the dominant language of
+  // the consultation's submissions (values are free-form: 'de', 'EN', ...).
+  let language = arg("language");
+  if (!language) {
+    const langRes = await db.execute(sql`
+      SELECT s.language FROM submissions s
+      JOIN consultations c ON c.id = s.consultation_id
+      WHERE (c.id::text = ${consultation} OR c.source_ref = ${consultation})
+        AND s.language IS NOT NULL
+      GROUP BY s.language ORDER BY count(*) DESC LIMIT 1
+    `);
+    language = (langRes.rows[0] as { language: string } | undefined)?.language;
+  }
+  const languageLine = language
+    ? `\n\nWrite ALL camp names and summaries in this language: ${language}.`
+    : "";
+
   const groups = Object.keys(result.clustering.groupSizes).map(Number).sort();
   const lines: string[] = [];
   for (const g of groups) {
@@ -76,7 +97,7 @@ async function main() {
   const provider = new AgentSdkProvider();
   const generated = await provider.generateStructured({
     system: NAME_CAMPS_SYSTEM,
-    prompt: `Consultation: ${title}\n\n${lines.join("\n\n")}\n\nName every camp (group index as given).`,
+    prompt: `Consultation: ${title}\n\n${lines.join("\n\n")}\n\nName every camp (group index as given).${languageLine}`,
     schema: campNamesJsonSchema,
   });
   const parsed = campNamesOutput.parse(generated.output);
