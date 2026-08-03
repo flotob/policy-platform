@@ -78,6 +78,71 @@ function hashJitter(id: string): number {
 }
 
 /**
+ * Which dots get a text label: heaviest first (weight = sources + votes,
+ * the same measure the dot RADIUS encodes), skipping any label whose box
+ * would overlap one already placed — so dense clusters show only their
+ * heaviest label instead of overprinting. Deterministic (coords are
+ * pre-rounded), SSR-safe.
+ */
+function placeLabels(
+  coords: { p: MapPoint; x: number; y: number; r: number }[],
+  max: number,
+): Set<string> {
+  const placed: { x1: number; y1: number; x2: number; y2: number }[] = [];
+  const out = new Set<string>();
+  const byWeight = [...coords].sort((a, b) => pointWeight(b.p) - pointWeight(a.p));
+  for (const c of byWeight) {
+    if (out.size >= max) break;
+    const w = Math.min(c.p.label.length, 34) * 6.2 + 10;
+    const box = { x1: c.x - w / 2, y1: c.y + c.r + 2, x2: c.x + w / 2, y2: c.y + c.r + 16 };
+    if (placed.some((b) => box.x1 < b.x2 && box.x2 > b.x1 && box.y1 < b.y2 && box.y2 > b.y1))
+      continue;
+    placed.push(box);
+    out.add(c.p.id);
+  }
+  return out;
+}
+
+const KIND_KEYS = ["fact", "value", "design", "gap"] as const;
+
+/** Legend that doubles as a kind filter (Fact/Value/Design/Gap). */
+function KindLegend({
+  counts,
+  kindFilter,
+  onToggleKind,
+  t,
+}: {
+  counts: Record<string, number>;
+  kindFilter: Set<string>;
+  onToggleKind: (kind: string) => void;
+  t: ReturnType<typeof useTranslations<"MapView">>;
+}) {
+  const label = (k: string) =>
+    k === "fact" ? t("kindFact") : k === "value" ? t("kindValue") : k === "design" ? t("kindDesign") : t("kindGap");
+  return (
+    <span className="scatter__legend">
+      {KIND_KEYS.map((k) => (
+        <button
+          key={k}
+          type="button"
+          className={[
+            "scatter__kbtn",
+            kindFilter.has(k) ? "scatter__kbtn--on" : "",
+            kindFilter.size > 0 && !kindFilter.has(k) ? "scatter__kbtn--dim" : "",
+          ].join(" ")}
+          onClick={() => onToggleKind(k)}
+          aria-pressed={kindFilter.has(k)}
+          title={t("kindFilterHint")}
+        >
+          <i className={`dot scatter__key--${k}`} /> {label(k)}
+          <span className="scatter__kcount">{counts[k] ?? 0}</span>
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
  * Barycentric triangle for THREE camps: each camp is a corner; a point sits
  * at the weighted average of the corners by relative agreement. Center =
  * all camps agree alike; an edge = two camps share it against the third.
@@ -92,6 +157,9 @@ function TriangleField({
   campLabel,
   nodeText,
   t,
+  kindCounts,
+  kindFilter,
+  onToggleKind,
 }: {
   points: MapPoint[];
   selectedId: string | null;
@@ -100,6 +168,9 @@ function TriangleField({
   campLabel: (g: number) => string;
   nodeText: (p: MapPoint) => string;
   t: ReturnType<typeof useTranslations<"MapView">>;
+  kindCounts: Record<string, number>;
+  kindFilter: Set<string>;
+  onToggleKind: (kind: string) => void;
 }) {
   const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 3);
   if (voted.length === 0) return <p className="placeholder-note">{t("scatterEmpty")}</p>;
@@ -130,12 +201,7 @@ function TriangleField({
       r: round2(4 + Math.min(9, Math.sqrt(pointWeight(p)) * 0.6)),
     };
   });
-  const labeled = new Set(
-    [...coords]
-      .sort((a, b) => pointWeight(b.p) - pointWeight(a.p))
-      .slice(0, 12)
-      .map((c) => c.p.id),
-  );
+  const labeled = placeLabels(coords, 16);
   if (selectedId) labeled.add(selectedId);
 
   return (
@@ -194,12 +260,7 @@ function TriangleField({
         ))}
       </svg>
       <div className="scatter__footer">
-        <span className="scatter__legend">
-          <i className="dot scatter__key--fact" /> {t("kindFact")}
-          <i className="dot scatter__key--value" /> {t("kindValue")}
-          <i className="dot scatter__key--design" /> {t("kindDesign")}
-          <i className="dot scatter__key--gap" /> {t("kindGap")}
-        </span>
+        <KindLegend counts={kindCounts} kindFilter={kindFilter} onToggleKind={onToggleKind} t={t} />
         <span className="scatter__note">{t("triangleLegend")}</span>
         {points.length > voted.length && (
           <span className="scatter__note">
@@ -225,6 +286,9 @@ function ScatterField({
   campLabel,
   nodeText,
   t,
+  kindCounts,
+  kindFilter,
+  onToggleKind,
 }: {
   points: MapPoint[];
   edges: MapEdgeData[];
@@ -234,6 +298,9 @@ function ScatterField({
   campLabel: (g: number) => string;
   nodeText: (p: MapPoint) => string;
   t: ReturnType<typeof useTranslations<"MapView">>;
+  kindCounts: Record<string, number>;
+  kindFilter: Set<string>;
+  onToggleKind: (kind: string) => void;
 }) {
   const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 2);
   if (voted.length === 0) return <p className="placeholder-note">{t("scatterEmpty")}</p>;
@@ -266,12 +333,7 @@ function ScatterField({
     };
   });
   const byId = new Map(coords.map((c) => [c.p.id, c]));
-  const labeled = new Set(
-    [...coords]
-      .sort((a, b) => pointWeight(b.p) - pointWeight(a.p))
-      .slice(0, 14)
-      .map((c) => c.p.id),
-  );
+  const labeled = placeLabels(coords, 18);
   if (selectedId) labeled.add(selectedId);
   const selEdges = selectedId
     ? edges.filter(
@@ -341,12 +403,7 @@ function ScatterField({
         ))}
       </svg>
       <div className="scatter__footer">
-        <span className="scatter__legend">
-          <i className="dot scatter__key--fact" /> {t("kindFact")}
-          <i className="dot scatter__key--value" /> {t("kindValue")}
-          <i className="dot scatter__key--design" /> {t("kindDesign")}
-          <i className="dot scatter__key--gap" /> {t("kindGap")}
-        </span>
+        <KindLegend counts={kindCounts} kindFilter={kindFilter} onToggleKind={onToggleKind} t={t} />
         {points.length > voted.length && (
           <span className="scatter__note">
             {t("scatterUnvoted", { n: points.length - voted.length })}
@@ -384,6 +441,16 @@ export function ArgumentMap({
   // narrow the canvas to it.
   const [slotFilter, setSlotFilter] = useState<string | null>(null);
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
+  // Kind filter (Fact/Value/Design/Gap), toggled via the field legend.
+  // Scoped to the scatter/triangle canvas; empty set = show all kinds.
+  const [kindFilter, setKindFilter] = useState<Set<string>>(new Set());
+  const toggleKind = (kind: string) =>
+    setKindFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
   const campLabel = (g: number) => campNames?.[String(g)]?.name ?? `G${g}`;
   const nodeText = (p: MapPoint) => p.statement ?? p.label;
   const q = query.trim().toLowerCase();
@@ -400,6 +467,14 @@ export function ArgumentMap({
     if (themeFilter && (p.theme ?? "") !== themeFilter) return false;
     return true;
   });
+  // Field canvas: kind filter narrows the dots; counts show what each kind
+  // contributes to the canvas (voted points only — unvoted never plot).
+  const fieldPoints =
+    kindFilter.size > 0 ? visiblePoints.filter((p) => kindFilter.has(p.kind)) : visiblePoints;
+  const kindCounts: Record<string, number> = {};
+  for (const p of visiblePoints) {
+    if ((p.perGroup?.length ?? 0) >= 2) kindCounts[p.kind] = (kindCounts[p.kind] ?? 0) + 1;
+  }
   const allThemes = [...new Set(points.map((p) => p.theme).filter(Boolean))] as string[];
   allThemes.sort(
     (a, b) =>
@@ -700,17 +775,20 @@ export function ArgumentMap({
               <div className="argmap__zones">
                 {campCount >= 3 ? (
                   <TriangleField
-                    points={visiblePoints}
+                    points={fieldPoints}
                     selectedId={selectedId}
                     relatedIds={relatedIds}
                     onSelect={setSelectedId}
                     campLabel={campLabel}
                     nodeText={nodeText}
                     t={t}
+                    kindCounts={kindCounts}
+                    kindFilter={kindFilter}
+                    onToggleKind={toggleKind}
                   />
                 ) : (
                   <ScatterField
-                    points={visiblePoints}
+                    points={fieldPoints}
                     edges={edges}
                     selectedId={selectedId}
                     relatedIds={relatedIds}
@@ -718,6 +796,9 @@ export function ArgumentMap({
                     campLabel={campLabel}
                     nodeText={nodeText}
                     t={t}
+                    kindCounts={kindCounts}
+                    kindFilter={kindFilter}
+                    onToggleKind={toggleKind}
                   />
                 )}
               </div>

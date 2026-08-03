@@ -1812,6 +1812,40 @@ code {
 .scatter__key--design { background: var(--magenta); }
 .scatter__key--gap { background: var(--muted); }
 
+/* Legend chips double as kind filters. */
+.scatter__kbtn {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 99px;
+  padding: 0.15rem 0.55rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.scatter__kbtn:hover {
+  border-color: var(--line);
+}
+
+.scatter__kbtn--on {
+  border-color: var(--line-strong);
+  background: var(--card);
+}
+
+.scatter__kbtn--dim {
+  opacity: 0.45;
+}
+
+.scatter__kcount {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
 
 /* ——— consultation overview (exec summary) ——— */
 

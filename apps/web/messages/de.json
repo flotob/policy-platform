@@ -106,6 +106,7 @@
     "kindValue": "Wertung",
     "kindDesign": "Ausgestaltung",
     "kindGap": "Lücke",
+    "kindFilterHint": "Klick zeigt nur diese Art (nochmal klicken hebt den Filter auf)",
     "noVotesCamp": "noch keine Voten aus diesem Lager",
     "triangleCenter": "Mitte: alle Lager ähnlich",
     "triangleLegend": "Deckkraft = Zustimmung des skeptischsten Lagers · heller Ring = Brücke (alle Lager ≥ 60 %)"

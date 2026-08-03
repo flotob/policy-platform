@@ -106,6 +106,7 @@
     "kindValue": "Value",
     "kindDesign": "Design",
     "kindGap": "Gap",
+    "kindFilterHint": "Click to show only this kind (click again to remove the filter)",
     "noVotesCamp": "no votes from this camp yet",
     "triangleCenter": "center: all camps alike",
     "triangleLegend": "opacity = the most skeptical camp's agreement · bright ring = bridge (every camp ≥ 60%)"
