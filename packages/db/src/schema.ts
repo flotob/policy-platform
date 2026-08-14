@@ -51,6 +51,12 @@ export const points = pgTable("points", {
   summary: text("summary"),
   finding: text("finding"),
   theme: text("theme"),
+  /** The door an objection point comes through (one of the five critical
+   *  questions); NULL for grammar claims and instruments. */
+  cq: text("cq"),
+  /** For instruments (kind='design'): the door(s) the instrument answers.
+   *  First element = primary, rest secondary. */
+  answersCq: text("answers_cq").array(),
   status: text("status").notNull().default("draft"),
   mergedInto: uuid("merged_into"),
   createdBy: text("created_by").notNull(),

@@ -11,21 +11,63 @@
 export const DECOMPOSE_SYSTEM = `You decompose consultation submissions into distinct argumentative points for a public argument map.
 
 The debate follows the practical-reasoning schema for a proposed measure M:
-- P1 (situation): claims about the present situation.
-- P2 (effect prognosis): claims that M will/will not cause some effect.
-- P3 (goal attainment): claims that the effect does/does not serve the stated goal.
-- P4 (value): claims that a value justifies/outweighs the measure's burdens.
+- P1 (situation): claims how the present situation is, independent of the measure — recognizable because it could already be checked with data today.
+- P2 (effect prognosis): claims that M triggers a certain effect — recognizable because it makes a prognosis about the future that would turn out differently without the measure.
+- P3 (goal attainment): claims that this effect contributes to a stated goal — recognizable because one can accept the effect and still deny that it serves the goal.
+- P4 (value): claims that the goal is worth the price — recognizable because no study can settle it; it is set, not proven.
 - conclusion: overall support or rejection of M, or a concrete design proposal for how M should be shaped.
+
+Objections come through five doors (the critical questions):
+- "empirics": does the claimed effect actually occur?
+- "alternatives": does a milder/cheaper means reach the same goal?
+- "goal_conflict": does the measure incidentally violate another value we also care about (costs, side effects)?
+- "feasibility": can it be implemented at all?
+- "value_conflict": is this value worth what we sacrifice for it?
+
+Instruments are a third type of contribution: they do not attack the measure, they cushion it — they say "if we do it, then like this" (transition periods, hardship clauses, staggering, exemptions). Every instrument answers one or more of the five doors.
 
 Rules:
 1. Extract every DISTINCT point; merge repetitions within the submission.
 2. Strip rhetoric and tone; keep the argumentative core, neutrally phrased.
-3. kind = "fact" for empirically checkable claims (present or prognosis), "value" for normative judgments no study could settle, "design" for concrete proposals on how to shape/implement the measure (transition periods, exemptions, procedures), "gap" for an open question the submission raises but nobody answers (an explicitly missing piece of evidence or an unexamined alternative).
+3. kind = "fact" for empirically checkable claims (present or prognosis), "value" for normative judgments no study could settle, "design" for instruments (concrete proposals on how to shape/implement the measure), "gap" for an open question the submission raises but nobody answers (an explicitly missing piece of evidence or an unexamined alternative).
 4. slot: assign P1–P4 or "conclusion" when clearly attributable, else null. Design proposals are usually "conclusion".
-5. quote: a short VERBATIM excerpt from the submission (copy exactly, no ellipses) that best evidences the point.
-6. label and summary: write them in the language of the submission.
-7. Prefer 3–15 points for a typical association submission; never pad.
-8. relations: argumentative links BETWEEN the candidates you extracted, by array index. kind "supports" = from is a premise for to (especially P1–P4 points supporting a conclusion point). The five critical-question kinds mark attacks: "empirics" (from disputes to's effect prognosis with counter-evidence), "alternatives" (from claims a milder means reaches the goal), "goal_conflict" (from claims the effect harms other goals), "feasibility" (from claims to cannot be implemented), "value_conflict" (from challenges the value premise behind to). Only emit relations the text actually argues; an empty array is fine.`;
+5. cq: when the point OBJECTS to the measure or to another claim, name the door it comes through (one of the five above); null for supporting grammar claims, instruments, and gaps.
+6. answers_cq: for instruments (kind=design), the door(s) the instrument answers, FIRST = primary (a transition period answers "feasibility"; a hardship clause answers "goal_conflict"); null otherwise.
+7. quote: a short VERBATIM excerpt from the submission (copy exactly, no ellipses) that best evidences the point.
+8. label and summary: write them in the language of the submission.
+9. Prefer 3–15 points for a typical association submission; never pad.
+10. relations: argumentative links BETWEEN the candidates you extracted, by array index. kind "supports" = from is a premise for to (especially P1–P4 points supporting a conclusion point). The five critical-question kinds mark attacks, same vocabulary as the doors. Only emit relations the text actually argues; an empty array is fine.`;
+
+/** Backfill classifier: assigns doors/instrument-backlinks to EXISTING points. */
+export const CLASSIFY_CQ_SYSTEM = `You classify points of a public argument map into the ordering layer of the five critical questions.
+
+The map follows the practical-reasoning schema for a proposed measure M (P1 situation, P2 effect prognosis, P3 goal attainment, P4 value, conclusion). Objections against the measure come through five doors:
+- "empirics": does the claimed effect actually occur?
+- "alternatives": does a milder/cheaper means reach the same goal?
+- "goal_conflict": does the measure incidentally violate another value we also care about (costs, side effects)?
+- "feasibility": can it be implemented at all?
+- "value_conflict": is this value worth what we sacrifice for it?
+
+Instruments do not attack the measure, they cushion it ("if we do it, then like this": transition periods, hardship clauses, staggering, exemptions). Every instrument answers one or more doors.
+
+For each numbered point (label + summary + kind) decide:
+- role "claim": a supporting grammar claim (P1–P4/conclusion in favor, or neutral) — no door.
+- role "objection": an attack on the measure or one of its claims — name its door as cq.
+- role "instrument": a shaping proposal — name the door(s) it answers as answers_cq, FIRST = primary.
+- role "gap": an open question — no door.
+Judge only from the given text; when genuinely ambiguous between two doors, pick the one the point's own wording emphasizes.`;
+
+export function classifyCqPrompt(
+  points: { label: string; summary: string | null; kind: string }[],
+): string {
+  const list = points
+    .map((p, i) => `${i}. [${p.kind}] ${p.label} — ${p.summary ?? ""}`)
+    .join("\n");
+  return (
+    `Points on the map:\n${list}\n\n` +
+    `Classify every point (use the point's number as index). One verdict per point, all ${points.length} of them.`
+  );
+}
 
 export function decomposePrompt(text: string, maxChars = 24_000): {
   prompt: string;

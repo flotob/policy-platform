@@ -5,6 +5,15 @@
 
 import { z } from "zod";
 
+/** The five critical questions — the doors every objection comes through. */
+export const cqKind = z.enum([
+  "empirics",
+  "alternatives",
+  "goal_conflict",
+  "feasibility",
+  "value_conflict",
+]);
+
 export const candidatePoint = z
   .object({
     /** Short editorial label in the submission's language (≤ 80 chars). */
@@ -14,6 +23,11 @@ export const candidatePoint = z
     kind: z.enum(["fact", "value", "design", "gap"]),
     /** Slot in the practical-reasoning schema; null when not attributable. */
     slot: z.enum(["P1", "P2", "P3", "P4", "conclusion"]).nullable(),
+    /** For an OBJECTION: the door it comes through; null otherwise. */
+    cq: cqKind.nullable(),
+    /** For an instrument (kind=design): the door(s) it answers,
+     *  first = primary; null otherwise. */
+    answers_cq: z.array(cqKind).max(3).nullable(),
     /** Verbatim supporting excerpt from the submission text. */
     quote: z.string().min(5).max(600),
   })
@@ -67,6 +81,24 @@ export const batchMatchVerdict = z
 export const batchMatchOutput = z
   .object({
     matches: z.array(batchMatchVerdict).max(30),
+  })
+  .strict();
+
+/** Backfill classifier verdict for one existing point (by index). */
+export const cqVerdict = z
+  .object({
+    index: z.number().int().nonnegative(),
+    role: z.enum(["claim", "objection", "instrument", "gap"]),
+    /** Door for objections; null otherwise. */
+    cq: cqKind.nullable(),
+    /** Door(s) an instrument answers, first = primary; null otherwise. */
+    answers_cq: z.array(cqKind).max(3).nullable(),
+  })
+  .strict();
+
+export const classifyCqOutput = z
+  .object({
+    verdicts: z.array(cqVerdict).max(40),
   })
   .strict();
 
@@ -179,6 +211,7 @@ function toProviderSchema(schema: z.ZodType): Record<string, unknown> {
 export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
 export const batchMatchJsonSchema = toProviderSchema(batchMatchOutput);
+export const classifyCqJsonSchema = toProviderSchema(classifyCqOutput);
 export const statementJsonSchema = toProviderSchema(statementOutput);
 export const relationsJsonSchema = toProviderSchema(relationsOutput);
 export const aiReviewJsonSchema = toProviderSchema(aiReviewOutput);

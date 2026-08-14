@@ -21,6 +21,10 @@ export interface MapPoint {
   status: string;
   statement: string | null;
   theme: string | null;
+  /** Door (critical question) for objection points; null for claims/instruments/gaps. */
+  cq: "empirics" | "alternatives" | "goal_conflict" | "feasibility" | "value_conflict" | null;
+  /** For instruments: door(s) answered, first = primary. */
+  answersCq: string[] | null;
   sources: { quote: string | null; org: string | null }[];
   profile?: "bridged" | "divisive" | "open";
   perGroup?: { group: number; pa: number; ns: number }[];
@@ -441,6 +445,9 @@ export function ArgumentMap({
   // narrow the canvas to it.
   const [slotFilter, setSlotFilter] = useState<string | null>(null);
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
+  // Door filter (five critical questions): shows the door's objections AND
+  // the instruments answering it — the "ob" and its "wie" together.
+  const [cqFilter, setCqFilter] = useState<string | null>(null);
   // Kind filter (Fact/Value/Design/Gap), toggled via the field legend.
   // Scoped to the scatter/triangle canvas; empty set = show all kinds.
   const [kindFilter, setKindFilter] = useState<Set<string>>(new Set());
@@ -454,7 +461,7 @@ export function ArgumentMap({
   const campLabel = (g: number) => campNames?.[String(g)]?.name ?? `G${g}`;
   const nodeText = (p: MapPoint) => p.statement ?? p.label;
   const q = query.trim().toLowerCase();
-  const filtering = q !== "" || slotFilter !== null || themeFilter !== null;
+  const filtering = q !== "" || slotFilter !== null || themeFilter !== null || cqFilter !== null;
   const visiblePoints = points.filter((p) => {
     if (
       q &&
@@ -465,6 +472,7 @@ export function ArgumentMap({
       return false;
     if (slotFilter && slotKey(p.slot) !== slotFilter) return false;
     if (themeFilter && (p.theme ?? "") !== themeFilter) return false;
+    if (cqFilter && p.cq !== cqFilter && !(p.answersCq ?? []).includes(cqFilter)) return false;
     return true;
   });
   // Field canvas: kind filter narrows the dots; counts show what each kind
@@ -738,6 +746,32 @@ export function ArgumentMap({
                 {t("slotNone")}
               </button>
 
+              {points.some((p) => p.cq || (p.answersCq?.length ?? 0) > 0) && (
+                <>
+                  <span className="argmap__spine-eyebrow argmap__spine-eyebrow--themes">
+                    {t("cqHeading")}
+                  </span>
+                  <div className="argmap__themetree">
+                    {(["empirics", "alternatives", "goal_conflict", "feasibility", "value_conflict"] as const).map((door, i) => {
+                      const objections = points.filter((p) => p.cq === door).length;
+                      const instruments = points.filter((p) => (p.answersCq ?? []).includes(door)).length;
+                      if (objections + instruments === 0) return null;
+                      return (
+                        <button
+                          key={door}
+                          className={`argmap__themelink argmap__cqlink ${cqFilter === door ? "argmap__themelink--on" : ""}`}
+                          onClick={() => setCqFilter(cqFilter === door ? null : door)}
+                          title={t("cqFilterHint")}
+                        >
+                          <span><i className="argmap__cqnum">{i + 1}</i> {t(`cq_${door}`)}</span>
+                          <em>{objections}{instruments > 0 ? ` +${instruments}⚒` : ""}</em>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
               {allThemes.length > 0 && (
                 <>
                   <span className="argmap__spine-eyebrow argmap__spine-eyebrow--themes">
@@ -749,6 +783,7 @@ export function ArgumentMap({
                       onClick={() => {
                         setSlotFilter(null);
                         setThemeFilter(null);
+                        setCqFilter(null);
                         setQuery("");
                       }}
                     >
@@ -906,6 +941,14 @@ export function ArgumentMap({
                     {selected.kind}
                   </span>
                   {selected.slot && <span className="badge badge--design">{selected.slot}</span>}
+                  {selected.cq && (
+                    <span className="badge badge--cq">{t(`cq_${selected.cq}`)}</span>
+                  )}
+                  {(selected.answersCq?.length ?? 0) > 0 && (
+                    <span className="badge badge--instrument">
+                      {t("answersCq")}: {selected.answersCq!.map((d) => t(`cq_${d}`)).join(" · ")}
+                    </span>
+                  )}
                   {selected.status === "draft" && (
                     <span className="badge badge--draft">{t("draft")}</span>
                   )}

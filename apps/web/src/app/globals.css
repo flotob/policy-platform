@@ -451,6 +451,24 @@ code {
 .badge--fact { background: var(--blue-bg); color: var(--blue); }
 .badge--value { background: var(--violet-bg); color: var(--violet); }
 .badge--design { background: var(--magenta-bg); color: var(--magenta); }
+/* Door (critical question) of an objection; instrument backlink. */
+.badge--cq { background: var(--coral-bg); color: var(--coral); }
+.badge--instrument { background: var(--magenta-bg); color: var(--magenta); }
+
+.argmap__cqnum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--coral);
+  color: var(--coral);
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  margin-right: 0.25rem;
+}
 .badge--draft { background: var(--coral-bg); color: var(--coral); }
 
 /* ——— voting ——— */

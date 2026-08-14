@@ -237,6 +237,8 @@ export async function runForSubmission(
           slot: candidate.slot,
           label: candidate.label,
           summary: candidate.summary,
+          cq: candidate.cq ?? null,
+          answersCq: candidate.answers_cq ?? null,
           status: "draft",
           createdBy: method,
         })
