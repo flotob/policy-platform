@@ -11,11 +11,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  AGREE_FLOOR,
   chainPattern,
   computeChain,
   DOOR_ANCHORS,
   stationState,
-  type ChainPattern,
   type SpineSlot,
 } from "./chain-model";
 import { useTranslations } from "next-intl";
@@ -258,6 +258,9 @@ function ChainView({
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
   const pattern = chainPattern(stations, forkIdx);
+  // Carriers = the fork's genuinely contested claims: at least one camp
+  // below the agreement floor. Enthusiasm gaps between two agreeing camps
+  // (65 % vs. 95 % — a bridge) do not carry a break.
   const carriers = fork
     ? [...fork.claims]
         .map((p) => {
@@ -265,6 +268,7 @@ function ChainView({
           const b = p.perGroup!.find((x) => x.group === gB)?.pa ?? 0;
           return { p, gap: Math.abs(a - b), a, b };
         })
+        .filter(({ a, b }) => Math.min(a, b) < AGREE_FLOOR)
         .sort((x, y) => y.gap - x.gap)
         .slice(0, 6)
     : [];

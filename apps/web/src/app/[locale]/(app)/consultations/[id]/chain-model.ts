@@ -11,6 +11,18 @@
  */
 
 export const FORK_THRESHOLD = 0.15;
+/** Below this agreement a camp no longer carries the claim (bridge bar). */
+export const AGREE_FLOOR = 0.6;
+
+/**
+ * A station forks only on REAL dissent: profiles apart by the threshold
+ * AND at least one camp below the agreement floor. A mere enthusiasm
+ * gap (65 % vs. 95 % — both agreeing) is not a break.
+ */
+export function isDissent(paA: number | null, paB: number | null): boolean {
+  if (paA === null || paB === null) return false;
+  return Math.abs(paA - paB) >= FORK_THRESHOLD && Math.min(paA, paB) < AGREE_FLOOR;
+}
 
 export const SPINE = ["P1", "P2", "P3", "P4", "conclusion"] as const;
 export type SpineSlot = (typeof SPINE)[number];
@@ -79,7 +91,7 @@ export function computeChain<P extends ChainPoint>(points: P[]): {
   }).filter((s) => s.claims.length > 0);
 
   if (stations.length < 2) return null;
-  const forkIdx = stations.findIndex((s) => (s.gapAbs ?? 0) >= FORK_THRESHOLD);
+  const forkIdx = stations.findIndex((s) => isDissent(s.paA, s.paB));
   return { stations, forkIdx, gA, gB };
 }
 
@@ -99,7 +111,7 @@ export function stationState(
   // No computable gap (one camp has no votes here): neutral, neither
   // split nor re-converged.
   if (station.gapAbs === null) return "after";
-  return station.gapAbs >= FORK_THRESHOLD ? "split" : "reconverge";
+  return isDissent(station.paA, station.paB) ? "split" : "reconverge";
 }
 
 export type ChainPattern =
@@ -126,11 +138,12 @@ export function chainPattern(
   if (
     last.slot === "conclusion" &&
     forkIdx < stations.length - 1 &&
-    (last.gapAbs ?? 1) < FORK_THRESHOLD
+    !isDissent(last.paA, last.paB) &&
+    last.paA !== null
   )
     return "pseudo_consensus";
   if (stations[forkIdx]!.slot === "P4") return "value_conflict";
   const p4 = stations.find((s) => s.slot === "P4");
-  if (p4 && (p4.gapAbs ?? 1) < FORK_THRESHOLD) return "pseudo_fact";
+  if (p4 && p4.paA !== null && !isDissent(p4.paA, p4.paB)) return "pseudo_fact";
   return "contested";
 }
