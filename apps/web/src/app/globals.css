@@ -496,6 +496,18 @@ code {
 .overview__chain-link { display: block; text-decoration: none; }
 .overview__chain-link:hover .chain__box { stroke-width: 2.5; }
 
+.nodelegend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 1rem;
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  margin: 0.3rem 0 0.8rem;
+}
+.nodelegend__label { font-weight: 600; color: var(--muted); }
+.nodelegend__extra { color: var(--muted); }
+
 .chain__station { cursor: pointer; }
 .chain__station:hover .chain__box { stroke-width: 2.5; }
 .chain__station--open .chain__box { stroke-width: 3; }
@@ -747,6 +759,7 @@ code {
 }
 
 .dot--bridged { background: var(--teal); }
+.dot--open { background: var(--line-strong); }
 .dot--divisive { background: var(--coral); }
 .dot--gap { background: var(--muted); }
 .dot--warn { background: var(--amber); }

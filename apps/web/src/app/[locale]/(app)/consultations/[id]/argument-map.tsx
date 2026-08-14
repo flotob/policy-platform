@@ -148,6 +148,20 @@ function KindLegend({
   );
 }
 
+/** Explains the mapnode chips' left-border color — the point's Befund. */
+function NodeLegend({ t }: { t: ReturnType<typeof useTranslations<"MapView">> }) {
+  return (
+    <p className="nodelegend">
+      <span className="nodelegend__label">{t("nodeLegend")}</span>
+      <span><i className="dot dot--bridged" /> {t("counterBridges")}</span>
+      <span><i className="dot dot--divisive" /> {t("counterConflicts")}</span>
+      <span><i className="dot dot--open" /> {t("legendOpen")}</span>
+      <span><i className="dot dot--warn" /> {t("legendWarn")}</span>
+      <span className="nodelegend__extra">{t("legendExtras")}</span>
+    </p>
+  );
+}
+
 /**
  * The argument chain (Stamm & Gabelung): how far the two camps walk the
  * practical-reasoning spine together before their profiles fork. Per slot,
@@ -280,6 +294,7 @@ function ChainView({
           <span className="chain__carriers-head">
             {t("chainCarriers", { fork: slotLabel(fork.slot) })}
           </span>
+          <NodeLegend t={t} />
           <div className="argmap__nodes">
             {carriers.map(({ p, a, b }) => (
               <button
@@ -361,6 +376,7 @@ function ChainView({
               <h3>{slotLabel(drill)}</h3>
               <button className="chain__drill-close" onClick={() => setDrill(null)}>✕</button>
             </header>
+            <NodeLegend t={t} />
             {claimRows.length > 0 && (
               <section className="chain__drill-sec">
                 <span className="chain__drill-sechead">
@@ -925,6 +941,7 @@ export function ArgumentMap({
 
       {mode === "list" ? (
         <div className="argmap__list">
+          <NodeLegend t={t} />
           {ZONES.map(({ kind, className }) => {
             const list = visiblePoints.filter((p) => p.kind === kind);
             if (list.length === 0) return null;
@@ -1121,6 +1138,7 @@ export function ArgumentMap({
               </div>
             ) : (
             <div className="argmap__zones">
+              <NodeLegend t={t} />
               {ZONES.map(({ kind, className }) => {
                 const zonePoints = visiblePoints.filter((p) => p.kind === kind);
                 if (zonePoints.length === 0) return null;
