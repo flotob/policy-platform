@@ -455,6 +455,44 @@ code {
 .badge--cq { background: var(--coral-bg); color: var(--coral); }
 .badge--instrument { background: var(--magenta-bg); color: var(--magenta); }
 
+/* Ketten-Ansicht (Stamm & Gabelung) */
+.chain { padding: 1rem 0.5rem; }
+.chain__verdict {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  line-height: 1.55;
+  max-width: 62ch;
+  margin: 0.4rem auto 1.4rem;
+  text-align: center;
+}
+.chain__breakkind { display: block; font-family: var(--font-sans); font-size: 0.8rem; color: var(--muted); margin-top: 0.3rem; }
+.chain__svg { max-width: 1000px; margin: 0 auto; display: block; }
+.chain__box { fill: var(--card); stroke: var(--line-strong); stroke-width: 1.5; }
+.chain__box--shared { stroke: var(--teal); fill: var(--teal-bg); }
+.chain__box--fork { stroke: var(--coral); stroke-width: 2.5; fill: var(--coral-bg); }
+.chain__box--after { stroke-dasharray: 4 3; }
+.chain__link { stroke: var(--line-strong); stroke-width: 2; }
+.chain__link--shared { stroke: var(--teal); stroke-width: 3; }
+.chain__breakline { stroke: var(--coral); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.chain__breaklabel { fill: var(--coral); font-size: 12px; font-weight: 600; }
+.chain__slot { font-weight: 700; font-size: 14px; fill: var(--ink); }
+.chain__n { font-size: 10.5px; fill: var(--muted); }
+.chain__bar-bg { fill: var(--gray-bg); }
+.chain__bar--a { fill: var(--teal); }
+.chain__bar--b { fill: var(--coral); }
+.chain__pct { font-family: var(--font-mono); font-size: 10px; fill: var(--ink-soft); }
+.chain__legend {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem 1.4rem;
+  font-size: 0.82rem; color: var(--ink-soft); margin: 0.8rem 0 0;
+}
+.chain__note { color: var(--muted); font-size: 0.78rem; }
+.chain__carriers { max-width: 860px; margin: 1.6rem auto 0; }
+.chain__carriers-head {
+  display: block; font-family: var(--font-mono); font-size: 0.75rem;
+  letter-spacing: 0.05em; color: var(--coral); margin-bottom: 0.5rem;
+}
+.chain__carriergap { font-style: normal; font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
+
 /* Türen-Ansicht (five-doors ordering layer) */
 .argmap__doorsec { border-top: 3px solid var(--coral); background: linear-gradient(var(--coral-bg), var(--card) 60px); }
 .argmap__doorsec--grundmuster { border-top-color: var(--ink); background: linear-gradient(var(--gray-bg), var(--card) 60px); }

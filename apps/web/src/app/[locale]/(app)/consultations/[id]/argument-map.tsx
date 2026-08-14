@@ -147,6 +147,188 @@ function KindLegend({
 }
 
 /**
+ * The argument chain (Stamm & Gabelung): how far the two camps walk the
+ * practical-reasoning spine together before their profiles fork. Per slot,
+ * the mean agreement of each camp over the slot's voted GRAMMAR CLAIMS
+ * (objections and instruments live behind the doors, not on the spine).
+ * The first station where the profiles diverge significantly is the
+ * Bruchpunkt; the points carrying the divergence are listed for drill-down.
+ */
+const FORK_THRESHOLD = 0.15;
+
+function ChainView({
+  points,
+  selectedId,
+  onSelect,
+  campLabel,
+  nodeText,
+  slotLabel,
+  profileClass,
+  t,
+}: {
+  points: MapPoint[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+  campLabel: (g: number) => string;
+  nodeText: (p: MapPoint) => string;
+  slotLabel: (s: "P1" | "P2" | "P3" | "P4" | "conclusion") => string;
+  profileClass: (p: MapPoint) => string;
+  t: ReturnType<typeof useTranslations<"MapView">>;
+}) {
+  const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 2);
+  const nsByGroup = new Map<number, number>();
+  for (const p of voted)
+    for (const g of p.perGroup!) nsByGroup.set(g.group, (nsByGroup.get(g.group) ?? 0) + g.ns);
+  const top2 = [...nsByGroup.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map((e) => e[0]);
+  const [gA, gB] = top2.sort((a, b) => a - b) as [number, number];
+
+  const SPINE = ["P1", "P2", "P3", "P4", "conclusion"] as const;
+  const stations = SPINE.map((slot) => {
+    const claims = voted.filter(
+      (p) =>
+        p.slot === slot &&
+        !p.cq &&
+        (p.answersCq?.length ?? 0) === 0 &&
+        p.kind !== "design" &&
+        p.kind !== "gap",
+    );
+    const mean = (g: number) => {
+      const pas = claims
+        .map((p) => p.perGroup!.find((x) => x.group === g))
+        .filter((x): x is { group: number; pa: number; ns: number } => !!x && x.ns > 0);
+      if (pas.length === 0) return null;
+      return pas.reduce((s, x) => s + x.pa, 0) / pas.length;
+    };
+    const paA = mean(gA);
+    const paB = mean(gB);
+    const gapAbs = paA !== null && paB !== null ? Math.abs(paA - paB) : null;
+    return { slot, claims, paA, paB, gapAbs };
+  }).filter((s) => s.claims.length > 0);
+
+  if (stations.length < 2)
+    return <p className="placeholder-note">{t("chainEmpty")}</p>;
+
+  const forkIdx = stations.findIndex((s) => (s.gapAbs ?? 0) >= FORK_THRESHOLD);
+  const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
+  const fork = forkIdx === -1 ? null : stations[forkIdx]!;
+  const carriers = fork
+    ? [...fork.claims]
+        .map((p) => {
+          const a = p.perGroup!.find((x) => x.group === gA)?.pa ?? 0;
+          const b = p.perGroup!.find((x) => x.group === gB)?.pa ?? 0;
+          return { p, gap: Math.abs(a - b), a, b };
+        })
+        .sort((x, y) => y.gap - x.gap)
+        .slice(0, 6)
+    : [];
+
+  const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)} %`);
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+
+  // Layout: horizontal stations, evenly spaced.
+  const W = 1000;
+  const H = 250;
+  const step = W / stations.length;
+  const boxW = Math.min(178, step - 26);
+
+  return (
+    <div className="chain">
+      <p className="chain__verdict">
+        {fork
+          ? t("chainVerdictFork", {
+              shared: shared.map((s) => slotLabel(s.slot)).join(" · ") || "—",
+              fork: slotLabel(fork.slot),
+              n: shared.length,
+            })
+          : t("chainVerdictNoFork")}
+        {fork && <span className="chain__breakkind"> {t("chainBreakKind")}</span>}
+      </p>
+
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" className="chain__svg">
+        {stations.map((s, i) => {
+          const x = round2(i * step + (step - boxW) / 2);
+          const cx = round2(i * step + step / 2);
+          const isShared = forkIdx === -1 || i < forkIdx;
+          const isFork = forkIdx !== -1 && i === forkIdx;
+          const cls = isFork ? "chain__box--fork" : isShared ? "chain__box--shared" : "chain__box--after";
+          const barW = boxW - 30;
+          return (
+            <g key={s.slot}>
+              {i > 0 && (
+                <line
+                  x1={round2(cx - step + boxW / 2 + 6)}
+                  y1={104}
+                  x2={round2(cx - boxW / 2 - 6)}
+                  y2={104}
+                  className={isShared || isFork ? "chain__link chain__link--shared" : "chain__link"}
+                />
+              )}
+              {isFork && (
+                <>
+                  <line x1={round2(cx - step / 2)} y1={20} x2={round2(cx - step / 2)} y2={H - 34} className="chain__breakline" />
+                  <text x={round2(cx - step / 2)} y={H - 16} textAnchor="middle" className="chain__breaklabel">
+                    {t("chainBreakpoint", { n: shared.length })}
+                  </text>
+                </>
+              )}
+              <rect x={x} y={44} width={boxW} height={120} rx={10} className={`chain__box ${cls}`} />
+              <text x={cx} y={70} textAnchor="middle" className="chain__slot">
+                {slotLabel(s.slot)}
+              </text>
+              <text x={cx} y={88} textAnchor="middle" className="chain__n">
+                {t("chainClaims", { n: s.claims.length })}
+              </text>
+              {/* camp bars */}
+              <rect x={round2(cx - barW / 2)} y={100} width={barW} height={8} rx={4} className="chain__bar-bg" />
+              {s.paA !== null && (
+                <rect x={round2(cx - barW / 2)} y={100} width={round2(barW * s.paA)} height={8} rx={4} className="chain__bar chain__bar--a" />
+              )}
+              <text x={round2(cx - barW / 2)} y={122} className="chain__pct">A {pct(s.paA)}</text>
+              <rect x={round2(cx - barW / 2)} y={130} width={barW} height={8} rx={4} className="chain__bar-bg" />
+              {s.paB !== null && (
+                <rect x={round2(cx - barW / 2)} y={130} width={round2(barW * s.paB)} height={8} rx={4} className="chain__bar chain__bar--b" />
+              )}
+              <text x={round2(cx - barW / 2)} y={152} className="chain__pct">B {pct(s.paB)}</text>
+            </g>
+          );
+        })}
+      </svg>
+
+      <div className="chain__legend">
+        <span><i className="dot dot--bridged" /> A · {campLabel(gA)}</span>
+        <span><i className="dot dot--divisive" /> B · {campLabel(gB)}</span>
+        <span className="chain__note">{t("chainSpineNote")}</span>
+      </div>
+
+      {fork && carriers.length > 0 && (
+        <div className="chain__carriers">
+          <span className="chain__carriers-head">
+            {t("chainCarriers", { fork: slotLabel(fork.slot) })}
+          </span>
+          <div className="argmap__nodes">
+            {carriers.map(({ p, a, b }) => (
+              <button
+                key={p.id}
+                className={[
+                  "mapnode",
+                  `mapnode--${profileClass(p)}`,
+                  selectedId === p.id ? "mapnode--selected" : "",
+                ].join(" ")}
+                onClick={() => onSelect(selectedId === p.id ? null : p.id)}
+                title={nodeText(p)}
+              >
+                {nodeText(p)}
+                <em className="chain__carriergap"> {Math.round(a * 100)} % · {Math.round(b * 100)} %</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Barycentric triangle for THREE camps: each camp is a corner; a point sits
  * at the weighted average of the corners by relative agreement. Center =
  * all camps agree alike; an edge = two camps share it against the third.
@@ -435,7 +617,7 @@ export function ArgumentMap({
   const tMap = useTranslations("Map");
   const hasVotes = points.some((p) => (p.perGroup?.length ?? 0) >= 2);
   const campCount = new Set(points.flatMap((p) => (p.perGroup ?? []).map((g) => g.group))).size;
-  const [mode, setMode] = useState<"scatter" | "doors" | "map" | "list">(
+  const [mode, setMode] = useState<"scatter" | "chain" | "doors" | "map" | "list">(
     hasVotes ? "scatter" : "map",
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -639,6 +821,14 @@ export function ArgumentMap({
               {t("mapMode")}
             </button>
           )}
+          {hasVotes && campCount === 2 && (
+            <button
+              className={`argmap__mode ${mode === "chain" ? "argmap__mode--on" : ""}`}
+              onClick={() => setMode("chain")}
+            >
+              {t("chainMode")}
+            </button>
+          )}
           {points.some((p) => p.cq || (p.answersCq?.length ?? 0) > 0) && (
             <button
               className={`argmap__mode ${mode === "doors" ? "argmap__mode--on" : ""}`}
@@ -814,7 +1004,20 @@ export function ArgumentMap({
               )}
             </aside>
 
-            {mode === "doors" ? (
+            {mode === "chain" ? (
+              <div className="argmap__zones">
+                <ChainView
+                  points={visiblePoints}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  campLabel={campLabel}
+                  nodeText={nodeText}
+                  slotLabel={slotLabel as (s: "P1" | "P2" | "P3" | "P4" | "conclusion") => string}
+                  profileClass={profileClass}
+                  t={t}
+                />
+              </div>
+            ) : mode === "doors" ? (
               <div className="argmap__zones">
                 {(() => {
                   const renderNodes = (group: MapPoint[], groupKey: string) => {
