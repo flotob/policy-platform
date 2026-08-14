@@ -95,7 +95,7 @@ export default async function MapPage({
   // are the analyzed statements themselves) with their canonical statement.
   const pointsRes = await db.execute(sql`
     SELECT p.id, p.kind, p.slot, p.label, p.summary, p.finding, p.status, p.theme,
-      p.cq, p.answers_cq,
+      p.cq, p.answers_cq, p.measure,
       (SELECT json_agg(json_build_object('quote', ps.quote, 'org', s.author_org))
        FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
        WHERE ps.point_id = p.id) AS sources,
@@ -116,7 +116,7 @@ export default async function MapPage({
   const rawPoints = pointsRes.rows as {
     id: string; kind: MapPoint["kind"]; slot: MapPoint["slot"]; label: string;
     summary: string | null; finding: string | null; status: string; theme: string | null;
-    cq: MapPoint["cq"]; answers_cq: string[] | null;
+    cq: MapPoint["cq"]; answers_cq: string[] | null; measure: string | null;
     sources: { quote: string | null; org: string | null }[] | null;
     statement_id: string | null; statement_text: string | null;
   }[];
@@ -164,6 +164,7 @@ export default async function MapPage({
       theme: p.theme,
       cq: p.cq,
       answersCq: p.answers_cq,
+      measure: p.measure,
       sources: p.sources ?? [],
       profile: prof?.profile,
       perGroup: prof?.perGroup,

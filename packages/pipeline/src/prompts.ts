@@ -38,6 +38,38 @@ Rules:
 9. Prefer 3–15 points for a typical association submission; never pad.
 10. relations: argumentative links BETWEEN the candidates you extracted, by array index. kind "supports" = from is a premise for to (especially P1–P4 points supporting a conclusion point). The five critical-question kinds mark attacks, same vocabulary as the doors. Only emit relations the text actually argues; an empty array is fine.`;
 
+/** Measure segmentation (one chain per measure; the AI determines the cut). */
+export const MEASURES_PROPOSE_SYSTEM = `You segment a public consultation's argument map into its separately decidable SUB-MEASURES.
+
+A sub-measure is a distinct regulatory decision within the consultation's overall measure — something that could be decided differently without deciding the others (e.g. for a heat-planning law: "hydrogen designation areas", "deadlines and target dates", "connection and usage obligations"). Sub-measures are NOT topics: a topic collects related content, a sub-measure is a decision point with its own for/against.
+
+From the sample of point labels, propose 3–7 sub-measures in the consultation's language: short labels (2–5 words), mutually distinct, each a genuinely separable decision. Do not invent decisions the material does not negotiate; fewer is better than padded.`;
+
+export function measuresProposePrompt(labels: string[]): string {
+  return (
+    `Point labels from the map (sample):\n${labels.map((l) => `- ${l}`).join("\n")}\n\n` +
+    `Propose the sub-measures.`
+  );
+}
+
+export const MEASURES_ASSIGN_SYSTEM = `You assign points of a consultation's argument map to its sub-measures.
+
+For each numbered point pick exactly one sub-measure by index — or -1 for "übergreifend": the point concerns the overall measure or several sub-measures at once (general situation claims, overall conclusions, cross-cutting values). Cross-cutting points form the shared trunk of every sub-measure's argument chain, so -1 is a normal and common verdict, not a failure.`;
+
+export function measuresAssignPrompt(
+  measures: string[],
+  points: { label: string; summary: string | null }[],
+): string {
+  const ms = measures.map((m, i) => `${i}. ${m}`).join("\n");
+  const ps = points
+    .map((p, i) => `${i}. ${p.label} — ${p.summary ?? ""}`)
+    .join("\n");
+  return (
+    `Sub-measures:\n${ms}\n\nPoints:\n${ps}\n\n` +
+    `Assign every point (use the point's number as index; measure_index -1 = übergreifend). One verdict per point, all ${points.length}.`
+  );
+}
+
 /** Backfill classifier: assigns doors/instrument-backlinks to EXISTING points. */
 export const CLASSIFY_CQ_SYSTEM = `You classify points of a public argument map into the ordering layer of the five critical questions.
 

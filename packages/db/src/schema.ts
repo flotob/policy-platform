@@ -57,6 +57,8 @@ export const points = pgTable("points", {
   /** For instruments (kind='design'): the door(s) the instrument answers.
    *  First element = primary, rest secondary. */
   answersCq: text("answers_cq").array(),
+  /** Sub-measure this point belongs to; 'übergreifend' = shared trunk. */
+  measure: text("measure"),
   status: text("status").notNull().default("draft"),
   mergedInto: uuid("merged_into"),
   createdBy: text("created_by").notNull(),

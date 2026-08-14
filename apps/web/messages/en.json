@@ -96,6 +96,8 @@
     "chainDrillHint": "Click a station: its stage's claims, its door's objections, and the instruments answering them.",
     "chainDrillClaims": "This stage's claims ({n}) — sorted by camp difference",
     "chainP1NoDoor": "No doors anchor at the situation — disputes about the Lage are ordinary claim disagreement.",
+    "chainMeasures": "Measures:",
+    "chainAllMeasure": "Overall",
     "chainReconverge": "⚠ At the conclusion the camps re-converge — spurious-consensus suspicion: same result, different reasons.",
     "patternHeading": "The four base patterns of dispute — detected pattern highlighted",
     "pattern_bridge_reasons": "Bridge of reasons",

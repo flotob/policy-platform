@@ -529,6 +529,15 @@ code {
 .nodelegend__label { font-weight: 600; color: var(--muted); }
 .nodelegend__extra { color: var(--muted); }
 
+.chain__measures {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 0.35rem; margin: 0 0 1.2rem;
+}
+.chain__measures-label {
+  font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.05em;
+  color: var(--muted); margin-right: 0.3rem;
+}
+
 .chain__station { cursor: pointer; }
 .chain__station:hover .chain__box { stroke-width: 2.5; }
 .chain__station--open .chain__box { stroke-width: 3; }

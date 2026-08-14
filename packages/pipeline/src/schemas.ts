@@ -84,6 +84,26 @@ export const batchMatchOutput = z
   })
   .strict();
 
+export const measuresProposeOutput = z
+  .object({
+    measures: z.array(z.string().min(3).max(80)).min(2).max(7),
+  })
+  .strict();
+
+export const measureAssignVerdict = z
+  .object({
+    index: z.number().int().nonnegative(),
+    /** Index into the measure list; -1 = übergreifend (shared trunk). */
+    measure_index: z.number().int().min(-1),
+  })
+  .strict();
+
+export const measuresAssignOutput = z
+  .object({
+    verdicts: z.array(measureAssignVerdict).max(40),
+  })
+  .strict();
+
 /** Backfill classifier verdict for one existing point (by index). */
 export const cqVerdict = z
   .object({
@@ -212,6 +232,8 @@ export const decompositionJsonSchema = toProviderSchema(decompositionOutput);
 export const matchJsonSchema = toProviderSchema(matchOutput);
 export const batchMatchJsonSchema = toProviderSchema(batchMatchOutput);
 export const classifyCqJsonSchema = toProviderSchema(classifyCqOutput);
+export const measuresProposeJsonSchema = toProviderSchema(measuresProposeOutput);
+export const measuresAssignJsonSchema = toProviderSchema(measuresAssignOutput);
 export const statementJsonSchema = toProviderSchema(statementOutput);
 export const relationsJsonSchema = toProviderSchema(relationsOutput);
 export const aiReviewJsonSchema = toProviderSchema(aiReviewOutput);

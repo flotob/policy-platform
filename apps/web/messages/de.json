@@ -96,6 +96,8 @@
     "chainDrillHint": "Station anklicken: Behauptungen der Stufe, die Einwände ihrer Tür und die Instrumente, die sie beantworten.",
     "chainDrillClaims": "Behauptungen dieser Stufe ({n}) — sortiert nach Lager-Differenz",
     "chainP1NoDoor": "An der Lage docken keine Türen an — Streit über die Lage ist gewöhnlicher Behauptungs-Dissens.",
+    "chainMeasures": "Maßnahmen:",
+    "chainAllMeasure": "Gesamt",
     "chainReconverge": "⚠ Bei der Konklusion nähern sich die Lager wieder an — Scheinkonsens-Verdacht: gleiches Ergebnis, andere Gründe.",
     "patternHeading": "Die vier Grundmuster des Streits — erkanntes Muster hervorgehoben",
     "pattern_bridge_reasons": "Brücke der Gründe",

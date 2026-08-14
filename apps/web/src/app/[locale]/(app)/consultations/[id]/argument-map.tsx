@@ -30,6 +30,8 @@ export interface MapPoint {
   status: string;
   statement: string | null;
   theme: string | null;
+  /** Sub-measure ('übergreifend' = shared trunk of every chain). */
+  measure: string | null;
   /** Door (critical question) for objection points; null for claims/instruments/gaps. */
   cq: "empirics" | "alternatives" | "goal_conflict" | "feasibility" | "value_conflict" | null;
   /** For instruments: door(s) answered, first = primary. */
@@ -155,59 +157,6 @@ function KindLegend({
   );
 }
 
-/** The concept paper's four dispute patterns as glyphs; the detected one lit. */
-function PatternRow({
-  active,
-  t,
-}: {
-  active: ChainPattern;
-  t: ReturnType<typeof useTranslations<"MapView">>;
-}) {
-  const GLYPHS: { key: ChainPattern; svg: React.ReactNode }[] = [
-    {
-      key: "bridge_reasons",
-      svg: (
-        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="120" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="120" y1="22" x2="168" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="120" y1="22" x2="168" y2="36" stroke="var(--coral)" strokeWidth="2" /></svg>
-      ),
-    },
-    {
-      key: "pseudo_consensus",
-      svg: (
-        <svg viewBox="0 0 180 44"><line x1="8" y1="8" x2="120" y2="22" stroke="var(--violet)" strokeWidth="2" /><line x1="8" y1="36" x2="120" y2="22" stroke="var(--blue)" strokeWidth="2" /><line x1="120" y1="22" x2="168" y2="22" stroke="var(--teal)" strokeWidth="3" /></svg>
-      ),
-    },
-    {
-      key: "value_conflict",
-      svg: (
-        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="132" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="132" y1="22" x2="168" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="132" y1="22" x2="168" y2="36" stroke="var(--coral)" strokeWidth="2" /><circle cx="132" cy="22" r="5" fill="var(--coral)" /></svg>
-      ),
-    },
-    {
-      key: "pseudo_fact",
-      svg: (
-        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="40" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="40" y1="22" x2="90" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="40" y1="22" x2="90" y2="36" stroke="var(--coral)" strokeWidth="2" /><line x1="90" y1="8" x2="140" y2="22" stroke="var(--coral)" strokeWidth="2" /><line x1="90" y1="36" x2="140" y2="22" stroke="var(--coral)" strokeWidth="2" /><line x1="140" y1="22" x2="168" y2="22" stroke="var(--teal)" strokeWidth="3" /></svg>
-      ),
-    },
-  ];
-  return (
-    <div className="patternrow">
-      <span className="patternrow__head">{t("patternHeading")}</span>
-      <div className="patternrow__cards">
-        {GLYPHS.map(({ key, svg }) => (
-          <div
-            key={key}
-            className={`patternrow__card ${active === key ? "patternrow__card--active" : ""}`}
-          >
-            {svg}
-            <strong>{t(`pattern_${key}`)}</strong>
-            <p>{t(`patternDesc_${key}`)}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** Explains the mapnode chips' left-border color — the point's Befund. */
 function NodeLegend({ t }: { t: ReturnType<typeof useTranslations<"MapView">> }) {
   return (
@@ -250,8 +199,48 @@ function ChainView({
   t: ReturnType<typeof useTranslations<"MapView">>;
 }) {
   const [drill, setDrill] = useState<SpineSlot | null>(null);
-  const chain = computeChain(points);
-  if (!chain) return <p className="placeholder-note">{t("chainEmpty")}</p>;
+  // One chain per sub-measure (decision 2026-08-14). 'übergreifend' points
+  // are the shared trunk: they join every sub-measure's chain.
+  const [measure, setMeasure] = useState<string | null>(null);
+  const measures = [...new Set(points.map((p) => p.measure).filter(
+    (m): m is string => !!m && m !== "übergreifend",
+  ))].sort(
+    (a, b) =>
+      points.filter((p) => p.measure === b).length -
+      points.filter((p) => p.measure === a).length,
+  );
+  const scoped = measure
+    ? points.filter((p) => p.measure === measure || p.measure === "übergreifend")
+    : points;
+  const chain = computeChain(scoped);
+  const measurePills = measures.length > 0 && (
+    <div className="chain__measures">
+      <span className="chain__measures-label">{t("chainMeasures")}</span>
+      <button
+        className={`scatter__kbtn ${measure === null ? "scatter__kbtn--on" : ""}`}
+        onClick={() => { setMeasure(null); setDrill(null); }}
+      >
+        {t("chainAllMeasure")}
+      </button>
+      {measures.map((m) => (
+        <button
+          key={m}
+          className={`scatter__kbtn ${measure === m ? "scatter__kbtn--on" : ""}`}
+          onClick={() => { setMeasure(measure === m ? null : m); setDrill(null); }}
+        >
+          {m}
+          <span className="scatter__kcount">{points.filter((p) => p.measure === m).length}</span>
+        </button>
+      ))}
+    </div>
+  );
+  if (!chain)
+    return (
+      <div className="chain">
+        {measurePills}
+        <p className="placeholder-note">{t("chainEmpty")}</p>
+      </div>
+    );
   const { stations, forkIdx, gA, gB } = chain;
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
@@ -278,6 +267,7 @@ function ChainView({
 
   return (
     <div className="chain">
+      {measurePills}
       <p className="chain__verdict">
         {fork
           ? t("chainVerdictFork", {
@@ -353,7 +343,6 @@ function ChainView({
         <span className="chain__note">{t("chainSpineNote")}</span>
       </div>
       <p className="chain__drillhint">{t("chainDrillHint")}</p>
-      {drill === null && <PatternRow active={pattern} t={t} />}
 
       {drill === null && fork && carriers.length > 0 && (
         <div className="chain__carriers">
@@ -452,8 +441,8 @@ function ChainView({
               </section>
             )}
             {doorKeys.map((door) => {
-              const objections = points.filter((p) => p.cq === door);
-              const instruments = points
+              const objections = scoped.filter((p) => p.cq === door);
+              const instruments = scoped
                 .filter((p) => (p.answersCq ?? []).includes(door))
                 .sort((a, b) => {
                   const ap = a.answersCq?.[0] === door ? 0 : 1;
