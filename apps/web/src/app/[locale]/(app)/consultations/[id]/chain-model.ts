@@ -93,10 +93,13 @@ export function stationState(
   station: ChainStation,
   i: number,
   forkIdx: number,
-): "shared" | "fork" | "split" | "reconverge" {
+): "shared" | "fork" | "split" | "reconverge" | "after" {
   if (forkIdx === -1 || i < forkIdx) return "shared";
   if (i === forkIdx) return "fork";
-  return (station.gapAbs ?? 0) >= FORK_THRESHOLD ? "split" : "reconverge";
+  // No computable gap (one camp has no votes here): neutral, neither
+  // split nor re-converged.
+  if (station.gapAbs === null) return "after";
+  return station.gapAbs >= FORK_THRESHOLD ? "split" : "reconverge";
 }
 
 export type ChainPattern =

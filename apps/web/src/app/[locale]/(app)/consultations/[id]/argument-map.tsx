@@ -209,10 +209,22 @@ function ChainView({
       points.filter((p) => p.measure === b).length -
       points.filter((p) => p.measure === a).length,
   );
-  const scoped = measure
-    ? points.filter((p) => p.measure === measure || p.measure === "übergreifend")
-    : points;
+  // Clean scopes (decision 2026-08-14): a measure's chain = ONLY its own
+  // points; the Gesamt chain = ONLY the übergreifend points (the question
+  // "the proposal as a whole"). No mixing — context via the trunk
+  // reference below. Unsegmented maps keep the all-points chain.
+  const scoped =
+    measures.length === 0
+      ? points
+      : measure
+        ? points.filter((p) => p.measure === measure)
+        : points.filter((p) => p.measure === "übergreifend");
   const chain = computeChain(scoped);
+  const trunkRef = measure !== null && (
+    <button className="chain__trunkref" onClick={() => { setMeasure(null); setDrill(null); }}>
+      ◀ {t("chainTrunkRef")}
+    </button>
+  );
   const measurePills = measures.length > 0 && (
     <div className="chain__measures">
       <span className="chain__measures-label">{t("chainMeasures")}</span>
@@ -238,6 +250,7 @@ function ChainView({
     return (
       <div className="chain">
         {measurePills}
+        {trunkRef}
         <p className="placeholder-note">{t("chainEmpty")}</p>
       </div>
     );
@@ -268,6 +281,7 @@ function ChainView({
   return (
     <div className="chain">
       {measurePills}
+      {trunkRef}
       <p className="chain__verdict">
         {fork
           ? t("chainVerdictFork", {

@@ -529,6 +529,12 @@ code {
 .nodelegend__label { font-weight: 600; color: var(--muted); }
 .nodelegend__extra { color: var(--muted); }
 
+.chain__trunkref {
+  display: block; margin: 0 auto 1rem; font: inherit; font-size: 0.8rem;
+  color: var(--teal); background: var(--teal-bg); border: 1px solid var(--teal);
+  border-radius: 99px; padding: 0.25rem 0.9rem; cursor: pointer;
+}
+
 .chain__measures {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: 0.35rem; margin: 0 0 1.2rem;

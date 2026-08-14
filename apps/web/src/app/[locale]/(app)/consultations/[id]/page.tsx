@@ -62,10 +62,19 @@ export default async function OverviewPage({
   // Kette hero: spine claims with their camp profiles (k=2 only).
   let chainPoints: ChainPoint[] = [];
   if (analysis && analysis.clustering.k === 2) {
+    // Segmented maps: the hero shows the "proposal as a whole" chain
+    // (übergreifend points only); unsegmented maps use everything.
     const cpRes = await db.execute(sql`
       SELECT id, slot, kind, cq, answers_cq FROM points
       WHERE consultation_id = ${consultation.id}
         AND status IN ('draft','released') AND slot IS NOT NULL
+        AND (
+          NOT EXISTS (
+            SELECT 1 FROM points m WHERE m.consultation_id = ${consultation.id}
+              AND m.measure IS NOT NULL
+          )
+          OR measure = 'übergreifend'
+        )
     `);
     const profileByPoint = new Map(
       (analysis.statements ?? []).map((s) => [s.pointId, s.perGroup]),
