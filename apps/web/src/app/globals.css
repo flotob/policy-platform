@@ -455,6 +455,30 @@ code {
 .badge--cq { background: var(--coral-bg); color: var(--coral); }
 .badge--instrument { background: var(--magenta-bg); color: var(--magenta); }
 
+/* Türen-Ansicht (five-doors ordering layer) */
+.argmap__doorsec { border-top: 3px solid var(--coral); background: linear-gradient(var(--coral-bg), var(--card) 60px); }
+.argmap__doorsec--grundmuster { border-top-color: var(--ink); background: linear-gradient(var(--gray-bg), var(--card) 60px); }
+.argmap__doorsec--loose { border-top-color: var(--magenta); background: linear-gradient(var(--magenta-bg), var(--card) 60px); }
+.argmap__doorsec header h3 { display: flex; align-items: center; gap: 0.4rem; }
+.argmap__doorsec header small { display: block; color: var(--muted); font-style: italic; margin-top: 0.1rem; }
+
+.argmap__doorinstruments {
+  margin-top: 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--magenta);
+  background: var(--magenta-bg);
+  border-radius: 0 8px 8px 0;
+}
+
+.argmap__doorinstruments-head {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--magenta);
+  margin-bottom: 0.4rem;
+}
+
 .argmap__cqnum {
   display: inline-flex;
   align-items: center;

@@ -435,7 +435,7 @@ export function ArgumentMap({
   const tMap = useTranslations("Map");
   const hasVotes = points.some((p) => (p.perGroup?.length ?? 0) >= 2);
   const campCount = new Set(points.flatMap((p) => (p.perGroup ?? []).map((g) => g.group))).size;
-  const [mode, setMode] = useState<"scatter" | "map" | "list">(
+  const [mode, setMode] = useState<"scatter" | "doors" | "map" | "list">(
     hasVotes ? "scatter" : "map",
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -639,6 +639,14 @@ export function ArgumentMap({
               {t("mapMode")}
             </button>
           )}
+          {points.some((p) => p.cq || (p.answersCq?.length ?? 0) > 0) && (
+            <button
+              className={`argmap__mode ${mode === "doors" ? "argmap__mode--on" : ""}`}
+              onClick={() => setMode("doors")}
+            >
+              {t("doorsMode")}
+            </button>
+          )}
           <button
             className={`argmap__mode ${mode === "map" ? "argmap__mode--on" : ""}`}
             onClick={() => setMode("map")}
@@ -806,7 +814,149 @@ export function ArgumentMap({
               )}
             </aside>
 
-            {mode === "scatter" ? (
+            {mode === "doors" ? (
+              <div className="argmap__zones">
+                {(() => {
+                  const renderNodes = (group: MapPoint[], groupKey: string) => {
+                    const sorted = [...group].sort((a, b) => pointWeight(b) - pointWeight(a));
+                    const expanded =
+                      filtering || expandedGroups.has(groupKey) || sorted.length <= GROUP_LIMIT;
+                    const shown = expanded ? sorted : sorted.slice(0, GROUP_LIMIT);
+                    return (
+                      <div className="argmap__nodes">
+                        {shown.map((p) => (
+                          <button
+                            key={p.id}
+                            className={[
+                              "mapnode",
+                              `mapnode--${profileClass(p)}`,
+                              p.status === "draft" ? "mapnode--draft" : "",
+                              selectedId === p.id ? "mapnode--selected" : "",
+                              relatedIds.has(p.id) ? "mapnode--related" : "",
+                            ].join(" ")}
+                            onClick={() => setSelectedId(selectedId === p.id ? null : p.id)}
+                            title={nodeText(p)}
+                          >
+                            {nodeText(p)}
+                          </button>
+                        ))}
+                        {!expanded && (
+                          <button
+                            className="mapnode mapnode--more"
+                            onClick={() =>
+                              setExpandedGroups(new Set([...expandedGroups, groupKey]))
+                            }
+                          >
+                            +{sorted.length - GROUP_LIMIT} {t("showMore")}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  };
+                  // 5–7 rule: beyond 7 units a group splits into theme clusters.
+                  const renderUnitised = (group: MapPoint[], keyPrefix: string) => {
+                    if (group.length <= 7) return renderNodes(group, keyPrefix);
+                    const themes = [...new Set(group.map((p) => p.theme ?? ""))].sort(
+                      (a, b) =>
+                        group.filter((p) => (p.theme ?? "") === b).length -
+                        group.filter((p) => (p.theme ?? "") === a).length,
+                    );
+                    if (themes.length <= 1) return renderNodes(group, keyPrefix);
+                    return themes.map((th) => {
+                      const themePoints = group.filter((p) => (p.theme ?? "") === th);
+                      return (
+                        <details
+                          key={th || "_other"}
+                          className="argmap__theme"
+                          open={filtering || themes.length <= 3}
+                        >
+                          <summary>
+                            {th || t("themeOther")}{" "}
+                            <span className="argmap__theme-count">{themePoints.length}</span>
+                          </summary>
+                          {renderNodes(themePoints, `${keyPrefix}:${th || "_other"}`)}
+                        </details>
+                      );
+                    });
+                  };
+
+                  const isInstrument = (p: MapPoint) => (p.answersCq?.length ?? 0) > 0;
+                  const claims = visiblePoints.filter(
+                    (p) => !p.cq && !isInstrument(p) && p.kind !== "gap" && p.kind !== "design",
+                  );
+                  const gaps = visiblePoints.filter((p) => p.kind === "gap");
+                  const looseDesign = visiblePoints.filter(
+                    (p) => p.kind === "design" && !isInstrument(p),
+                  );
+                  const DOORS = ["empirics", "alternatives", "goal_conflict", "feasibility", "value_conflict"] as const;
+                  return (
+                    <>
+                      <section className="argmap__zone argmap__doorsec argmap__doorsec--grundmuster">
+                        <header><h3>{t("grundmusterTitle")} ({claims.length})</h3></header>
+                        <div className="argmap__slotgroups">
+                          {SLOTS.map((slot) => {
+                            const group = claims.filter((p) => p.slot === slot);
+                            if (group.length === 0) return null;
+                            return (
+                              <div key={slotKey(slot)} className="argmap__slotgroup">
+                                <span className="argmap__slotchip">{slotLabel(slot)}</span>
+                                {renderUnitised(group, `gm:${slotKey(slot)}`)}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
+
+                      {DOORS.map((door, i) => {
+                        const objections = visiblePoints.filter((p) => p.cq === door);
+                        const instruments = visiblePoints.filter((p) =>
+                          (p.answersCq ?? []).includes(door),
+                        );
+                        if (objections.length + instruments.length === 0) return null;
+                        // Primary answers first within the instrument block.
+                        const instSorted = [...instruments].sort((a, b) => {
+                          const ap = a.answersCq?.[0] === door ? 0 : 1;
+                          const bp = b.answersCq?.[0] === door ? 0 : 1;
+                          return ap - bp || pointWeight(b) - pointWeight(a);
+                        });
+                        return (
+                          <section key={door} className="argmap__zone argmap__doorsec">
+                            <header>
+                              <h3>
+                                <i className="argmap__cqnum">{i + 1}</i> {t(`cq_${door}`)} ({objections.length})
+                              </h3>
+                              <small>{t(`cqQuestion_${door}`)}</small>
+                            </header>
+                            {renderUnitised(objections, `door:${door}`)}
+                            {instSorted.length > 0 && (
+                              <div className="argmap__doorinstruments">
+                                <span className="argmap__doorinstruments-head">
+                                  ⚒ {t("doorInstruments")} ({instSorted.length})
+                                </span>
+                                {renderUnitised(instSorted, `doorinst:${door}`)}
+                              </div>
+                            )}
+                          </section>
+                        );
+                      })}
+
+                      {looseDesign.length > 0 && (
+                        <section className="argmap__zone argmap__doorsec argmap__doorsec--loose">
+                          <header><h3>{t("designUnassigned")} ({looseDesign.length})</h3></header>
+                          {renderUnitised(looseDesign, "loosedesign")}
+                        </section>
+                      )}
+                      {gaps.length > 0 && (
+                        <section className="argmap__zone argmap__zone--gap">
+                          <header><h3>{zoneTitle("gap")} ({gaps.length})</h3></header>
+                          {renderUnitised(gaps, "gaps")}
+                        </section>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            ) : mode === "scatter" ? (
               <div className="argmap__zones">
                 {campCount >= 3 ? (
                   <TriangleField
