@@ -492,6 +492,23 @@ code {
   letter-spacing: 0.05em; color: var(--coral); margin-bottom: 0.5rem;
 }
 .chain__carriergap { font-style: normal; font-family: var(--font-mono); font-size: 0.68rem; color: var(--muted); }
+.overview__chain { margin: 2rem 0 2.4rem; }
+.overview__chain-link { display: block; text-decoration: none; }
+.overview__chain-link:hover .chain__box { stroke-width: 2.5; }
+
+.chain__station { cursor: pointer; }
+.chain__station:hover .chain__box { stroke-width: 2.5; }
+.chain__station--open .chain__box { stroke-width: 3; }
+.chain__drillhint { text-align: center; font-size: 0.78rem; color: var(--muted); margin: 0.5rem 0 0; }
+.chain__drill { max-width: 900px; margin: 1.6rem auto 0; border-top: 2px solid var(--line-strong); padding-top: 1rem; }
+.chain__drill-head { display: flex; align-items: baseline; justify-content: space-between; }
+.chain__drill-head h3 { font-family: var(--font-serif); margin: 0 0 0.6rem; }
+.chain__drill-close { font: inherit; color: var(--ink); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; padding: 0.1rem 0.5rem; }
+.chain__drill-sec { margin: 1.1rem 0; }
+.chain__drill-sec--door { border-left: 3px solid var(--coral); padding-left: 0.9rem; border-radius: 0 8px 8px 0; }
+.chain__drill-sechead { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.45rem; }
+.chain__drill-sechead--door { color: var(--coral); }
+.chain__drill-q { display: block; font-weight: 400; font-style: italic; color: var(--muted); font-size: 0.8rem; }
 
 /* Türen-Ansicht (five-doors ordering layer) */
 .argmap__doorsec { border-top: 3px solid var(--coral); background: linear-gradient(var(--coral-bg), var(--card) 60px); }

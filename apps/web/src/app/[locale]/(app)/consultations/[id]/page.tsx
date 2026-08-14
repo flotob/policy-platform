@@ -5,6 +5,9 @@ import { sql } from "@policy/db";
 
 import { getDb } from "@/lib/db";
 
+import { ChainHero } from "./chain-hero";
+import type { ChainPoint } from "./chain-model";
+
 export const dynamic = "force-dynamic";
 
 interface AnalysisStatement {
@@ -55,6 +58,30 @@ export default async function OverviewPage({
   `);
   const analysis = (runRes.rows[0]?.result ?? null) as Analysis | null;
   const analysisAt = runRes.rows[0]?.created_at as string | undefined;
+
+  // Kette hero: spine claims with their camp profiles (k=2 only).
+  let chainPoints: ChainPoint[] = [];
+  if (analysis && analysis.clustering.k === 2) {
+    const cpRes = await db.execute(sql`
+      SELECT id, slot, kind, cq, answers_cq FROM points
+      WHERE consultation_id = ${consultation.id}
+        AND status IN ('draft','released') AND slot IS NOT NULL
+    `);
+    const profileByPoint = new Map(
+      (analysis.statements ?? []).map((s) => [s.pointId, s.perGroup]),
+    );
+    chainPoints = (cpRes.rows as {
+      id: string; slot: ChainPoint["slot"]; kind: string;
+      cq: string | null; answers_cq: string[] | null;
+    }[]).map((p) => ({
+      id: p.id,
+      slot: p.slot,
+      kind: p.kind,
+      cq: p.cq,
+      answersCq: p.answers_cq,
+      perGroup: profileByPoint.get(p.id),
+    }));
+  }
 
   const numsRes = await db.execute(sql`
     SELECT
@@ -195,6 +222,15 @@ export default async function OverviewPage({
           </Link>
         </div>
       </header>
+
+      {chainPoints.length > 0 && (
+        <ChainHero
+          points={chainPoints}
+          campNames={analysis?.campNames}
+          de={de}
+          href={`/${locale}/consultations/${consultation.id}/map`}
+        />
+      )}
 
       {analysis && (
         <section className="overview__section">

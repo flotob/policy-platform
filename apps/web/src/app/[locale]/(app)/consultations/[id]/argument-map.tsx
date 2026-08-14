@@ -9,6 +9,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+
+import { computeChain, DOOR_ANCHORS, type SpineSlot } from "./chain-model";
 import { useTranslations } from "next-intl";
 
 export interface MapPoint {
@@ -154,8 +156,6 @@ function KindLegend({
  * The first station where the profiles diverge significantly is the
  * Bruchpunkt; the points carrying the divergence are listed for drill-down.
  */
-const FORK_THRESHOLD = 0.15;
-
 function ChainView({
   points,
   selectedId,
@@ -175,40 +175,10 @@ function ChainView({
   profileClass: (p: MapPoint) => string;
   t: ReturnType<typeof useTranslations<"MapView">>;
 }) {
-  const voted = points.filter((p) => (p.perGroup?.length ?? 0) >= 2);
-  const nsByGroup = new Map<number, number>();
-  for (const p of voted)
-    for (const g of p.perGroup!) nsByGroup.set(g.group, (nsByGroup.get(g.group) ?? 0) + g.ns);
-  const top2 = [...nsByGroup.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2).map((e) => e[0]);
-  const [gA, gB] = top2.sort((a, b) => a - b) as [number, number];
-
-  const SPINE = ["P1", "P2", "P3", "P4", "conclusion"] as const;
-  const stations = SPINE.map((slot) => {
-    const claims = voted.filter(
-      (p) =>
-        p.slot === slot &&
-        !p.cq &&
-        (p.answersCq?.length ?? 0) === 0 &&
-        p.kind !== "design" &&
-        p.kind !== "gap",
-    );
-    const mean = (g: number) => {
-      const pas = claims
-        .map((p) => p.perGroup!.find((x) => x.group === g))
-        .filter((x): x is { group: number; pa: number; ns: number } => !!x && x.ns > 0);
-      if (pas.length === 0) return null;
-      return pas.reduce((s, x) => s + x.pa, 0) / pas.length;
-    };
-    const paA = mean(gA);
-    const paB = mean(gB);
-    const gapAbs = paA !== null && paB !== null ? Math.abs(paA - paB) : null;
-    return { slot, claims, paA, paB, gapAbs };
-  }).filter((s) => s.claims.length > 0);
-
-  if (stations.length < 2)
-    return <p className="placeholder-note">{t("chainEmpty")}</p>;
-
-  const forkIdx = stations.findIndex((s) => (s.gapAbs ?? 0) >= FORK_THRESHOLD);
+  const [drill, setDrill] = useState<SpineSlot | null>(null);
+  const chain = computeChain(points);
+  if (!chain) return <p className="placeholder-note">{t("chainEmpty")}</p>;
+  const { stations, forkIdx, gA, gB } = chain;
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
   const carriers = fork
@@ -253,7 +223,11 @@ function ChainView({
           const cls = isFork ? "chain__box--fork" : isShared ? "chain__box--shared" : "chain__box--after";
           const barW = boxW - 30;
           return (
-            <g key={s.slot}>
+            <g
+              key={s.slot}
+              className={`chain__station ${drill === s.slot ? "chain__station--open" : ""}`}
+              onClick={() => setDrill(drill === s.slot ? null : s.slot)}
+            >
               {i > 0 && (
                 <line
                   x1={round2(cx - step + boxW / 2 + 6)}
@@ -299,8 +273,9 @@ function ChainView({
         <span><i className="dot dot--divisive" /> B · {campLabel(gB)}</span>
         <span className="chain__note">{t("chainSpineNote")}</span>
       </div>
+      <p className="chain__drillhint">{t("chainDrillHint")}</p>
 
-      {fork && carriers.length > 0 && (
+      {drill === null && fork && carriers.length > 0 && (
         <div className="chain__carriers">
           <span className="chain__carriers-head">
             {t("chainCarriers", { fork: slotLabel(fork.slot) })}
@@ -324,6 +299,108 @@ function ChainView({
           </div>
         </div>
       )}
+
+      {drill !== null && (() => {
+        const st = stations.find((s) => s.slot === drill)!;
+        const pa = (p: MapPoint, g: number) =>
+          p.perGroup?.find((x) => x.group === g)?.pa ?? null;
+        const claimRows = [...st.claims].sort(
+          (a, b) =>
+            Math.abs((pa(b, gA) ?? 0) - (pa(b, gB) ?? 0)) -
+            Math.abs((pa(a, gA) ?? 0) - (pa(a, gB) ?? 0)),
+        );
+        const nodeChip = (p: MapPoint) => {
+          const a = pa(p, gA);
+          const b = pa(p, gB);
+          return (
+            <button
+              key={p.id}
+              className={[
+                "mapnode",
+                `mapnode--${profileClass(p)}`,
+                p.status === "draft" ? "mapnode--draft" : "",
+                selectedId === p.id ? "mapnode--selected" : "",
+              ].join(" ")}
+              onClick={() => onSelect(selectedId === p.id ? null : p.id)}
+              title={nodeText(p)}
+            >
+              {nodeText(p)}
+              {a !== null && b !== null && (
+                <em className="chain__carriergap"> {Math.round(a * 100)} % · {Math.round(b * 100)} %</em>
+              )}
+            </button>
+          );
+        };
+        const themed = (group: MapPoint[], keyPrefix: string) => {
+          if (group.length <= 7)
+            return <div className="argmap__nodes">{group.map(nodeChip)}</div>;
+          const themes = [...new Set(group.map((p) => p.theme ?? ""))].sort(
+            (a, b) =>
+              group.filter((p) => (p.theme ?? "") === b).length -
+              group.filter((p) => (p.theme ?? "") === a).length,
+          );
+          return themes.map((th) => {
+            const tp = group.filter((p) => (p.theme ?? "") === th);
+            return (
+              <details key={`${keyPrefix}:${th || "_other"}`} className="argmap__theme" open={themes.length <= 3}>
+                <summary>
+                  {th || t("themeOther")} <span className="argmap__theme-count">{tp.length}</span>
+                </summary>
+                <div className="argmap__nodes">{tp.map(nodeChip)}</div>
+              </details>
+            );
+          });
+        };
+        const doorKeys = DOOR_ANCHORS[drill];
+        const DOOR_INDEX: Record<string, number> = {
+          empirics: 1, alternatives: 2, goal_conflict: 3, feasibility: 4, value_conflict: 5,
+        };
+        return (
+          <div className="chain__drill">
+            <header className="chain__drill-head">
+              <h3>{slotLabel(drill)}</h3>
+              <button className="chain__drill-close" onClick={() => setDrill(null)}>✕</button>
+            </header>
+            {claimRows.length > 0 && (
+              <section className="chain__drill-sec">
+                <span className="chain__drill-sechead">
+                  {t("chainDrillClaims", { n: claimRows.length })}
+                </span>
+                <div className="argmap__nodes">{claimRows.map(nodeChip)}</div>
+              </section>
+            )}
+            {doorKeys.map((door) => {
+              const objections = points.filter((p) => p.cq === door);
+              const instruments = points
+                .filter((p) => (p.answersCq ?? []).includes(door))
+                .sort((a, b) => {
+                  const ap = a.answersCq?.[0] === door ? 0 : 1;
+                  const bp = b.answersCq?.[0] === door ? 0 : 1;
+                  return ap - bp || pointWeight(b) - pointWeight(a);
+                });
+              if (objections.length + instruments.length === 0) return null;
+              return (
+                <section key={door} className="chain__drill-sec chain__drill-sec--door">
+                  <span className="chain__drill-sechead chain__drill-sechead--door">
+                    <i className="argmap__cqnum">{DOOR_INDEX[door]}</i> {t(`cq_${door}`)} ({objections.length})
+                    <em className="chain__drill-q">{t(`cqQuestion_${door}`)}</em>
+                  </span>
+                  {themed(objections, `obj:${door}`)}
+                  {instruments.length > 0 && (
+                    <div className="argmap__doorinstruments">
+                      <span className="argmap__doorinstruments-head">
+                        ⚒ {t("doorInstruments")} ({instruments.length})
+                      </span>
+                      {themed(instruments, `inst:${door}`)}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+            {drill === "P1" && <p className="chain__note">{t("chainP1NoDoor")}</p>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -617,8 +694,10 @@ export function ArgumentMap({
   const tMap = useTranslations("Map");
   const hasVotes = points.some((p) => (p.perGroup?.length ?? 0) >= 2);
   const campCount = new Set(points.flatMap((p) => (p.perGroup ?? []).map((g) => g.group))).size;
-  const [mode, setMode] = useState<"scatter" | "chain" | "doors" | "map" | "list">(
-    hasVotes ? "scatter" : "map",
+  // The Kette is the primary entry for two-camp maps; the conflict field
+  // stays default elsewhere.
+  const [mode, setMode] = useState<"scatter" | "chain" | "map" | "list">(
+    hasVotes && campCount === 2 ? "chain" : hasVotes ? "scatter" : "map",
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -829,14 +908,6 @@ export function ArgumentMap({
               {t("chainMode")}
             </button>
           )}
-          {points.some((p) => p.cq || (p.answersCq?.length ?? 0) > 0) && (
-            <button
-              className={`argmap__mode ${mode === "doors" ? "argmap__mode--on" : ""}`}
-              onClick={() => setMode("doors")}
-            >
-              {t("doorsMode")}
-            </button>
-          )}
           <button
             className={`argmap__mode ${mode === "map" ? "argmap__mode--on" : ""}`}
             onClick={() => setMode("map")}
@@ -1016,148 +1087,6 @@ export function ArgumentMap({
                   profileClass={profileClass}
                   t={t}
                 />
-              </div>
-            ) : mode === "doors" ? (
-              <div className="argmap__zones">
-                {(() => {
-                  const renderNodes = (group: MapPoint[], groupKey: string) => {
-                    const sorted = [...group].sort((a, b) => pointWeight(b) - pointWeight(a));
-                    const expanded =
-                      filtering || expandedGroups.has(groupKey) || sorted.length <= GROUP_LIMIT;
-                    const shown = expanded ? sorted : sorted.slice(0, GROUP_LIMIT);
-                    return (
-                      <div className="argmap__nodes">
-                        {shown.map((p) => (
-                          <button
-                            key={p.id}
-                            className={[
-                              "mapnode",
-                              `mapnode--${profileClass(p)}`,
-                              p.status === "draft" ? "mapnode--draft" : "",
-                              selectedId === p.id ? "mapnode--selected" : "",
-                              relatedIds.has(p.id) ? "mapnode--related" : "",
-                            ].join(" ")}
-                            onClick={() => setSelectedId(selectedId === p.id ? null : p.id)}
-                            title={nodeText(p)}
-                          >
-                            {nodeText(p)}
-                          </button>
-                        ))}
-                        {!expanded && (
-                          <button
-                            className="mapnode mapnode--more"
-                            onClick={() =>
-                              setExpandedGroups(new Set([...expandedGroups, groupKey]))
-                            }
-                          >
-                            +{sorted.length - GROUP_LIMIT} {t("showMore")}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  };
-                  // 5–7 rule: beyond 7 units a group splits into theme clusters.
-                  const renderUnitised = (group: MapPoint[], keyPrefix: string) => {
-                    if (group.length <= 7) return renderNodes(group, keyPrefix);
-                    const themes = [...new Set(group.map((p) => p.theme ?? ""))].sort(
-                      (a, b) =>
-                        group.filter((p) => (p.theme ?? "") === b).length -
-                        group.filter((p) => (p.theme ?? "") === a).length,
-                    );
-                    if (themes.length <= 1) return renderNodes(group, keyPrefix);
-                    return themes.map((th) => {
-                      const themePoints = group.filter((p) => (p.theme ?? "") === th);
-                      return (
-                        <details
-                          key={th || "_other"}
-                          className="argmap__theme"
-                          open={filtering || themes.length <= 3}
-                        >
-                          <summary>
-                            {th || t("themeOther")}{" "}
-                            <span className="argmap__theme-count">{themePoints.length}</span>
-                          </summary>
-                          {renderNodes(themePoints, `${keyPrefix}:${th || "_other"}`)}
-                        </details>
-                      );
-                    });
-                  };
-
-                  const isInstrument = (p: MapPoint) => (p.answersCq?.length ?? 0) > 0;
-                  const claims = visiblePoints.filter(
-                    (p) => !p.cq && !isInstrument(p) && p.kind !== "gap" && p.kind !== "design",
-                  );
-                  const gaps = visiblePoints.filter((p) => p.kind === "gap");
-                  const looseDesign = visiblePoints.filter(
-                    (p) => p.kind === "design" && !isInstrument(p),
-                  );
-                  const DOORS = ["empirics", "alternatives", "goal_conflict", "feasibility", "value_conflict"] as const;
-                  return (
-                    <>
-                      <section className="argmap__zone argmap__doorsec argmap__doorsec--grundmuster">
-                        <header><h3>{t("grundmusterTitle")} ({claims.length})</h3></header>
-                        <div className="argmap__slotgroups">
-                          {SLOTS.map((slot) => {
-                            const group = claims.filter((p) => p.slot === slot);
-                            if (group.length === 0) return null;
-                            return (
-                              <div key={slotKey(slot)} className="argmap__slotgroup">
-                                <span className="argmap__slotchip">{slotLabel(slot)}</span>
-                                {renderUnitised(group, `gm:${slotKey(slot)}`)}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </section>
-
-                      {DOORS.map((door, i) => {
-                        const objections = visiblePoints.filter((p) => p.cq === door);
-                        const instruments = visiblePoints.filter((p) =>
-                          (p.answersCq ?? []).includes(door),
-                        );
-                        if (objections.length + instruments.length === 0) return null;
-                        // Primary answers first within the instrument block.
-                        const instSorted = [...instruments].sort((a, b) => {
-                          const ap = a.answersCq?.[0] === door ? 0 : 1;
-                          const bp = b.answersCq?.[0] === door ? 0 : 1;
-                          return ap - bp || pointWeight(b) - pointWeight(a);
-                        });
-                        return (
-                          <section key={door} className="argmap__zone argmap__doorsec">
-                            <header>
-                              <h3>
-                                <i className="argmap__cqnum">{i + 1}</i> {t(`cq_${door}`)} ({objections.length})
-                              </h3>
-                              <small>{t(`cqQuestion_${door}`)}</small>
-                            </header>
-                            {renderUnitised(objections, `door:${door}`)}
-                            {instSorted.length > 0 && (
-                              <div className="argmap__doorinstruments">
-                                <span className="argmap__doorinstruments-head">
-                                  ⚒ {t("doorInstruments")} ({instSorted.length})
-                                </span>
-                                {renderUnitised(instSorted, `doorinst:${door}`)}
-                              </div>
-                            )}
-                          </section>
-                        );
-                      })}
-
-                      {looseDesign.length > 0 && (
-                        <section className="argmap__zone argmap__doorsec argmap__doorsec--loose">
-                          <header><h3>{t("designUnassigned")} ({looseDesign.length})</h3></header>
-                          {renderUnitised(looseDesign, "loosedesign")}
-                        </section>
-                      )}
-                      {gaps.length > 0 && (
-                        <section className="argmap__zone argmap__zone--gap">
-                          <header><h3>{zoneTitle("gap")} ({gaps.length})</h3></header>
-                          {renderUnitised(gaps, "gaps")}
-                        </section>
-                      )}
-                    </>
-                  );
-                })()}
               </div>
             ) : mode === "scatter" ? (
               <div className="argmap__zones">
