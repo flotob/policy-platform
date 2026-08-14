@@ -471,6 +471,27 @@ code {
 .chain__box--shared { stroke: var(--teal); fill: var(--teal-bg); }
 .chain__box--fork { stroke: var(--coral); stroke-width: 2.5; fill: var(--coral-bg); }
 .chain__box--after { stroke-dasharray: 4 3; }
+/* Beyond the fork every station keeps its own meaning: still split, or
+   re-converging (the Scheinkonsens signal). */
+.chain__box--split { stroke: var(--coral); stroke-dasharray: 4 3; stroke-width: 2; }
+.chain__box--reconverge { stroke: var(--amber); stroke-width: 2.5; fill: var(--amber-bg); }
+.chain__reconverge { display: block; font-family: var(--font-sans); font-size: 0.85rem; color: var(--amber); margin-top: 0.35rem; }
+
+.patternrow { max-width: 980px; margin: 1.6rem auto 0; }
+.patternrow__head {
+  display: block; font-family: var(--font-mono); font-size: 0.72rem;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted);
+  margin-bottom: 0.5rem; text-align: center;
+}
+.patternrow__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; }
+.patternrow__card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0.7rem 0.8rem; opacity: 0.45;
+}
+.patternrow__card--active { opacity: 1; border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.patternrow__card svg { width: 100%; height: auto; }
+.patternrow__card strong { display: block; font-size: 0.85rem; margin-top: 0.2rem; }
+.patternrow__card p { margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--muted); }
 .chain__link { stroke: var(--line-strong); stroke-width: 2; }
 .chain__link--shared { stroke: var(--teal); stroke-width: 3; }
 .chain__breakline { stroke: var(--coral); stroke-width: 1.5; stroke-dasharray: 6 5; }

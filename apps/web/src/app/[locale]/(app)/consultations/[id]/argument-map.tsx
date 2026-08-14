@@ -10,7 +10,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { computeChain, DOOR_ANCHORS, type SpineSlot } from "./chain-model";
+import {
+  chainPattern,
+  computeChain,
+  DOOR_ANCHORS,
+  stationState,
+  type ChainPattern,
+  type SpineSlot,
+} from "./chain-model";
 import { useTranslations } from "next-intl";
 
 export interface MapPoint {
@@ -148,6 +155,59 @@ function KindLegend({
   );
 }
 
+/** The concept paper's four dispute patterns as glyphs; the detected one lit. */
+function PatternRow({
+  active,
+  t,
+}: {
+  active: ChainPattern;
+  t: ReturnType<typeof useTranslations<"MapView">>;
+}) {
+  const GLYPHS: { key: ChainPattern; svg: React.ReactNode }[] = [
+    {
+      key: "bridge_reasons",
+      svg: (
+        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="120" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="120" y1="22" x2="168" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="120" y1="22" x2="168" y2="36" stroke="var(--coral)" strokeWidth="2" /></svg>
+      ),
+    },
+    {
+      key: "pseudo_consensus",
+      svg: (
+        <svg viewBox="0 0 180 44"><line x1="8" y1="8" x2="120" y2="22" stroke="var(--violet)" strokeWidth="2" /><line x1="8" y1="36" x2="120" y2="22" stroke="var(--blue)" strokeWidth="2" /><line x1="120" y1="22" x2="168" y2="22" stroke="var(--teal)" strokeWidth="3" /></svg>
+      ),
+    },
+    {
+      key: "value_conflict",
+      svg: (
+        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="132" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="132" y1="22" x2="168" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="132" y1="22" x2="168" y2="36" stroke="var(--coral)" strokeWidth="2" /><circle cx="132" cy="22" r="5" fill="var(--coral)" /></svg>
+      ),
+    },
+    {
+      key: "pseudo_fact",
+      svg: (
+        <svg viewBox="0 0 180 44"><line x1="8" y1="22" x2="40" y2="22" stroke="var(--teal)" strokeWidth="3" /><line x1="40" y1="22" x2="90" y2="8" stroke="var(--coral)" strokeWidth="2" /><line x1="40" y1="22" x2="90" y2="36" stroke="var(--coral)" strokeWidth="2" /><line x1="90" y1="8" x2="140" y2="22" stroke="var(--coral)" strokeWidth="2" /><line x1="90" y1="36" x2="140" y2="22" stroke="var(--coral)" strokeWidth="2" /><line x1="140" y1="22" x2="168" y2="22" stroke="var(--teal)" strokeWidth="3" /></svg>
+      ),
+    },
+  ];
+  return (
+    <div className="patternrow">
+      <span className="patternrow__head">{t("patternHeading")}</span>
+      <div className="patternrow__cards">
+        {GLYPHS.map(({ key, svg }) => (
+          <div
+            key={key}
+            className={`patternrow__card ${active === key ? "patternrow__card--active" : ""}`}
+          >
+            {svg}
+            <strong>{t(`pattern_${key}`)}</strong>
+            <p>{t(`patternDesc_${key}`)}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Explains the mapnode chips' left-border color — the point's Befund. */
 function NodeLegend({ t }: { t: ReturnType<typeof useTranslations<"MapView">> }) {
   return (
@@ -195,6 +255,7 @@ function ChainView({
   const { stations, forkIdx, gA, gB } = chain;
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
+  const pattern = chainPattern(stations, forkIdx);
   const carriers = fork
     ? [...fork.claims]
         .map((p) => {
@@ -225,6 +286,9 @@ function ChainView({
               n: shared.length,
             })
           : t("chainVerdictNoFork")}
+        {pattern === "pseudo_consensus" && (
+          <span className="chain__reconverge"> {t("chainReconverge")}</span>
+        )}
         {fork && <span className="chain__breakkind"> {t("chainBreakKind")}</span>}
       </p>
 
@@ -232,9 +296,10 @@ function ChainView({
         {stations.map((s, i) => {
           const x = round2(i * step + (step - boxW) / 2);
           const cx = round2(i * step + step / 2);
-          const isShared = forkIdx === -1 || i < forkIdx;
-          const isFork = forkIdx !== -1 && i === forkIdx;
-          const cls = isFork ? "chain__box--fork" : isShared ? "chain__box--shared" : "chain__box--after";
+          const state = stationState(s, i, forkIdx);
+          const isShared = state === "shared";
+          const isFork = state === "fork";
+          const cls = `chain__box--${state}`;
           const barW = boxW - 30;
           return (
             <g
@@ -288,6 +353,7 @@ function ChainView({
         <span className="chain__note">{t("chainSpineNote")}</span>
       </div>
       <p className="chain__drillhint">{t("chainDrillHint")}</p>
+      {drill === null && <PatternRow active={pattern} t={t} />}
 
       {drill === null && fork && carriers.length > 0 && (
         <div className="chain__carriers">

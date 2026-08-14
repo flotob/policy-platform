@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 
-import { computeChain, type ChainPoint } from "./chain-model";
+import { computeChain, stationState, type ChainPoint } from "./chain-model";
 
 const SLOT_LABELS_DE: Record<string, string> = {
   P1: "P1 · Lage",
@@ -66,9 +66,10 @@ export function ChainHero({
           {stations.map((s, i) => {
             const x = round2(i * step + (step - boxW) / 2);
             const cx = round2(i * step + step / 2);
-            const isShared = forkIdx === -1 || i < forkIdx;
-            const isFork = forkIdx !== -1 && i === forkIdx;
-            const cls = isFork ? "chain__box--fork" : isShared ? "chain__box--shared" : "chain__box--after";
+            const state = stationState(s, i, forkIdx);
+            const isShared = state === "shared";
+            const isFork = state === "fork";
+            const cls = `chain__box--${state}`;
             const barW = boxW - 30;
             return (
               <g key={s.slot}>

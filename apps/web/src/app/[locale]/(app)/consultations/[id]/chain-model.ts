@@ -82,3 +82,52 @@ export function computeChain<P extends ChainPoint>(points: P[]): {
   const forkIdx = stations.findIndex((s) => (s.gapAbs ?? 0) >= FORK_THRESHOLD);
   return { stations, forkIdx, gA, gB };
 }
+
+/**
+ * How a station reads relative to the Bruchpunkt: shared trunk, the fork
+ * itself — and beyond it, each station keeps its own meaning: still split
+ * (gap above threshold) or re-converging (gap closed again = the
+ * Scheinkonsens signal).
+ */
+export function stationState(
+  station: ChainStation,
+  i: number,
+  forkIdx: number,
+): "shared" | "fork" | "split" | "reconverge" {
+  if (forkIdx === -1 || i < forkIdx) return "shared";
+  if (i === forkIdx) return "fork";
+  return (station.gapAbs ?? 0) >= FORK_THRESHOLD ? "split" : "reconverge";
+}
+
+export type ChainPattern =
+  | "bridge_reasons"
+  | "pseudo_consensus"
+  | "value_conflict"
+  | "pseudo_fact"
+  | "contested";
+
+/**
+ * Which of the concept paper's four dispute patterns the chain shows.
+ * - no fork at all → Brücke der Gründe (long shared stretch)
+ * - fork, but the conclusion re-converges → Scheinkonsens
+ * - empirical trunk shared, fork at P4 → klarer Wertkonflikt
+ * - fork in P1–P3 while P4 is shared → Scheinfaktenstreit
+ * - otherwise → plain contested chain
+ */
+export function chainPattern(
+  stations: ChainStation[],
+  forkIdx: number,
+): ChainPattern {
+  if (forkIdx === -1) return "bridge_reasons";
+  const last = stations[stations.length - 1]!;
+  if (
+    last.slot === "conclusion" &&
+    forkIdx < stations.length - 1 &&
+    (last.gapAbs ?? 1) < FORK_THRESHOLD
+  )
+    return "pseudo_consensus";
+  if (stations[forkIdx]!.slot === "P4") return "value_conflict";
+  const p4 = stations.find((s) => s.slot === "P4");
+  if (p4 && (p4.gapAbs ?? 1) < FORK_THRESHOLD) return "pseudo_fact";
+  return "contested";
+}
