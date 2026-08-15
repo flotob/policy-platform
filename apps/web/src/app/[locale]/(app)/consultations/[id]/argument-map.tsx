@@ -246,14 +246,88 @@ function ChainView({
       ))}
     </div>
   );
-  if (!chain)
+  if (!chain) {
+    // Not enough two-camp votes on this measure's base claims for a chain —
+    // instead of a dead end, show what the measure actually consists of:
+    // its objections and the proposals answering them.
+    const fbChip = (p: MapPoint) => (
+      <button
+        key={p.id}
+        className={[
+          "mapnode",
+          `mapnode--${profileClass(p)}`,
+          p.status === "draft" ? "mapnode--draft" : "",
+          selectedId === p.id ? "mapnode--selected" : "",
+        ].join(" ")}
+        onClick={() => onSelect(selectedId === p.id ? null : p.id)}
+        title={nodeText(p)}
+      >
+        {nodeText(p)}
+      </button>
+    );
+    const fbThemed = (group: MapPoint[], keyPrefix: string) => {
+      if (group.length <= 7)
+        return <div className="argmap__nodes">{group.map(fbChip)}</div>;
+      const themes = [...new Set(group.map((p) => p.theme ?? ""))];
+      return themes.map((th) => {
+        const tp = group.filter((p) => (p.theme ?? "") === th);
+        return (
+          <details key={`${keyPrefix}:${th || "_o"}`} className="argmap__theme" open={themes.length <= 3}>
+            <summary>
+              {th || t("themeOther")} <span className="argmap__theme-count">{tp.length}</span>
+            </summary>
+            <div className="argmap__nodes">{tp.map(fbChip)}</div>
+          </details>
+        );
+      });
+    };
+    const fbClaims = scoped.filter(
+      (p) => !p.cq && (p.answersCq?.length ?? 0) === 0 && p.kind !== "design" && p.kind !== "gap",
+    );
+    const DOOR_INDEX_FB: Record<string, number> = {
+      empirics: 1, alternatives: 2, goal_conflict: 3, feasibility: 4, value_conflict: 5,
+    };
+    const fbDoors = (["empirics", "alternatives", "goal_conflict", "feasibility", "value_conflict"] as const)
+      .map((door) => ({
+        door,
+        objections: scoped.filter((p) => p.cq === door),
+        instruments: scoped.filter((p) => (p.answersCq ?? []).includes(door)),
+      }))
+      .filter((d) => d.objections.length + d.instruments.length > 0);
     return (
       <div className="chain">
         {measurePills}
         {trunkRef}
-        <p className="placeholder-note">{t("chainEmpty")}</p>
+        <p className="chain__verdict">{t("chainNoData")}</p>
+        <div className="chain__drill">
+          <NodeLegend t={t} />
+          {fbClaims.length > 0 && (
+            <section className="chain__drill-sec">
+              <span className="chain__drill-sechead">{t("chainFallbackClaims", { n: fbClaims.length })}</span>
+              {fbThemed(fbClaims, "fbclaims")}
+            </section>
+          )}
+          {fbDoors.map(({ door, objections, instruments }) => (
+            <section key={door} className="chain__drill-sec chain__drill-sec--door">
+              <span className="chain__drill-sechead chain__drill-sechead--door">
+                <i className="argmap__cqnum">{DOOR_INDEX_FB[door]}</i> {t(`cq_${door}`)} ({objections.length})
+                <em className="chain__drill-q">{t(`cqQuestion_${door}`)}</em>
+              </span>
+              {fbThemed(objections, `fbobj:${door}`)}
+              {instruments.length > 0 && (
+                <div className="argmap__doorinstruments">
+                  <span className="argmap__doorinstruments-head">
+                    ⚒ {t("doorInstruments")} ({instruments.length})
+                  </span>
+                  {fbThemed(instruments, `fbinst:${door}`)}
+                </div>
+              )}
+            </section>
+          ))}
+        </div>
       </div>
     );
+  }
   const { stations, forkIdx, gA, gB } = chain;
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
@@ -288,16 +362,17 @@ function ChainView({
       {trunkRef}
       <p className="chain__verdict">
         {fork
-          ? t("chainVerdictFork", {
-              shared: shared.map((s) => slotLabel(s.slot)).join(" · ") || "—",
-              fork: slotLabel(fork.slot),
-              n: shared.length,
-            })
+          ? shared.length === 0
+            ? t("chainVerdictForkStart", { fork: slotLabel(fork.slot) })
+            : t("chainVerdictFork", {
+                shared: shared.map((s) => slotLabel(s.slot)).join(" · "),
+                fork: slotLabel(fork.slot),
+                n: shared.length,
+              })
           : t("chainVerdictNoFork")}
         {pattern === "pseudo_consensus" && (
           <span className="chain__reconverge"> {t("chainReconverge")}</span>
         )}
-        {fork && <span className="chain__breakkind"> {t("chainBreakKind")}</span>}
       </p>
 
       <svg viewBox={`0 0 ${W} ${H}`} role="img" className="chain__svg">
@@ -324,10 +399,10 @@ function ChainView({
                   className={isShared || isFork ? "chain__link chain__link--shared" : "chain__link"}
                 />
               )}
-              {isFork && (
+              {isFork && i > 0 && (
                 <>
-                  <line x1={round2(cx - step / 2)} y1={20} x2={round2(cx - step / 2)} y2={H - 34} className="chain__breakline" />
-                  <text x={round2(cx - step / 2)} y={H - 16} textAnchor="middle" className="chain__breaklabel">
+                  <line x1={Math.max(round2(cx - step / 2), 8)} y1={20} x2={Math.max(round2(cx - step / 2), 8)} y2={H - 34} className="chain__breakline" />
+                  <text x={Math.max(round2(cx - step / 2), 120)} y={H - 16} textAnchor="middle" className="chain__breaklabel">
                     {t("chainBreakpoint", { n: shared.length })}
                   </text>
                 </>

@@ -88,7 +88,9 @@ export function computeChain<P extends ChainPoint>(points: P[]): {
     const paB = mean(gB);
     const gapAbs = paA !== null && paB !== null ? Math.abs(paA - paB) : null;
     return { slot, claims, paA, paB, gapAbs };
-  }).filter((s) => s.claims.length > 0);
+    // A station only counts when BOTH camps actually voted on its claims —
+    // "no data from camp A" must never render as agreement.
+  }).filter((s) => s.claims.length > 0 && s.paA !== null && s.paB !== null);
 
   if (stations.length < 2) return null;
   const forkIdx = stations.findIndex((s) => isDissent(s.paA, s.paB));
