@@ -160,7 +160,11 @@
     "triangleLegend": "Deckkraft = Zustimmung des skeptischsten Lagers · heller Ring = Brücke (alle Lager ≥ 60 %)",
     "chainVerdictForkStart": "Die Lager trennen sich bereits an der ersten Stufe: {fork}.",
     "chainNoData": "Für einen Lager-Vergleich auf den Grundaussagen dieser Maßnahme gibt es zu wenige Voten. Worum es hier geht — die Einwände und die Lösungsvorschläge dazu:",
-    "chainFallbackClaims": "Grundaussagen dieser Maßnahme ({n})"
+    "chainFallbackClaims": "Grundaussagen dieser Maßnahme ({n})",
+    "stationTabContent": "Dossier",
+    "stationTabAnalysis": "Lager-Analyse",
+    "stationClaims": "Aussagen dieser Stufe ({n})",
+    "chainCarriersLink": "Woran es bei {fork} bricht → zur Lager-Analyse"
   },
   "Report": {
     "title": "Bericht",

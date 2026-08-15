@@ -160,7 +160,11 @@
     "triangleLegend": "opacity = the most skeptical camp's agreement · bright ring = bridge (every camp ≥ 60%)",
     "chainVerdictForkStart": "The camps part already at the first stage: {fork}.",
     "chainNoData": "Too few votes on this measure's base claims for a camp comparison. What this measure is about — its objections and the proposed solutions:",
-    "chainFallbackClaims": "This measure's base claims ({n})"
+    "chainFallbackClaims": "This measure's base claims ({n})",
+    "stationTabContent": "Dossier",
+    "stationTabAnalysis": "Camp analysis",
+    "stationClaims": "This stage's claims ({n})",
+    "chainCarriersLink": "What breaks at {fork} → open the camp analysis"
   },
   "Report": {
     "title": "Report",

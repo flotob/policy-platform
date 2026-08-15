@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  AGREE_FLOOR,
   chainPattern,
   computeChain,
   DOOR_ANCHORS,
@@ -199,6 +198,8 @@ function ChainView({
   t: ReturnType<typeof useTranslations<"MapView">>;
 }) {
   const [drill, setDrill] = useState<SpineSlot | null>(null);
+  // Station panel lens: Dossier (content) by default, Lager-Analyse on demand.
+  const [lens, setLens] = useState<"content" | "analysis">("content");
   // One chain per sub-measure (decision 2026-08-14). 'übergreifend' points
   // are the shared trunk: they join every sub-measure's chain.
   const [measure, setMeasure] = useState<string | null>(null);
@@ -332,21 +333,6 @@ function ChainView({
   const shared = forkIdx === -1 ? stations : stations.slice(0, forkIdx);
   const fork = forkIdx === -1 ? null : stations[forkIdx]!;
   const pattern = chainPattern(stations, forkIdx);
-  // Carriers = the fork's genuinely contested claims: at least one camp
-  // below the agreement floor. Enthusiasm gaps between two agreeing camps
-  // (65 % vs. 95 % — a bridge) do not carry a break.
-  const carriers = fork
-    ? [...fork.claims]
-        .map((p) => {
-          const a = p.perGroup!.find((x) => x.group === gA)?.pa ?? 0;
-          const b = p.perGroup!.find((x) => x.group === gB)?.pa ?? 0;
-          return { p, gap: Math.abs(a - b), a, b };
-        })
-        .filter(({ a, b }) => Math.min(a, b) < AGREE_FLOOR)
-        .sort((x, y) => y.gap - x.gap)
-        .slice(0, 6)
-    : [];
-
   const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)} %`);
   const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -388,7 +374,10 @@ function ChainView({
             <g
               key={s.slot}
               className={`chain__station ${drill === s.slot ? "chain__station--open" : ""}`}
-              onClick={() => setDrill(drill === s.slot ? null : s.slot)}
+              onClick={() => {
+                setDrill(drill === s.slot ? null : s.slot);
+                setLens("content");
+              }}
             >
               {i > 0 && (
                 <line
@@ -437,42 +426,25 @@ function ChainView({
       </div>
       <p className="chain__drillhint">{t("chainDrillHint")}</p>
 
-      {drill === null && fork && carriers.length > 0 && (
-        <div className="chain__carriers">
-          <span className="chain__carriers-head">
-            {t("chainCarriers", { fork: slotLabel(fork.slot) })}
-          </span>
-          <NodeLegend t={t} />
-          <div className="argmap__nodes">
-            {carriers.map(({ p, a, b }) => (
-              <button
-                key={p.id}
-                className={[
-                  "mapnode",
-                  `mapnode--${profileClass(p)}`,
-                  selectedId === p.id ? "mapnode--selected" : "",
-                ].join(" ")}
-                onClick={() => onSelect(selectedId === p.id ? null : p.id)}
-                title={nodeText(p)}
-              >
-                {nodeText(p)}
-                <em className="chain__carriergap"> {Math.round(a * 100)} % · {Math.round(b * 100)} %</em>
-              </button>
-            ))}
-          </div>
-        </div>
+      {drill === null && fork && (
+        <button
+          className="chain__carrierlink"
+          onClick={() => { setDrill(fork.slot); setLens("analysis"); }}
+        >
+          {t("chainCarriersLink", { fork: slotLabel(fork.slot) })}
+        </button>
       )}
 
       {drill !== null && (() => {
         const st = stations.find((s) => s.slot === drill)!;
         const pa = (p: MapPoint, g: number) =>
           p.perGroup?.find((x) => x.group === g)?.pa ?? null;
-        const claimRows = [...st.claims].sort(
-          (a, b) =>
-            Math.abs((pa(b, gA) ?? 0) - (pa(b, gB) ?? 0)) -
-            Math.abs((pa(a, gA) ?? 0) - (pa(a, gB) ?? 0)),
-        );
-        const nodeChip = (p: MapPoint) => {
+        const gapOf = (p: MapPoint) => {
+          const a = pa(p, gA);
+          const b = pa(p, gB);
+          return a !== null && b !== null ? Math.abs(a - b) : -1;
+        };
+        const nodeChip = (p: MapPoint, showPct: boolean) => {
           const a = pa(p, gA);
           const b = pa(p, gB);
           return (
@@ -488,7 +460,7 @@ function ChainView({
               title={nodeText(p)}
             >
               {nodeText(p)}
-              {a !== null && b !== null && (
+              {showPct && a !== null && b !== null && (
                 <em className="chain__carriergap"> {Math.round(a * 100)} % · {Math.round(b * 100)} %</em>
               )}
             </button>
@@ -496,7 +468,7 @@ function ChainView({
         };
         const themed = (group: MapPoint[], keyPrefix: string) => {
           if (group.length <= 7)
-            return <div className="argmap__nodes">{group.map(nodeChip)}</div>;
+            return <div className="argmap__nodes">{group.map((p) => nodeChip(p, false))}</div>;
           const themes = [...new Set(group.map((p) => p.theme ?? ""))].sort(
             (a, b) =>
               group.filter((p) => (p.theme ?? "") === b).length -
@@ -509,58 +481,83 @@ function ChainView({
                 <summary>
                   {th || t("themeOther")} <span className="argmap__theme-count">{tp.length}</span>
                 </summary>
-                <div className="argmap__nodes">{tp.map(nodeChip)}</div>
+                <div className="argmap__nodes">{tp.map((p) => nodeChip(p, false))}</div>
               </details>
             );
           });
         };
+        /** Analysis lens: flat, camp-gap sorted, voted items first. */
+        const analysed = (group: MapPoint[]) => (
+          <div className="argmap__nodes">
+            {[...group].sort((a, b) => gapOf(b) - gapOf(a)).map((p) => nodeChip(p, true))}
+          </div>
+        );
         const doorKeys = DOOR_ANCHORS[drill];
         const DOOR_INDEX: Record<string, number> = {
           empirics: 1, alternatives: 2, goal_conflict: 3, feasibility: 4, value_conflict: 5,
         };
+        const doors = doorKeys
+          .map((door) => ({
+            door,
+            objections: scoped.filter((p) => p.cq === door),
+            instruments: scoped
+              .filter((p) => (p.answersCq ?? []).includes(door))
+              .sort((a, b) => {
+                const ap = a.answersCq?.[0] === door ? 0 : 1;
+                const bp = b.answersCq?.[0] === door ? 0 : 1;
+                return ap - bp || pointWeight(b) - pointWeight(a);
+              }),
+          }))
+          .filter((d) => d.objections.length + d.instruments.length > 0);
+        const render = lens === "analysis" ? analysed : themed;
         return (
           <div className="chain__drill">
             <header className="chain__drill-head">
               <h3>{slotLabel(drill)}</h3>
-              <button className="chain__drill-close" onClick={() => setDrill(null)}>✕</button>
+              <div className="chain__tabs">
+                <button
+                  className={`scatter__kbtn ${lens === "content" ? "scatter__kbtn--on" : ""}`}
+                  onClick={() => setLens("content")}
+                >
+                  {t("stationTabContent")}
+                </button>
+                <button
+                  className={`scatter__kbtn ${lens === "analysis" ? "scatter__kbtn--on" : ""}`}
+                  onClick={() => setLens("analysis")}
+                >
+                  {t("stationTabAnalysis")}
+                </button>
+                <button className="chain__drill-close" onClick={() => setDrill(null)}>✕</button>
+              </div>
             </header>
-            <NodeLegend t={t} />
-            {claimRows.length > 0 && (
+            {lens === "analysis" && <NodeLegend t={t} />}
+            {st.claims.length > 0 && (
               <section className="chain__drill-sec">
                 <span className="chain__drill-sechead">
-                  {t("chainDrillClaims", { n: claimRows.length })}
+                  {lens === "analysis"
+                    ? t("chainDrillClaims", { n: st.claims.length })
+                    : t("stationClaims", { n: st.claims.length })}
                 </span>
-                <div className="argmap__nodes">{claimRows.map(nodeChip)}</div>
+                {lens === "analysis" ? analysed(st.claims) : themed(st.claims, "drillclaims")}
               </section>
             )}
-            {doorKeys.map((door) => {
-              const objections = scoped.filter((p) => p.cq === door);
-              const instruments = scoped
-                .filter((p) => (p.answersCq ?? []).includes(door))
-                .sort((a, b) => {
-                  const ap = a.answersCq?.[0] === door ? 0 : 1;
-                  const bp = b.answersCq?.[0] === door ? 0 : 1;
-                  return ap - bp || pointWeight(b) - pointWeight(a);
-                });
-              if (objections.length + instruments.length === 0) return null;
-              return (
-                <section key={door} className="chain__drill-sec chain__drill-sec--door">
-                  <span className="chain__drill-sechead chain__drill-sechead--door">
-                    <i className="argmap__cqnum">{DOOR_INDEX[door]}</i> {t(`cq_${door}`)} ({objections.length})
-                    <em className="chain__drill-q">{t(`cqQuestion_${door}`)}</em>
-                  </span>
-                  {themed(objections, `obj:${door}`)}
-                  {instruments.length > 0 && (
-                    <div className="argmap__doorinstruments">
-                      <span className="argmap__doorinstruments-head">
-                        ⚒ {t("doorInstruments")} ({instruments.length})
-                      </span>
-                      {themed(instruments, `inst:${door}`)}
-                    </div>
-                  )}
-                </section>
-              );
-            })}
+            {doors.map(({ door, objections, instruments }) => (
+              <section key={door} className="chain__drill-sec chain__drill-sec--door">
+                <span className="chain__drill-sechead chain__drill-sechead--door">
+                  <i className="argmap__cqnum">{DOOR_INDEX[door]}</i> {t(`cq_${door}`)} ({objections.length})
+                  <em className="chain__drill-q">{t(`cqQuestion_${door}`)}</em>
+                </span>
+                {lens === "analysis" ? analysed(objections) : themed(objections, `obj:${door}`)}
+                {instruments.length > 0 && (
+                  <div className="argmap__doorinstruments">
+                    <span className="argmap__doorinstruments-head">
+                      ⚒ {t("doorInstruments")} ({instruments.length})
+                    </span>
+                    {lens === "analysis" ? analysed(instruments) : themed(instruments, `inst:${door}`)}
+                  </div>
+                )}
+              </section>
+            ))}
             {drill === "P1" && <p className="chain__note">{t("chainP1NoDoor")}</p>}
           </div>
         );

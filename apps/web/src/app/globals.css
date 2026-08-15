@@ -529,6 +529,13 @@ code {
 .nodelegend__label { font-weight: 600; color: var(--muted); }
 .nodelegend__extra { color: var(--muted); }
 
+.chain__tabs { display: flex; align-items: center; gap: 0.35rem; }
+.chain__carrierlink {
+  display: block; margin: 1.2rem auto 0; font: inherit; font-size: 0.85rem;
+  color: var(--coral); background: var(--coral-bg); border: 1px solid var(--coral);
+  border-radius: 99px; padding: 0.3rem 1rem; cursor: pointer;
+}
+
 .chain__trunkref {
   display: block; margin: 0 auto 1rem; font: inherit; font-size: 0.8rem;
   color: var(--teal); background: var(--teal-bg); border: 1px solid var(--teal);
