@@ -354,7 +354,7 @@ export function Chain({
           return (
             <li key={s.slot} className={`kstation kstation--${state}`}>
               {i === forkIdx && i > 0 && (
-                <div className="kette__riss" aria-hidden>
+                <div className="kette__riss">
                   <span>{t("breakLabel")}</span>
                 </div>
               )}

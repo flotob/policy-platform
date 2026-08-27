@@ -431,17 +431,6 @@ a {
   position: relative;
 }
 
-/* the spine — a continuous line the stations sit on */
-.kette::before {
-  content: "";
-  position: absolute;
-  left: 9px;
-  top: 10px;
-  bottom: 10px;
-  width: 2px;
-  background: var(--line-strong);
-}
-
 .kstation {
   position: relative;
   padding-left: 2.1rem;
@@ -451,7 +440,35 @@ a {
   margin-top: 0.9rem;
 }
 
+/* The spine, drawn per station: solid gray while the camps walk together,
+   red-dashed from the fork on — from there they walk separately. */
+.kstation::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: -0.95rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--line-strong);
+}
+
+.kstation:first-child::before {
+  top: 12px;
+}
+
+.kstation--fork::before,
+.kstation--split::before,
+.kstation--reconverge::before,
+.kstation--after::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--break) 0 5px,
+    transparent 5px 10px
+  );
+}
+
 .kstation__head {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(11rem, 1fr) minmax(14rem, 1.4fr);
   gap: 0.6rem 1.4rem;
@@ -477,7 +494,7 @@ a {
 
 .kstation__node {
   position: absolute;
-  left: 3px;
+  left: calc(-2.1rem + 3px);
   top: 50%;
   transform: translateY(-50%);
   width: 14px;
@@ -527,36 +544,10 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-/* the tear: the spine breaks, the label says it plainly */
+/* the break label: the red-dashed spine says it visually, this says it plainly */
 .kette__riss {
-  position: relative;
-  margin: 1.1rem 0 1.1rem 2.1rem;
-  padding: 0.15rem 0;
-}
-
-.kette__riss::before {
-  content: "";
-  position: absolute;
-  left: -2.1rem;
-  top: -1.2rem;
-  height: 2.6rem;
-  width: 20px;
-  background: var(--ground);
-}
-
-.kette__riss::after {
-  content: "";
-  position: absolute;
-  left: calc(-2.1rem + 4px);
-  top: -1rem;
-  height: 2.4rem;
-  width: 2px;
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--break) 0 4px,
-    transparent 4px 8px
-  );
-  transform: rotate(14deg);
+  margin: 0 0 0.7rem;
+  padding-top: 0.1rem;
 }
 
 .kette__riss span {
