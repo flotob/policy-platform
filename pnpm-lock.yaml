@@ -18,6 +18,37 @@ importers:
         specifier: ^5.8.0
         version: 5.9.3
 
+  apps/common-ground:
+    dependencies:
+      '@policy/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
+      '@policy/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      next:
+        specifier: ^15.3.0
+        version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next-intl:
+        specifier: ^4.1.0
+        version: 4.13.4(next@15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.17)
+
   apps/web:
     dependencies:
       '@policy/chain':
