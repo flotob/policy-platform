@@ -7,7 +7,7 @@
 
 import Link from "next/link";
 
-import { computeChain, stationState, type ChainPoint } from "./chain-model";
+import { computeChain, stationState, type ChainPoint } from "@policy/chain";
 
 const SLOT_LABELS_DE: Record<string, string> = {
   P1: "P1 · Lage",

@@ -20,6 +20,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@policy/chain':
+        specifier: workspace:*
+        version: link:../../packages/chain
       '@policy/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -60,6 +63,12 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.1)
+
+  packages/chain:
+    devDependencies:
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
 
   packages/contracts:
     dependencies:

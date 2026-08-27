@@ -16,7 +16,7 @@ import {
   DOOR_ANCHORS,
   stationState,
   type SpineSlot,
-} from "./chain-model";
+} from "@policy/chain";
 import { useTranslations } from "next-intl";
 
 export interface MapPoint {

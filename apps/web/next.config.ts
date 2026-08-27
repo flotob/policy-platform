@@ -5,7 +5,7 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  transpilePackages: ["@policy/db", "@policy/contracts", "@policy/math", "@policy/pipeline"],
+  transpilePackages: ["@policy/db", "@policy/contracts", "@policy/math", "@policy/pipeline", "@policy/chain"],
 };
 
 export default withNextIntl(nextConfig);

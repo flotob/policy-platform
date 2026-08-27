@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@policy/chain": "workspace:*",
     "@policy/contracts": "workspace:*",
     "@policy/db": "workspace:*",
     "@policy/math": "workspace:*",

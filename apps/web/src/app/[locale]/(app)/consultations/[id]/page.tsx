@@ -6,7 +6,7 @@ import { sql } from "@policy/db";
 import { getDb } from "@/lib/db";
 
 import { ChainHero } from "./chain-hero";
-import type { ChainPoint } from "./chain-model";
+import type { ChainPoint } from "@policy/chain";
 
 export const dynamic = "force-dynamic";
 
