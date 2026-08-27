@@ -854,7 +854,27 @@ a {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.doorcard:hover,
+.doorcard.is-open {
+  border-color: var(--line-strong);
+}
+
+/* an opened door needs the full row for its lists */
+.doorcard.is-open {
+  grid-column: 1 / -1;
+}
+
+.doorcard__head {
+  display: block;
+  width: 100%;
   padding: 1.1rem 1.3rem;
+}
+
+.doorcard__body {
+  padding: 0 1.3rem 1.2rem;
 }
 
 .doorcard__title {
@@ -887,6 +907,19 @@ a {
   letter-spacing: 0.08em;
   color: var(--muted);
   display: block;
+}
+
+/* which sub-decision an objection/solution belongs to */
+.pointchip {
+  font-family: var(--font-data), system-ui, sans-serif;
+  font-size: 0.68rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  margin-left: 0.5rem;
+  white-space: nowrap;
+  vertical-align: 0.1em;
 }
 
 /* ---------- method ---------- */

@@ -31,6 +31,8 @@
     "doorObjections": "{n, plural, one {ein Einwand} other {# Einwände}}",
     "doorSolutions": "{n, plural, one {ein Lösungsvorschlag} other {# Lösungsvorschläge}}",
     "doorExample": "Zum Beispiel:",
+    "doorObjectionsHeading": "Die Einwände ({n}) — quer über alle Teilentscheidungen",
+    "doorSolutionsHeading": "Lösungsvorschläge, die zuerst diese Frage beantworten ({n})",
     "methodHeading": "So entsteht diese Auswertung",
     "methodStep1": "Alle Stellungnahmen werden vollständig gelesen und in einzelne Aussagen, Einwände und Vorschläge zerlegt — mit Beleg-Zitat und Fundstelle.",
     "methodStep2": "Jede Aussage wird redaktionell geprüft und einer Stufe der Argumentkette zugeordnet; jeder Einwand einer der fünf Einwand-Arten.",

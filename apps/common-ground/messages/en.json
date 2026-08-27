@@ -31,6 +31,8 @@
     "doorObjections": "{n, plural, one {one objection} other {# objections}}",
     "doorSolutions": "{n, plural, one {one proposed solution} other {# proposed solutions}}",
     "doorExample": "For example:",
+    "doorObjectionsHeading": "The objections ({n}) — across all sub-decisions",
+    "doorSolutionsHeading": "Proposed solutions answering this question first ({n})",
     "methodHeading": "How this analysis is made",
     "methodStep1": "Every submission is read in full and decomposed into individual claims, objections, and proposals — with source quote and location.",
     "methodStep2": "Each claim is editorially reviewed and assigned to a stage of the reasoning chain; each objection to one of the five objection kinds.",

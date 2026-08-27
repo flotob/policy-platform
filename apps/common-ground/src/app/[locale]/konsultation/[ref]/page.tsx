@@ -4,16 +4,9 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import { loadConsultation } from "@/lib/data";
 import { Chain } from "@/components/Chain";
 import { Measures } from "@/components/Measures";
+import { Doors } from "@/components/Doors";
 
 export const dynamic = "force-dynamic";
-
-const CQ_KINDS = [
-  "empirics",
-  "alternatives",
-  "goal_conflict",
-  "feasibility",
-  "value_conflict",
-] as const;
 
 export default async function ConsultationPage({
   params,
@@ -23,7 +16,6 @@ export default async function ConsultationPage({
   const { locale, ref } = await params;
   setRequestLocale(locale);
   const t = await getTranslations("Consultation");
-  const td = await getTranslations("Doors");
   const ta = await getTranslations("AuthorTypes");
 
   const c = await loadConsultation(decodeURIComponent(ref));
@@ -33,17 +25,6 @@ export default async function ConsultationPage({
   const trunk = c.points.filter((p) => p.measure === "übergreifend");
 
   const fmt = new Intl.NumberFormat(locale);
-  const doorStats = CQ_KINDS.map((cq) => {
-    const objections = c.points.filter((p) => p.cq === cq);
-    const solutions = c.points.filter((p) => p.answersCq?.[0] === cq);
-    return {
-      cq,
-      objections: objections.length,
-      solutions: solutions.length,
-      exampleObjection: objections[0]?.label ?? null,
-      exampleSolution: solutions[0]?.label ?? null,
-    };
-  }).filter((d) => d.objections > 0 || d.solutions > 0);
 
   return (
     <main className="page">
@@ -113,23 +94,7 @@ export default async function ConsultationPage({
       <section className="section">
         <h2 className="section__title">{t("doorsHeading")}</h2>
         <p className="section__intro">{t("doorsIntro")}</p>
-        <div className="doors">
-          {doorStats.map((d) => (
-            <div key={d.cq} className="doorcard">
-              <h3 className="doorcard__title">{td(d.cq as "empirics")}</h3>
-              <p className="doorcard__q">{td(`${d.cq}Q` as "empiricsQ")}</p>
-              <p className="doorcard__counts">
-                {t("doorObjections", { n: d.objections })} ·{" "}
-                {t("doorSolutions", { n: d.solutions })}
-              </p>
-              {d.exampleObjection && (
-                <p className="doorcard__example">
-                  <span>{t("doorExample")}</span> {d.exampleObjection}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
+        <Doors points={c.points} />
       </section>
 
       <section className="section">
