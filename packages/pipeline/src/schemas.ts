@@ -214,6 +214,69 @@ export const statementOutput = z
   })
   .strict();
 
+
+/** Condensation: extraction-grain points -> canonical Landkarten-Punkte. */
+export const condenseBezirk = z.enum([
+  "wirkung",
+  "machbarkeit",
+  "kosten",
+  "alternativen",
+  "wert",
+  "ausgestaltung",
+]);
+
+export const condensePoint = z
+  .object({
+    /** The canonical, votable claim — one neutral German sentence. */
+    text: z.string().min(15).max(240),
+    /** Short chip label for the map, German, <= 45 chars. */
+    label: z.string().min(5).max(48),
+    typ: z.enum(["T", "W", "verfahren"]),
+    bezirk: condenseBezirk,
+    /** Indices of ALL input extraction points this claim condenses. */
+    members: z.array(z.number().int().nonnegative()).min(1).max(80),
+  })
+  .strict();
+
+export const condenseOutput = z
+  .object({
+    map_points: z.array(condensePoint).min(4).max(28),
+  })
+  .strict();
+
+/** Sweep pass: assign leftover extraction points to existing map points. */
+export const condenseAssignOutput = z
+  .object({
+    verdicts: z
+      .array(
+        z
+          .object({
+            index: z.number().int().nonnegative(),
+            /** Index into the map-point list; -1 = fits none (off-map). */
+            map_index: z.number().int().min(-1),
+          })
+          .strict(),
+      )
+      .max(40),
+  })
+  .strict();
+
+/** Befund: verbalize the computed verdict (binding) for one map point. */
+export const befundOutput = z
+  .object({
+    /** 2-5 German sentences, plain language, report-annex tone. */
+    befund: z.string().min(40).max(1100),
+  })
+  .strict();
+
+/** Scheinbruecken check on bridge points: do the reasons align? */
+export const reasonsCheckOutput = z
+  .object({
+    verdict: z.enum(["same_reasons", "diverging_reasons", "unclear"]),
+    rationale: z.string().max(400),
+  })
+  .strict();
+
 export type CandidatePoint = z.infer<typeof candidatePoint>;
 export type DecompositionOutput = z.infer<typeof decompositionOutput>;
 export type MatchOutput = z.infer<typeof matchOutput>;
@@ -242,3 +305,7 @@ export const campNamesJsonSchema = toProviderSchema(campNamesOutput);
 export const shortLabelsJsonSchema = toProviderSchema(shortLabelsOutput);
 export const themesJsonSchema = toProviderSchema(themesOutput);
 export const themeAssignJsonSchema = toProviderSchema(themeAssignOutput);
+export const condenseJsonSchema = toProviderSchema(condenseOutput);
+export const condenseAssignJsonSchema = toProviderSchema(condenseAssignOutput);
+export const befundJsonSchema = toProviderSchema(befundOutput);
+export const reasonsCheckJsonSchema = toProviderSchema(reasonsCheckOutput);

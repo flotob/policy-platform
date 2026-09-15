@@ -59,9 +59,36 @@ export const points = pgTable("points", {
   answersCq: text("answers_cq").array(),
   /** Sub-measure this point belongs to; 'übergreifend' = shared trunk. */
   measure: text("measure"),
+  /** Canonical map point this extraction point condenses into. */
+  mapPointId: uuid("map_point_id"),
   status: text("status").notNull().default("draft"),
   mergedInto: uuid("merged_into"),
   createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Canonical Landkarten-Punkte (map grain, ~15-25 per measure) — the unit
+ *  of Stephan's prototype. Extraction points reference them via
+ *  points.map_point_id; diagnosis vocabulary matches the prototype. */
+export const mapPoints = pgTable("map_points", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id),
+  scope: text("scope").notNull(),
+  ord: integer("ord").notNull().default(0),
+  typ: text("typ").notNull(),
+  bezirk: text("bezirk").notNull(),
+  text: text("text").notNull(),
+  label: text("label").notNull(),
+  diag: text("diag"),
+  pa: integer("pa"),
+  pb: integer("pb"),
+  nVoted: integer("n_voted").notNull().default(0),
+  befund: text("befund"),
+  diagFlags: jsonb("diag_flags"),
+  quotes: jsonb("quotes"),
+  status: text("status").notNull().default("draft"),
+  createdBy: text("created_by").notNull().default("ai-condense"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

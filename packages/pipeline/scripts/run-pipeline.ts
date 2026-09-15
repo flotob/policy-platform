@@ -51,6 +51,11 @@ function stages(consultation: string, limit: string, concurrency: string): Stage
     { name: "analyze", cwd: platformDir, script: path.join(platformDir, "scripts", "analyze.ts"), args: c },
     { name: "name-camps", cwd: pipelineDir, script: p("name-camps.ts"), args: c },
     { name: "cluster-themes", cwd: pipelineDir, script: p("cluster-themes.ts"), args: c },
+    { name: "classify-cq", cwd: pipelineDir, script: p("classify-cq.ts"), args: c },
+    { name: "segment-measures", cwd: pipelineDir, script: p("segment-measures.ts"), args: c },
+    { name: "condense-map", cwd: pipelineDir, script: p("condense-map.ts"), args: c },
+    { name: "diagnose-map", cwd: pipelineDir, script: p("diagnose-map.ts"), args: [...c, "--concurrency", concurrency] },
+    { name: "render-landkarte", cwd: pipelineDir, script: p("render-landkarte.ts"), args: c },
   ];
 }
 

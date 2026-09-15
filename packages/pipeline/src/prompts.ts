@@ -284,3 +284,129 @@ export function matchPrompt(
     `If matched, give its number as matched_index; if new, matched_index = null.`
   );
 }
+
+/** Condensation: extraction-grain points → canonical Landkarten-Punkte
+ *  (map grain, the unit of the concept paper's prototype). */
+export const CONDENSE_SYSTEM = `You condense the extraction-grain points of one measure of a public consultation into canonical MAP POINTS (Landkarten-Punkte).
+
+A map point is ONE argument a reader can hold in mind and a citizen can vote on: a single, neutral, declarative German sentence. The extraction points underneath are formulations, details, and repetitions of these few real arguments — the map grows by insight, not by paper. Merge aggressively: every variant, sub-aspect, and restatement of the same argument belongs to the same map point. Target 10–20 map points; never exceed 25. Fewer, sharper points beat many small ones.
+
+Per map point:
+- "text": the canonical claim, German, one sentence, votable (someone can agree or disagree), neutral phrasing, no rhetoric.
+- "label": a short German chip label for the map, <= 45 characters.
+- "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": transition periods, hardship clauses, exemptions, staggering, procedural safeguards).
+- "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself — political, for the council), "ausgestaltung" (design instruments; always for typ "verfahren").
+- "members": the indices of ALL input points this map point condenses. Each input index may appear under at most one map point. Cover as many input points as you honestly can; leave an index unassigned only if it genuinely is noise or off-topic.
+
+Consistency: typ "W" belongs in bezirk "wert"; typ "verfahren" belongs in "ausgestaltung"; typ "T" belongs in one of wirkung/machbarkeit/kosten/alternativen.`;
+
+export function condensePrompt(
+  points: {
+    label: string;
+    summary: string | null;
+    kind: string;
+    cq: string | null;
+  }[],
+  scope: string,
+): string {
+  const list = points
+    .map(
+      (p, i) =>
+        `${i}. [${p.kind}${p.cq ? "/" + p.cq : ""}] ${p.label}${p.summary ? " — " + p.summary : ""}`,
+    )
+    .join("\n");
+  return (
+    `Measure under decision: ${scope}\n\nExtraction points (index. [kind/door] label — summary):\n${list}\n\n` +
+    `Condense these ${points.length} extraction points into canonical map points.`
+  );
+}
+
+export const CONDENSE_ASSIGN_SYSTEM = `You assign leftover extraction points of a consultation measure to its existing canonical map points.
+
+For each numbered extraction point pick the map point (by index) whose canonical claim it expresses, supports, details, or restates — or -1 if it genuinely fits none (off-topic or noise). Prefer assignment over -1: the map should account for the material.`;
+
+export function condenseAssignPrompt(
+  mapPoints: { label: string; text: string }[],
+  points: { label: string; summary: string | null }[],
+): string {
+  const ms = mapPoints.map((m, i) => `${i}. ${m.label} — ${m.text}`).join("\n");
+  const ps = points
+    .map((p, i) => `${i}. ${p.label}${p.summary ? " — " + p.summary : ""}`)
+    .join("\n");
+  return (
+    `Map points:\n${ms}\n\nExtraction points:\n${ps}\n\n` +
+    `Assign every extraction point (map_index; -1 = fits none). One verdict per point, all ${points.length}.`
+  );
+}
+
+/** Befund: the machine computes the verdict, the model only phrases it. */
+export const BEFUND_SYSTEM = `You write the BEFUND (finding) for one canonical point of a Landkarte des Streits — the annex of a consultation report read by the deciding body and the public.
+
+The verdict was computed deterministically and is BINDING. You verbalize it; you must not change, soften, invert, or second-guess it. The diagnosis vocabulary:
+- "bruecke" (Brücke der Gründe): both camps carry the claim (>= 60 % each). Say what that makes possible.
+- "klaerbar" (klärbar durch Gutachten): a fact question divides the camps — evidence could settle it. Name what kind of evidence (Kurzgutachten, Messdaten, juristische Kurzstellungnahme) and recommend clearing it before the council decides.
+- "wert" (Wertdifferenz): a value judgment divides the camps. No study can settle it; it belongs to the council as an explicit value decision.
+- "kern" (Kernkonflikt): THE central value conflict of this measure — the largest camp gap on a value point. Make its weight clear.
+- "warnung" (Scheinbrücke / Brücke der Ergebnisse): both camps agree, but for diverging reasons. Warn that a decision leaning on this number alone will crack at the first design question.
+- "offen": no sufficient vote data or mid-range profiles — the point is neither carried nor settled; say what would firm it up.
+- "luecke": an unanswered critical question — nobody in the consultation addressed it. Recommend actively closing it before the decision.
+
+Write 2–5 German sentences, plain language a first-time reader understands, confident report tone, no hedging about the computed numbers, no jargon, no meta-talk about AI. Refer to the deciding body neutrally as "die Entscheidungsebene" or "der Gesetzgeber" for federal/EU material — never invent a concrete body (Stadtrat, Gemeinderat) the material does not name. Ground the text in the material you are given (member points, quotes); mention concrete actors or mechanisms where the material carries them. Do not invent numbers beyond the given percentages.`;
+
+export function befundPrompt(input: {
+  scope: string;
+  text: string;
+  typ: string;
+  diag: string;
+  pa: number | null;
+  pb: number | null;
+  campA: string;
+  campB: string;
+  memberLabels: string[];
+  quotes: { quelle: string; text: string }[];
+  reasonsRationale?: string;
+}): string {
+  const profile =
+    input.pa !== null && input.pb !== null
+      ? `${input.campA}: ${input.pa} % Zustimmung · ${input.campB}: ${input.pb} % Zustimmung`
+      : "keine belastbaren Abstimmungsdaten";
+  const quotes = input.quotes
+    .map((q) => `- ${q.quelle}: "${q.text}"`)
+    .join("\n");
+  return (
+    `Measure: ${input.scope}\nCanonical claim: ${input.text}\nTyp: ${input.typ}\n` +
+    `Computed diagnosis (binding): ${input.diag}\nCamp profile: ${profile}\n` +
+    (input.reasonsRationale
+      ? `Reasons check (machine-flagged, editorial review pending): ${input.reasonsRationale}\n`
+      : "") +
+    `Underlying extraction points:\n${input.memberLabels.map((l) => `- ${l}`).join("\n")}\n` +
+    (quotes ? `Original quotes:\n${quotes}\n` : "") +
+    `\nWrite the Befund.`
+  );
+}
+
+/** Scheinbrücken check: do both camps back a bridge for the same reasons? */
+export const REASONS_CHECK_SYSTEM = `You check ONE bridge point of a consultation map for the Scheinbrücke pattern (Brücke der Ergebnisse): both camps agree with the claim — but for diverging, ultimately incompatible reasons (e.g. both want transition periods: one side so the obligation arrives cleanly, the other so it never arrives).
+
+From the underlying material (member points, quotes), judge:
+- "same_reasons": the visible reasons point in the same direction; the bridge carries.
+- "diverging_reasons": the material shows clearly conflicting purposes behind the agreement.
+- "unclear": the material does not show the reasons; no verdict possible.
+
+Be conservative: "diverging_reasons" only when the material actually shows it. Give a one-sentence German rationale.`;
+
+export function reasonsCheckPrompt(input: {
+  text: string;
+  memberLabels: string[];
+  quotes: { quelle: string; text: string }[];
+}): string {
+  const quotes = input.quotes
+    .map((q) => `- ${q.quelle}: "${q.text}"`)
+    .join("\n");
+  return (
+    `Bridge claim: ${input.text}\n` +
+    `Underlying extraction points:\n${input.memberLabels.map((l) => `- ${l}`).join("\n")}\n` +
+    (quotes ? `Original quotes:\n${quotes}\n` : "") +
+    `\nJudge the reasons.`
+  );
+}
