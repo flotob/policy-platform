@@ -247,12 +247,99 @@ const AUX: { label: string; text: string }[] = [
   { label: "Kurz-Labels (shorten-labels.ts)", text: SHORTEN_LABELS_SYSTEM },
 ];
 
-const PHASE_LABEL: Record<number, string> = {
-  1: "Phase 1 · Vorbereitung",
-  2: "Phase 2 · Beteiligung",
-  3: "Phase 3 · Auswertung",
-  4: "Phase 4 · Bericht",
-};
+/** The Verfahren timeline (Zielbild, paper §8 + §12): what a Gemeinde
+ *  experiences, left to right — pipeline stages hang beneath as chips. */
+interface TlChip {
+  label: string;
+  st: string;
+  mod?: "run" | "plan" | "test";
+}
+interface TlBlock {
+  title: string;
+  dur: string;
+  text: string;
+  sat?: string;
+  chips: TlChip[];
+  cls?: string;
+}
+
+const TIMELINE: TlBlock[] = [
+  {
+    title: "T0 · Anlass & Zuschnitt",
+    dur: "Woche 0",
+    text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
+    chips: [{ label: "Zuschnitt", st: "a2" }],
+  },
+  {
+    title: "T1 · Vorbereitung",
+    dur: "≈ 2 Wochen",
+    text: "Vorhandenes Material — die Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — wird zerlegt, geordnet und zu 15–25 kanonischen, abstimmbaren Punkten je Maßnahme verdichtet. Die Redaktion gibt den Startbestand frei.",
+    chips: [
+      { label: "Import", st: "1" },
+      { label: "Zerlegung", st: "2" },
+      { label: "Bezüge", st: "3" },
+      { label: "Redaktion", st: "4" },
+      { label: "Türen", st: "a1" },
+      { label: "Verdichtung", st: "a3" },
+      { label: "Aussagen", st: "b1" },
+    ],
+  },
+  {
+    title: "T2 · Offene Beteiligung",
+    dur: "≈ 3 Wochen",
+    text: "Die drei Türen sind offen; die Karte wächst live. Neue Punkte aus Tür 2 und 3 gehen nach Freigabe selbst in die Abstimmung (der Rückkanal — keine eingefrorene Landkarte). Die Lagerbildung läuft nächtlich mit.",
+    sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
+    chips: [
+      { label: "Tür 1: Abstimmen", st: "b2" },
+      { label: "Tür 2: Kurzaussage", st: "b3", mod: "plan" },
+      { label: "Tür 3: Stellungnahme", st: "b4" },
+      { label: "Zerlegung + Abgleich", st: "2", mod: "run" },
+      { label: "Redaktion", st: "4", mod: "run" },
+      { label: "Lagerbildung", st: "b6", mod: "run" },
+      { label: "Stance-Ableitung", st: "b5", mod: "test" },
+    ],
+    cls: "tl-t2",
+  },
+  {
+    title: "T3 · Auswertung",
+    dur: "≈ 1 Woche",
+    text: "Finale Analyse: Lager und Brücken, Diagnose je Punkt aus festen Schwellen, Lücken (ungestellte Fragen), Scheinbrücken-Markierungen mit redaktioneller Prüfung, Befunde unter der Bindungsregel.",
+    chips: [
+      { label: "Lager & Brücken", st: "b6" },
+      { label: "Lager-Namen", st: "b7" },
+      { label: "Diagnose", st: "5" },
+      { label: "Befunde", st: "6" },
+    ],
+  },
+  {
+    title: "T4 · Bericht & Entscheidung",
+    dur: "Ratsbefassung",
+    text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
+    chips: [{ label: "Landkarte", st: "7" }],
+  },
+  {
+    title: "T5 · Nach der Entscheidung",
+    dur: "Perspektive",
+    text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
+    chips: [],
+    cls: "tl-t5",
+  },
+];
+
+function tlChip(c: TlChip): string {
+  const mod = c.mod ? ` ${c.mod}` : "";
+  return `<a class="tl-chip${mod}" href="#st-${c.st}">${esc(c.label)}</a>`;
+}
+
+function tlBlock(b: TlBlock): string {
+  return `<div class="tl-block ${b.cls ?? ""}">
+    <div class="tl-head">${esc(b.title)}</div>
+    <div class="tl-dur">${esc(b.dur)}</div>
+    <p>${esc(b.text)}</p>
+    ${b.sat ? `<p class="tl-sat">┄ ${esc(b.sat)}</p>` : ""}
+    ${b.chips.length ? `<div class="tl-chips">${b.chips.map(tlChip).join("")}</div>` : ""}
+  </div>`;
+}
 
 function badge(k: Kind): string {
   const m = KIND[k];
@@ -267,13 +354,13 @@ function stationHtml(s: Station): string {
         `<details class="prompt"><summary>Prompt ansehen: ${esc(p.label)}</summary><pre>${esc(p.text)}</pre></details>`,
     )
     .join("");
-  return `<div class="station${s.kinds.includes("plan") ? " station-plan" : ""}">
+  return `<div class="station${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.num.toLowerCase()}">
     <div class="station-head">
       <span class="station-num">${s.num}</span>
       <strong>${esc(s.name)}</strong>
       ${s.script ? `<code>${esc(s.script)}</code>` : ""}
     </div>
-    <div class="station-badges">${s.kinds.map(badge).join("")}<span class="phase-chip">${PHASE_LABEL[s.phase]}</span></div>
+    <div class="station-badges">${s.kinds.map(badge).join("")}</div>
     <p>${esc(s.text)}</p>
     ${s.note ? `<p class="note">${esc(s.note)}</p>` : ""}
     ${prompts}
@@ -364,6 +451,25 @@ function main() {
   .aux h2 { font-family:Georgia,serif; font-weight:500; font-size:1.05rem; }
   .foot { margin-top:2rem; font-size:.72rem; color:#6B6E76; text-align:center; }
   .backlink { font-size:.8rem; } .backlink a { color:#1E4A7A; }
+  .tl-scroll { overflow-x:auto; margin-top:.6rem; padding-bottom:.5rem;
+    width:min(1480px, calc(100vw - 2rem)); margin-left:50%; transform:translateX(-50%); }
+  .timeline { display:flex; gap:.45rem; min-width:1180px; align-items:stretch; }
+  .tl-sep { align-self:center; color:#6B6E76; font-size:.9rem; flex:0 0 auto; }
+  .tl-block { flex:1 1 0; background:#FFF; border:1px solid #E3E1D8; border-radius:.7rem; padding:.65rem .75rem; }
+  .tl-t2 { flex:1.55 1 0; }
+  .tl-t5 { flex:.85 1 0; border-style:dashed; background:transparent; }
+  .tl-head { font-family:Georgia,serif; font-size:.92rem; font-weight:500; }
+  .tl-dur { font-size:.66rem; color:#9A6A14; text-transform:uppercase; letter-spacing:.06em; margin-top:.05rem; }
+  .tl-block p { font-size:.74rem; margin:.35rem 0 .45rem; color:#3D4046; }
+  .tl-sat { color:#9A6A14 !important; font-style:italic; border-top:1px dashed #E4C990; padding-top:.3rem; }
+  .tl-chips { display:flex; flex-wrap:wrap; gap:.25rem; }
+  .tl-chip { font-size:.64rem; border:1px solid #C6D6E8; background:#EDF2F8; color:#0C447C;
+    border-radius:9999px; padding:.08rem .5rem; text-decoration:none; display:inline-block; }
+  .tl-chip:hover { background:#DCE9F6; }
+  .tl-chip.run::before { content:"↻ "; }
+  .tl-chip.plan { border:1px dashed #5F5E5A; background:transparent; color:#444441; }
+  .tl-chip.test { background:#FBF3E0; border-color:#E4C990; color:#633806; }
+  .tl-legend { font-size:.68rem; color:#6B6E76; margin:.15rem 0 0; }
 </style>
 </head>
 <body>
@@ -371,18 +477,26 @@ function main() {
   <p class="backlink"><a href="index.html">← Zu den Landkarten</a></p>
   <p class="kicker">Methodik · Stand ${today} · alle Prompts im Original aus dem laufenden System</p>
   <h1>So entsteht die Landkarte des Streits</h1>
-  <p class="sub">Die Verarbeitungskette in ihrer echten Abhängigkeits-Form: Aus einem gemeinsamen Stamm
-    gabeln sich zwei voneinander unabhängige Stränge — <strong>die Struktur des Streits</strong> (braucht keine
-    Voten) und <strong>die Menschen dahinter</strong> (braucht keine Struktur). Das ist die Komplementarität aus §7
-    des Konzeptpapiers: Die Landkarte kennt die Struktur, Polis kennt die Geometrie der Bevölkerung — und
-    beide sind blind für den jeweils anderen. Erst die Diagnose verbindet sie: das Scharnier, das das Papier
-    als das eigentlich Neue beschreibt. Jede KI-Stufe zeigt den tatsächlichen System-Prompt, direkt aus dem
-    Code eingebettet; jede Stufe ist wiederholbar und protokolliert ihre Entscheidungen im Audit-Log.</p>
+  <p class="sub">Zwei Ansichten derselben Sache. <strong>Oben das Verfahren</strong>, wie eine Kommune es
+    erlebt — die Zeitachse von Anlass bis Ratsentscheidung (Zielbild nach §8 und §12 des Konzeptpapiers).
+    <strong>Darunter die Maschine</strong> in ihrer echten Abhängigkeits-Form (Ist-Stand): ein gemeinsamer
+    Stamm, der sich in zwei unabhängige Stränge gabelt — die Struktur des Streits und die Menschen dahinter,
+    die Komplementarität aus §7 — und der sich im Scharnier der Diagnose wieder verbindet. Die Stufen-Chips
+    auf der Zeitachse springen zur jeweiligen Station der Maschine. Jede KI-Stufe zeigt den tatsächlichen
+    System-Prompt, direkt aus dem Code eingebettet; jede Stufe ist wiederholbar und protokolliert ihre
+    Entscheidungen im Audit-Log.</p>
   <p class="principle">Das Vertrauensprinzip auf jeder Ebene: <strong>Die Maschine schlägt vor, der Mensch gibt frei.
     Die Diagnosen werden gerechnet, nicht gemeint. Wertungsfragen entscheidet die Maschine nie.</strong></p>
   <div class="legend">${(Object.keys(KIND) as Kind[]).map(badge).join("")}</div>
 
-  <h2 class="seg-title">Der gemeinsame Stamm</h2>
+  <h2 class="seg-title">Das Verfahren — die Zeitachse</h2>
+  <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“) — Stufen-Chips springen zur Maschine.</p>
+  <div class="tl-scroll">
+    <div class="timeline">${TIMELINE.map(tlBlock).join('<span class="tl-sep">→</span>')}</div>
+  </div>
+  <p class="tl-legend">↻ = läuft während des Fensters durchgehend (Dienst, kein Einzelschritt) · gestrichelt = geplant bzw. Perspektive · gelb = nur Testdaten-Modus (ersetzt dort die Live-Beteiligung)</p>
+
+  <h2 class="seg-title" style="margin-top:2.6rem;">Die Maschine — der gemeinsame Stamm</h2>
   <p class="seg-sub">Aus Stellungnahmen werden geprüfte Punkte — alles Weitere hängt hieran.</p>
   <div class="trunk">${TRUNK.map(stationHtml).join("")}</div>
 
