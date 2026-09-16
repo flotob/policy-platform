@@ -1,11 +1,11 @@
 /**
- * Render the pipeline methodology page — one standalone HTML file that
- * shows the pipeline in its TRUE dependency shape: a shared trunk that
- * forks into two independent strands (structure / people — the paper's §7
- * complementarity), which meet again at the diagnosis (the paper's
- * "Scharnier") and end in the report. The paper's four phases (§8) ride
- * along as chips on every station. All system prompts are inlined from the
- * running package ("inspectable by construction").
+ * Render the pipeline methodology page — ONE integrated board: the
+ * Verfahren timeline (paper §8/§12) as horizontal columns T0-T5, with the
+ * full pipeline station cards hanging beneath the phase in which they run.
+ * Strand membership (§7 complementarity: structure / people, meeting at
+ * the diagnosis hinge) survives as the cards' colored left edge. All
+ * system prompts are inlined from the running package ("inspectable by
+ * construction"). Horizontally scrollable; desktop-first by decision.
  *
  * No DB, no LLM. Usage:
  *   tsx scripts/render-pipeline.ts [--out ../../../docs/landkarte]
@@ -247,97 +247,94 @@ const AUX: { label: string; text: string }[] = [
   { label: "Kurz-Labels (shorten-labels.ts)", text: SHORTEN_LABELS_SYSTEM },
 ];
 
-/** The Verfahren timeline (Zielbild, paper §8 + §12): what a Gemeinde
- *  experiences, left to right — pipeline stages hang beneath as chips. */
-interface TlChip {
+/** The Verfahren board (Zielbild, paper §8 + §12): one integrated diagram —
+ *  timeline columns left to right, the FULL pipeline station cards hanging
+ *  beneath the phase in which they run. Horizontally scrollable (desktop). */
+interface Mini {
   label: string;
   st: string;
-  mod?: "run" | "plan" | "test";
+  note: string;
 }
-interface TlBlock {
+interface Column {
   title: string;
   dur: string;
   text: string;
   sat?: string;
-  chips: TlChip[];
   cls?: string;
+  cards: Station[];
+  minis?: Mini[];
 }
 
-const TIMELINE: TlBlock[] = [
-  {
-    title: "T0 · Anlass & Zuschnitt",
-    dur: "Woche 0",
-    text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
-    chips: [{ label: "Zuschnitt", st: "a2" }],
-  },
-  {
-    title: "T1 · Vorbereitung",
-    dur: "≈ 2 Wochen",
-    text: "Vorhandenes Material — die Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — wird zerlegt, geordnet und zu 15–25 kanonischen, abstimmbaren Punkten je Maßnahme verdichtet. Die Redaktion gibt den Startbestand frei.",
-    chips: [
-      { label: "Import", st: "1" },
-      { label: "Zerlegung", st: "2" },
-      { label: "Bezüge", st: "3" },
-      { label: "Redaktion", st: "4" },
-      { label: "Türen", st: "a1" },
-      { label: "Verdichtung", st: "a3" },
-      { label: "Aussagen", st: "b1" },
-    ],
-  },
-  {
-    title: "T2 · Offene Beteiligung",
-    dur: "≈ 3 Wochen",
-    text: "Die drei Türen sind offen; die Karte wächst live. Neue Punkte aus Tür 2 und 3 gehen nach Freigabe selbst in die Abstimmung (der Rückkanal — keine eingefrorene Landkarte). Die Lagerbildung läuft nächtlich mit.",
-    sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
-    chips: [
-      { label: "Tür 1: Abstimmen", st: "b2" },
-      { label: "Tür 2: Kurzaussage", st: "b3", mod: "plan" },
-      { label: "Tür 3: Stellungnahme", st: "b4" },
-      { label: "Zerlegung + Abgleich", st: "2", mod: "run" },
-      { label: "Redaktion", st: "4", mod: "run" },
-      { label: "Lagerbildung", st: "b6", mod: "run" },
-      { label: "Stance-Ableitung", st: "b5", mod: "test" },
-    ],
-    cls: "tl-t2",
-  },
-  {
-    title: "T3 · Auswertung",
-    dur: "≈ 1 Woche",
-    text: "Finale Analyse: Lager und Brücken, Diagnose je Punkt aus festen Schwellen, Lücken (ungestellte Fragen), Scheinbrücken-Markierungen mit redaktioneller Prüfung, Befunde unter der Bindungsregel.",
-    chips: [
-      { label: "Lager & Brücken", st: "b6" },
-      { label: "Lager-Namen", st: "b7" },
-      { label: "Diagnose", st: "5" },
-      { label: "Befunde", st: "6" },
-    ],
-  },
-  {
-    title: "T4 · Bericht & Entscheidung",
-    dur: "Ratsbefassung",
-    text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
-    chips: [{ label: "Landkarte", st: "7" }],
-  },
-  {
-    title: "T5 · Nach der Entscheidung",
-    dur: "Perspektive",
-    text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
-    chips: [],
-    cls: "tl-t5",
-  },
-];
-
-function tlChip(c: TlChip): string {
-  const mod = c.mod ? ` ${c.mod}` : "";
-  return `<a class="tl-chip${mod}" href="#st-${c.st}">${esc(c.label)}</a>`;
+function byNum(all: Station[], num: string): Station {
+  const f = all.find((x) => x.num === num);
+  if (!f) throw new Error(`station ${num} not found`);
+  return f;
 }
 
-function tlBlock(b: TlBlock): string {
-  return `<div class="tl-block ${b.cls ?? ""}">
-    <div class="tl-head">${esc(b.title)}</div>
-    <div class="tl-dur">${esc(b.dur)}</div>
-    <p>${esc(b.text)}</p>
-    ${b.sat ? `<p class="tl-sat">┄ ${esc(b.sat)}</p>` : ""}
-    ${b.chips.length ? `<div class="tl-chips">${b.chips.map(tlChip).join("")}</div>` : ""}
+function columns(): Column[] {
+  const all = [...TRUNK, ...STRAND_A, ...STRAND_B, ...JOIN];
+  const n = (num: string) => byNum(all, num);
+  return [
+    {
+      title: "T0 · Anlass & Zuschnitt",
+      dur: "Woche 0",
+      text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
+      cards: [n("A2")],
+    },
+    {
+      title: "T1 · Vorbereitung",
+      dur: "≈ 2 Wochen",
+      text: "Vorhandenes Material — die Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — wird zerlegt, geordnet und je Maßnahme zu 15–25 kanonischen, abstimmbaren Punkten verdichtet. Die Redaktion gibt den Startbestand frei.",
+      cards: [n("1"), n("2"), n("3"), n("4"), n("A1"), n("A3"), n("B1")],
+    },
+    {
+      title: "T2 · Offene Beteiligung",
+      dur: "≈ 3 Wochen",
+      text: "Die drei Türen sind offen; die Karte wächst live. Neue Punkte aus Tür 2 und 3 gehen nach Freigabe selbst in die Abstimmung — der Rückkanal, keine eingefrorene Landkarte.",
+      sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
+      cards: [n("B2"), n("B3"), n("B4"), n("B5")],
+      minis: [
+        { label: "↻ Zerlegung + Abgleich", st: "2", note: "läuft durchgehend weiter — jede neue Eingabe wird sofort zerlegt und abgeglichen" },
+        { label: "↻ Redaktion", st: "4", note: "läuft durchgehend weiter — neue Punkte werden laufend freigegeben" },
+        { label: "↻ Lagerbildung", st: "b6", note: "läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung" },
+      ],
+    },
+    {
+      title: "T3 · Auswertung",
+      dur: "≈ 1 Woche",
+      text: "Finale Analyse über dem vollständigen Material: Lager und Brücken, Diagnose je Punkt, Lücken, Scheinbrücken-Prüfung, Befunde.",
+      cards: [n("B6"), n("B7"), n("5"), n("6")],
+    },
+    {
+      title: "T4 · Bericht & Entscheidung",
+      dur: "Ratsbefassung",
+      text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
+      cards: [n("7")],
+    },
+    {
+      title: "T5 · Nach der Entscheidung",
+      dur: "Perspektive",
+      text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
+      cls: "col-t5",
+      cards: [],
+    },
+  ];
+}
+
+function miniHtml(m: Mini): string {
+  return `<a class="mini" href="#st-${m.st}"><strong>${esc(m.label)}</strong><span>${esc(m.note)}</span></a>`;
+}
+
+function columnHtml(c: Column): string {
+  return `<div class="col ${c.cls ?? ""}">
+    <div class="col-head">
+      <div class="tl-head">${esc(c.title)}</div>
+      <div class="tl-dur">${esc(c.dur)}</div>
+      <p>${esc(c.text)}</p>
+      ${c.sat ? `<p class="tl-sat">┄ ${esc(c.sat)}</p>` : ""}
+    </div>
+    ${c.cards.map(stationHtml).join("")}
+    ${(c.minis ?? []).map(miniHtml).join("")}
   </div>`;
 }
 
@@ -347,6 +344,13 @@ function badge(k: Kind): string {
   return `<span class="badge" style="color:${m.fg};background:${m.bg};border:1px solid ${m.border};${dashed}">${m.label}</span>`;
 }
 
+function strandOf(num: string): string {
+  const n = num.toLowerCase();
+  if (n.startsWith("a")) return "sa";
+  if (n.startsWith("b")) return "sb";
+  return Number(n) >= 5 ? "sh" : "st";
+}
+
 function stationHtml(s: Station): string {
   const prompts = (s.prompts ?? [])
     .map(
@@ -354,7 +358,7 @@ function stationHtml(s: Station): string {
         `<details class="prompt"><summary>Prompt ansehen: ${esc(p.label)}</summary><pre>${esc(p.text)}</pre></details>`,
     )
     .join("");
-  return `<div class="station${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.num.toLowerCase()}">
+  return `<div class="station strand-${strandOf(s.num)}${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.num.toLowerCase()}">
     <div class="station-head">
       <span class="station-num">${s.num}</span>
       <strong>${esc(s.name)}</strong>
@@ -366,13 +370,6 @@ function stationHtml(s: Station): string {
     ${prompts}
   </div>`;
 }
-
-const FORK_SVG = `<svg class="connector" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">
-  <path d="M50,0 L50,5 M26,5 L74,5 M26,5 L26,12 M74,5 L74,12" fill="none" stroke="#B4B8A9" stroke-width="0.6" vector-effect="non-scaling-stroke"/>
-</svg>`;
-const JOIN_SVG = `<svg class="connector" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">
-  <path d="M26,0 L26,7 M74,0 L74,7 M26,7 L74,7 M50,7 L50,12" fill="none" stroke="#B4B8A9" stroke-width="0.6" vector-effect="non-scaling-stroke"/>
-</svg>`;
 
 function main() {
   const outDir = resolve(arg("out") ?? "../../../docs/landkarte");
@@ -410,43 +407,44 @@ function main() {
   .phase-chip { color:#9A6A14; border:1px solid #E4C990; background:#FBF3E0; margin-left:auto; }
   .seg-title { font-family:Georgia,serif; font-weight:500; font-size:1.2rem; margin:1.8rem 0 .1rem; text-align:center; }
   .seg-sub { font-size:.8rem; color:#6B6E76; text-align:center; margin:0 0 .7rem; }
+  .board-scroll { overflow-x:auto; margin-top:.6rem; padding-bottom:.6rem;
+    width:calc(100vw - 2rem); margin-left:50%; transform:translateX(-50%); }
+  .board { display:flex; gap:.7rem; align-items:flex-start; width:max-content; padding:0 .2rem; }
+  .col { width:360px; flex:0 0 auto; background:#F1EFE8; border:1px solid #E3E1D8;
+    border-radius:.9rem; padding:.55rem; }
+  .col-t5 { background:transparent; border-style:dashed; }
+  .col-head { padding:.35rem .45rem .5rem; }
+  .tl-head { font-family:Georgia,serif; font-size:1rem; font-weight:500; }
+  .tl-dur { font-size:.66rem; color:#9A6A14; text-transform:uppercase; letter-spacing:.06em; margin-top:.05rem; }
+  .col-head p { font-size:.76rem; margin:.35rem 0 0; color:#3D4046; }
+  .tl-sat { color:#9A6A14 !important; font-style:italic; border-top:1px dashed #E4C990; padding-top:.3rem; margin-top:.45rem !important; }
   .station { position:relative; background:#FFF; border:1px solid #E3E1D8; border-radius:.75rem;
-    padding:.85rem 1rem; margin:.55rem 0; }
-  .station-plan { border-style:dashed; background:transparent; }
-  .station-head { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
-  .station-num { min-width:1.6rem; height:1.6rem; border-radius:50%; background:#FBFAF6;
-    border:2px solid #B4B8A9; color:#6B6E76; font-size:.68rem; font-weight:600;
+    padding:.8rem .9rem; margin:.5rem 0 0; border-left-width:4px; }
+  .strand-st { border-left-color:#6B6E76; }
+  .strand-sa { border-left-color:#0F6E56; }
+  .strand-sb { border-left-color:#1E4A7A; }
+  .strand-sh { border-left-color:#9A6A14; }
+  .station-plan { border-style:dashed; border-left-style:solid; background:transparent; }
+  .station-head { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+  .station-num { min-width:1.55rem; height:1.55rem; border-radius:50%; background:#FBFAF6;
+    border:2px solid #B4B8A9; color:#6B6E76; font-size:.66rem; font-weight:600;
     display:inline-flex; align-items:center; justify-content:center; padding:0 .2rem; }
-  .station-head strong { font-size:.92rem; }
-  .station-head code { font-size:.68rem; color:#6B6E76; background:#F1EFE8; border-radius:.25rem; padding:.1rem .4rem; }
-  .station-badges { display:flex; align-items:center; gap:.35rem; flex-wrap:wrap; margin-top:.4rem; }
-  .station p { font-size:.85rem; margin:.5rem 0 0; }
-  .note { color:#9A6A14; background:#FBF3E0; border-radius:.4rem; padding:.4rem .6rem; font-size:.78rem !important; }
-  details.prompt { margin-top:.5rem; font-size:.8rem; }
+  .station-head strong { font-size:.88rem; }
+  .station-head code { font-size:.66rem; color:#6B6E76; background:#F1EFE8; border-radius:.25rem; padding:.1rem .35rem; }
+  .station-badges { display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; margin-top:.35rem; }
+  .station p { font-size:.8rem; margin:.45rem 0 0; }
+  .note { color:#9A6A14; background:#FBF3E0; border-radius:.4rem; padding:.4rem .55rem; font-size:.74rem !important; }
+  details.prompt { margin-top:.45rem; font-size:.78rem; }
   details.prompt summary { cursor:pointer; color:#1E4A7A; }
   details.prompt pre { white-space:pre-wrap; background:#F1EFE8; border:1px solid #E3E1D8;
-    border-radius:.5rem; padding:.7rem .9rem; font-size:.7rem; line-height:1.5; margin:.4rem 0 0; }
-  .trunk .station { max-width:34rem; margin-left:auto; margin-right:auto; }
-  .trunk .station + .station::before { content:""; position:absolute; left:50%; top:-0.65rem;
-    height:0.65rem; width:2px; background:#B4B8A9; }
-  .connector { display:block; width:100%; height:2.6rem; }
-  .strands { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
-  .strand-head { text-align:center; margin-bottom:.4rem; }
-  .strand-head strong { font-family:Georgia,serif; font-weight:500; font-size:1.05rem; display:block; }
-  .strand-head span { font-size:.75rem; color:#6B6E76; font-style:italic; }
-  .strand-a .strand-head strong { color:#0F6E56; }
-  .strand-b .strand-head strong { color:#1E4A7A; }
-  .strand { border-radius:1rem; padding:.7rem; }
-  .strand-a { background:#E7F3EE; border:1px solid #BFDCD1; }
-  .strand-b { background:#EDF2F8; border:1px solid #C6D6E8; }
-  .strand .station + .station::before { content:""; position:absolute; left:50%; top:-0.6rem;
-    height:0.6rem; width:2px; background:#B4B8A9; }
-  .parallel-note { text-align:center; font-size:.72rem; color:#6B6E76; margin:.3rem 0 0; }
-  @media (max-width:640px) {
-    .strands { grid-template-columns:1fr; }
-    .connector { display:none; }
-    .seg-gap { height:1rem; }
-  }
+    border-radius:.5rem; padding:.6rem .8rem; font-size:.68rem; line-height:1.5; margin:.35rem 0 0; }
+  .mini { display:block; background:transparent; border:1px dashed #B4B8A9; border-radius:.6rem;
+    padding:.5rem .7rem; margin:.5rem 0 0; text-decoration:none; }
+  .mini strong { font-size:.78rem; color:#1C1E24; display:block; }
+  .mini span { font-size:.7rem; color:#6B6E76; }
+  .mini:hover { border-color:#1E4A7A; }
+  .strand-legend { font-size:.72rem; color:#6B6E76; text-align:center; margin:.4rem 0 0; }
+  .strand-legend i { font-style:normal; font-weight:700; }
   .aux { margin-top:2.4rem; max-width:34rem; margin-left:auto; margin-right:auto; }
   .aux h2 { font-family:Georgia,serif; font-weight:500; font-size:1.05rem; }
   .foot { margin-top:2rem; font-size:.72rem; color:#6B6E76; text-align:center; }
@@ -477,51 +475,29 @@ function main() {
   <p class="backlink"><a href="index.html">← Zu den Landkarten</a></p>
   <p class="kicker">Methodik · Stand ${today} · alle Prompts im Original aus dem laufenden System</p>
   <h1>So entsteht die Landkarte des Streits</h1>
-  <p class="sub">Zwei Ansichten derselben Sache. <strong>Oben das Verfahren</strong>, wie eine Kommune es
-    erlebt — die Zeitachse von Anlass bis Ratsentscheidung (Zielbild nach §8 und §12 des Konzeptpapiers).
-    <strong>Darunter die Maschine</strong> in ihrer echten Abhängigkeits-Form (Ist-Stand): ein gemeinsamer
-    Stamm, der sich in zwei unabhängige Stränge gabelt — die Struktur des Streits und die Menschen dahinter,
-    die Komplementarität aus §7 — und der sich im Scharnier der Diagnose wieder verbindet. Die Stufen-Chips
-    auf der Zeitachse springen zur jeweiligen Station der Maschine. Jede KI-Stufe zeigt den tatsächlichen
-    System-Prompt, direkt aus dem Code eingebettet; jede Stufe ist wiederholbar und protokolliert ihre
-    Entscheidungen im Audit-Log.</p>
+  <p class="sub">Ein Bild für die ganze Idee: <strong>die Zeitachse des Verfahrens</strong>, wie eine
+    Kommune es erlebt — von Anlass bis Ratsentscheidung (Zielbild nach §8 und §12 des Konzeptpapiers) —
+    und <strong>unter jedem Zeitblock die Pipeline-Stufen</strong>, die dort arbeiten. Die farbige Kante
+    jeder Karte zeigt den Strang: Die Struktur des Streits und die Menschen dahinter (die Komplementarität
+    aus §7) laufen unabhängig voneinander und treffen sich erst im Scharnier der Diagnose. Jede KI-Stufe
+    zeigt den tatsächlichen System-Prompt, direkt aus dem Code eingebettet; jede Stufe ist wiederholbar
+    und protokolliert ihre Entscheidungen im Audit-Log.</p>
   <p class="principle">Das Vertrauensprinzip auf jeder Ebene: <strong>Die Maschine schlägt vor, der Mensch gibt frei.
     Die Diagnosen werden gerechnet, nicht gemeint. Wertungsfragen entscheidet die Maschine nie.</strong></p>
   <div class="legend">${(Object.keys(KIND) as Kind[]).map(badge).join("")}</div>
 
-  <h2 class="seg-title">Das Verfahren — die Zeitachse</h2>
-  <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“) — Stufen-Chips springen zur Maschine.</p>
-  <div class="tl-scroll">
-    <div class="timeline">${TIMELINE.map(tlBlock).join('<span class="tl-sep">→</span>')}</div>
+  <h2 class="seg-title">Das Verfahren — und die Maschine darunter</h2>
+  <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“). Unter jedem
+    Zeitblock hängen die Pipeline-Stufen, die dort laufen — horizontal scrollen für den ganzen Ablauf.</p>
+  <div class="board-scroll">
+    <div class="board">${columns().map(columnHtml).join("")}</div>
   </div>
-  <p class="tl-legend">↻ = läuft während des Fensters durchgehend (Dienst, kein Einzelschritt) · gestrichelt = geplant bzw. Perspektive · gelb = nur Testdaten-Modus (ersetzt dort die Live-Beteiligung)</p>
-
-  <h2 class="seg-title" style="margin-top:2.6rem;">Die Maschine — der gemeinsame Stamm</h2>
-  <p class="seg-sub">Aus Stellungnahmen werden geprüfte Punkte — alles Weitere hängt hieran.</p>
-  <div class="trunk">${TRUNK.map(stationHtml).join("")}</div>
-
-  ${FORK_SVG}
-
-  <div class="strands">
-    <div class="strand strand-a">
-      <div class="strand-head"><strong>Strang A — Die Struktur des Streits</strong>
-        <span>„Die Landkarte kennt die Struktur …“ — läuft ohne ein einziges Votum</span></div>
-      ${STRAND_A.map(stationHtml).join("")}
-    </div>
-    <div class="strand strand-b">
-      <div class="strand-head"><strong>Strang B — Die Menschen dahinter</strong>
-        <span>„… Polis kennt die Geometrie der Bevölkerung“ — läuft ohne Türen und Zuschnitt</span></div>
-      ${STRAND_B.map(stationHtml).join("")}
-    </div>
-  </div>
-  <p class="parallel-note">Die Stränge sind vollständig unabhängig und im Prinzip parallel ausführbar;
-    der Orchestrator arbeitet sie heute aus Robustheitsgründen nacheinander ab.</p>
-
-  ${JOIN_SVG}
-
-  <h2 class="seg-title">Das Scharnier &amp; der Bericht</h2>
-  <p class="seg-sub">Kanonische Punkte × Lagerprofile → Diagnose, Befund, Landkarte.</p>
-  <div class="trunk">${JOIN.map(stationHtml).join("")}</div>
+  <p class="strand-legend">Kartenkante = Strang: <i style="color:#6B6E76">▍</i> Stamm ·
+    <i style="color:#0F6E56">▍</i> Struktur des Streits (läuft ohne Voten) ·
+    <i style="color:#1E4A7A">▍</i> die Menschen dahinter (läuft ohne Türen/Zuschnitt) ·
+    <i style="color:#9A6A14">▍</i> Scharnier &amp; Bericht (Struktur × Lagerprofile) —
+    die Stränge sind unabhängig und treffen sich erst in der Diagnose ·
+    gestrichelte Karten = geplant · ↻ = läuft im Fenster durchgehend als Dienst</p>
 
   <section class="aux">
     <h2>Hilfsstufen (Darstellung, keine Inhalte)</h2>
