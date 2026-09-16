@@ -75,6 +75,7 @@ const TRUNK: Station[] = [
     script: "harvester · import-harvest.ts",
     kinds: ["det"],
     text: "Stellungnahmen, Fragebögen und Anhänge werden aus den Quellsystemen geholt und unverändert gespeichert. Lange Texte werden nie gekürzt, sondern in überlappenden Fenstern vollständig verarbeitet.",
+    note: "Nur im Anlauf: Im Dauerbetrieb (T2) kommt neues Material durch die drei Türen herein, nicht per Import.",
   },
   {
     key: "zerlegung",
@@ -139,7 +140,7 @@ const STRAND_A: Station[] = [
     script: "condense-map.ts",
     kinds: ["ki"],
     text: "Aus den fein-granularen Extraktionspunkten (oft 50 je Stellungnahme) werden je Maßnahme 15–25 kanonische Landkarten-Punkte — die Einheit, die ein Leser im Kopf behalten und über die ein Bürger abstimmen kann. Nichts geht verloren: Jeder Extraktionspunkt bleibt als Beleg-Schicht seinem kanonischen Punkt zugeordnet.",
-    note: "Im Zielverfahren erzeugt dieser Schritt den Startbestand für die Abstimmung (blauer Strang, T2). In den bisherigen Testdaten lief die Abstimmung noch auf der feineren Ebene; die Profile werden auf die kanonischen Punkte aggregiert.",
+    note: "Im Zielverfahren erzeugt dieser Schritt den Startbestand für die Abstimmung. Im Dauerbetrieb (T2) arbeitet die Verdichtung inkrementell: Neue Punkte werden bestehenden kanonischen Punkten zugeordnet oder der Redaktion als neue vorgeschlagen. In den bisherigen Testdaten lief die Abstimmung noch auf der feineren Ebene; die Profile werden auf die kanonischen Punkte aggregiert.",
     prompts: [
       { label: "Verdichtungs-Prompt", text: CONDENSE_SYSTEM },
       { label: "Verdichtungs-Prompt (Nachzuordnung)", text: CONDENSE_ASSIGN_SYSTEM },
@@ -183,7 +184,7 @@ const STRAND_B: Station[] = [
     name: "Tür 3: Volle Stellungnahme",
     script: "decompose.ts",
     kinds: ["ki"],
-    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt zurück in die Zerlegung (T1.2) und landet als Punkte und Belege auf derselben Karte.",
+    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt zurück in die Zerlegung (S1) und landet als Punkte und Belege auf derselben Karte.",
   },
   {
     key: "stances",
@@ -274,67 +275,84 @@ function byKey(all: Station[], key: string): Station {
   return f;
 }
 
-function columns(): Column[] {
-  const all = [...TRUNK, ...STRAND_A, ...STRAND_B, ...JOIN];
-  const n = (key: string) => byKey(all, key);
-  return [
-    {
-      code: "T0",
-      title: "T0 · Anlass & Zuschnitt",
-      dur: "Woche 0",
-      text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
-      cards: [n("zuschnitt")],
-    },
-    {
-      code: "T1",
-      title: "T1 · Vorbereitung",
-      dur: "≈ 2 Wochen",
-      text: "Vorhandenes Material — die Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — wird zerlegt, geordnet und je Maßnahme zu 15–25 kanonischen, abstimmbaren Punkten verdichtet. Die Redaktion gibt den Startbestand frei.",
-      cards: [n("import"), n("zerlegung"), n("bezuege"), n("redaktion"), n("tueren"), n("verdichtung"), n("aussagen")],
-    },
-    {
-      code: "T2",
-      title: "T2 · Offene Beteiligung",
-      dur: "≈ 3 Wochen",
-      text: "Die drei Türen sind offen; die Karte wächst live. Neue Punkte aus Tür 2 und 3 gehen nach Freigabe selbst in die Abstimmung — der Rückkanal, keine eingefrorene Landkarte.",
-      sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
-      cards: [n("tuer1"), n("tuer2"), n("tuer3"), n("stances")],
-      minis: [
-        { label: "↻ Zerlegung + Abgleich", key: "zerlegung", note: "läuft durchgehend weiter — jede neue Eingabe wird sofort zerlegt und abgeglichen" },
-        { label: "↻ Redaktion", key: "redaktion", note: "läuft durchgehend weiter — neue Punkte werden laufend freigegeben" },
-        { label: "↻ Lagerbildung", key: "analyse", note: "läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung" },
-      ],
-    },
-    {
-      code: "T3",
-      title: "T3 · Auswertung",
-      dur: "≈ 1 Woche",
-      text: "Finale Analyse über dem vollständigen Material: Lager und Brücken, Diagnose je Punkt, Lücken, Scheinbrücken-Prüfung, Befunde.",
-      cards: [n("analyse"), n("namen"), n("diagnose"), n("befund")],
-    },
-    {
-      code: "T4",
-      title: "T4 · Bericht & Entscheidung",
-      dur: "Ratsbefassung",
-      text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
-      cards: [n("landkarte")],
-    },
-    {
-      code: "T5",
-      title: "T5 · Nach der Entscheidung",
-      dur: "Perspektive",
-      text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
-      cls: "col-t5",
-      cards: [],
-    },
-  ];
+const ALL = [...TRUNK, ...STRAND_A, ...STRAND_B, ...JOIN];
+const n = (key: string) => byKey(ALL, key);
+
+/** T0 and T3-T5 as plain columns; T1+T2 are the merged group below. */
+function outerColumns(): { before: Column[]; after: Column[] } {
+  return {
+    before: [
+      {
+        code: "T0",
+        title: "T0 · Anlass & Zuschnitt",
+        dur: "Woche 0",
+        text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
+        cards: [n("zuschnitt")],
+      },
+    ],
+    after: [
+      {
+        code: "T3",
+        title: "T3 · Auswertung",
+        dur: "≈ 1 Woche",
+        text: "Finale Analyse über dem vollständigen Material: Lager und Brücken, Diagnose je Punkt, Lücken, Scheinbrücken-Prüfung, Befunde.",
+        cards: [n("analyse"), n("namen"), n("diagnose"), n("befund")],
+      },
+      {
+        code: "T4",
+        title: "T4 · Bericht & Entscheidung",
+        dur: "Ratsbefassung",
+        text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
+        cards: [n("landkarte")],
+      },
+      {
+        code: "T5",
+        title: "T5 · Nach der Entscheidung",
+        dur: "Perspektive",
+        text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
+        cls: "col-t5",
+        cards: [],
+      },
+    ],
+  };
 }
 
-/** Display codes computed from board position: T1.1, T1.2, … */
-function codeMap(cols: Column[]): Map<string, string> {
+/** T1+T2 as one group: the shared Verarbeitungsstrecke spans both phases —
+ *  same machinery, two operating modes (batch over the Bestand / streaming
+ *  per contribution). Only the inputs differ. */
+const T12 = {
+  t1: {
+    title: "T1 · Vorbereitung — der Anlauf",
+    dur: "≈ 2 Wochen",
+    text: "Der vorhandene Bestand — Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — läuft einmal komplett im Stapel durch die Verarbeitungsstrecke (S1–S6). Die Redaktion gibt den Startbestand frei.",
+  },
+  t2: {
+    title: "T2 · Offene Beteiligung — der Dauerbetrieb",
+    dur: "≈ 3 Wochen",
+    text: "Dieselbe Strecke läuft weiter, jetzt gespeist aus den drei Türen — je Beitrag statt im Stapel. Neue Punkte gehen nach Freigabe selbst in die Abstimmung: der Rückkanal, keine eingefrorene Landkarte.",
+    sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
+  },
+  strecke: ["zerlegung", "bezuege", "redaktion", "tueren", "verdichtung", "aussagen"].map(n),
+  t1Only: ["import"].map(n),
+  t2Only: ["tuer1", "tuer2", "tuer3", "stances"].map(n),
+  t2Minis: [
+    {
+      label: "↻ Lagerbildung",
+      key: "analyse",
+      note: "läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung",
+    },
+  ] as Mini[],
+};
+
+/** Display codes from board position: T0.1, S1-S6, T1.1, T2.1 …, T3.1 … */
+function codeMap(): Map<string, string> {
   const m = new Map<string, string>();
-  for (const c of cols)
+  const oc = outerColumns();
+  for (const c of [...oc.before, ...oc.after])
     c.cards.forEach((st, i) => m.set(st.key, `${c.code}.${i + 1}`));
+  T12.strecke.forEach((st, i) => m.set(st.key, `S${i + 1}`));
+  T12.t1Only.forEach((st, i) => m.set(st.key, `T1.${i + 1}`));
+  T12.t2Only.forEach((st, i) => m.set(st.key, `T2.${i + 1}`));
   return m;
 }
 
@@ -352,6 +370,34 @@ function columnHtml(c: Column, codes: Map<string, string>): string {
     </div>
     ${c.cards.map((st) => stationHtml(st, codes.get(st.key) ?? "")).join("")}
     ${(c.minis ?? []).map((m) => miniHtml(m, codes)).join("")}
+  </div>`;
+}
+
+function t12Html(codes: Map<string, string>): string {
+  const head = (h: { title: string; dur: string; text: string; sat?: string }) => `
+    <div class="col-head">
+      <div class="tl-head">${esc(h.title)}</div>
+      <div class="tl-dur">${esc(h.dur)}</div>
+      <p>${esc(h.text)}</p>
+      ${h.sat ? `<p class="tl-sat">┄ ${esc(h.sat)}</p>` : ""}
+    </div>`;
+  return `<div class="t12">
+    ${head(T12.t1)}
+    ${head(T12.t2)}
+    <div class="band">
+      <div class="band-title">Die Verarbeitungsstrecke — identisch in T1 und T2</div>
+      <div class="band-sub">in T1 als Stapel über den Bestand · in T2 laufend über jeden neuen Beitrag (jede Stufe ist idempotent — Dauerbetrieb heißt: dieselben Stufen laufen wiederholt)</div>
+      <div class="band-cards">${T12.strecke.map((st) => stationHtml(st, codes.get(st.key) ?? "")).join("")}</div>
+    </div>
+    <div class="t12-sub">
+      <div class="sub-label">Nur im Anlauf (T1)</div>
+      ${T12.t1Only.map((st) => stationHtml(st, codes.get(st.key) ?? "")).join("")}
+    </div>
+    <div class="t12-sub">
+      <div class="sub-label">Nur im Dauerbetrieb (T2)</div>
+      ${T12.t2Only.map((st) => stationHtml(st, codes.get(st.key) ?? "")).join("")}
+      ${T12.t2Minis.map((m) => miniHtml(m, codes)).join("")}
+    </div>
   </div>`;
 }
 
@@ -453,6 +499,17 @@ function main() {
   .mini strong { font-size:.78rem; color:#1C1E24; display:block; }
   .mini span { font-size:.7rem; color:#6B6E76; }
   .mini:hover { border-color:#1E4A7A; }
+  .t12 { flex:0 0 auto; display:grid; grid-template-columns:360px 360px; gap:.55rem .7rem;
+    background:#F1EFE8; border:1px solid #E3E1D8; border-radius:.9rem; padding:.55rem; align-content:start; }
+  .band { grid-column:1 / 3; background:#FBFAF6; border:1.5px solid #B4B8A9; border-radius:.75rem;
+    padding:.5rem .6rem .6rem; }
+  .band-title { font-family:Georgia,serif; font-size:.95rem; font-weight:500; text-align:center; }
+  .band-sub { font-size:.7rem; color:#6B6E76; text-align:center; margin:.15rem 0 .3rem; }
+  .band-cards { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; align-items:start; }
+  .band-cards .station { margin:0; }
+  .t12-sub { display:flex; flex-direction:column; }
+  .sub-label { font-size:.68rem; letter-spacing:.07em; text-transform:uppercase; color:#6B6E76;
+    margin:.1rem 0 0 .2rem; }
   .strand-legend { font-size:.72rem; color:#6B6E76; text-align:center; margin:.4rem 0 0; }
   .strand-legend i { font-style:normal; font-weight:700; }
   .aux { margin-top:2.4rem; max-width:34rem; margin-left:auto; margin-right:auto; }
@@ -500,7 +557,11 @@ function main() {
   <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“). Unter jedem
     Zeitblock hängen die Pipeline-Stufen, die dort laufen — horizontal scrollen für den ganzen Ablauf.</p>
   <div class="board-scroll">
-    <div class="board">${(() => { const cols = columns(); const codes = codeMap(cols); return cols.map((c) => columnHtml(c, codes)).join(""); })()}</div>
+    <div class="board">${(() => { const codes = codeMap(); const oc = outerColumns(); return [
+      ...oc.before.map((c) => columnHtml(c, codes)),
+      t12Html(codes),
+      ...oc.after.map((c) => columnHtml(c, codes)),
+    ].join(""); })()}</div>
   </div>
   <p class="strand-legend">Kartenkante = Strang: <i style="color:#6B6E76">▍</i> Stamm ·
     <i style="color:#0F6E56">▍</i> Struktur des Streits (läuft ohne Voten) ·
