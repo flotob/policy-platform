@@ -515,6 +515,7 @@ async function main() {
     .sort((a, b) => (a.scope === "übergreifend" ? -1 : b.scope === "übergreifend" ? 1 : a.display.localeCompare(b.display)))
     .map((r) => `<a class="card" href="${r.file}"><strong>${esc(r.display)}</strong><span>${r.counts}</span></a>`)
     .join("")}
+  <a class="card" href="pipeline.html"><strong>So entsteht die Landkarte</strong><span>Die komplette Pipeline in den vier Phasen des Konzeptpapiers — mit allen Prompts im Original.</span></a>
 </div></body></html>`;
   writeFileSync(`${outDir}/index.html`, index);
   console.log(`index.html: ${indexRows.length} maps → ${outDir}`);
