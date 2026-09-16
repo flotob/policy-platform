@@ -54,11 +54,13 @@ const KIND: Record<Kind, { label: string; fg: string; bg: string; border: string
 };
 
 interface Station {
-  num: string;
+  /** Stable identity for anchors and cross-references — display codes
+   *  (T1.2 …) are computed from board position and may change. */
+  key: string;
+  strand: "st" | "sa" | "sb" | "sh";
   name: string;
   script: string | null;
   kinds: Kind[];
-  phase: 1 | 2 | 3 | 4;
   text: string;
   note?: string;
   prompts?: { label: string; text: string }[];
@@ -67,19 +69,19 @@ interface Station {
 /** Shared trunk: everything downstream depends on these. */
 const TRUNK: Station[] = [
   {
-    num: "1",
+    key: "import",
+    strand: "st",
     name: "Import & Aufbereitung",
     script: "harvester · import-harvest.ts",
     kinds: ["det"],
-    phase: 1,
     text: "Stellungnahmen, Fragebögen und Anhänge werden aus den Quellsystemen geholt und unverändert gespeichert. Lange Texte werden nie gekürzt, sondern in überlappenden Fenstern vollständig verarbeitet.",
   },
   {
-    num: "2",
+    key: "zerlegung",
+    strand: "st",
     name: "Zerlegung + Abgleich",
     script: "decompose.ts",
     kinds: ["ki"],
-    phase: 1,
     text: "Jede Stellungnahme wird in einzelne Punkte zerlegt — Behauptungen entlang des Grundmusters (P1–P4), Einwände durch eine der fünf Türen (die fünf kritischen Fragen: die fünf Wege, ein Maßnahmen-Argument anzugreifen), Lösungsvorschläge mit der Tür, die sie beantworten. Jeder Punkt trägt ein wörtliches Beleg-Zitat. Direkt verzahnt der Abgleich: Ist der Kandidat ein bekannter Punkt in neuen Worten oder wirklich neu? 214 Wiederholungen werden ein Punkt — die Landkarte wächst um Erkenntnis, nicht um Papier. Die Neupunkt-Rate ergibt das Sättigungsmaß.",
     prompts: [
       { label: "Zerlegungs-Prompt", text: DECOMPOSE_SYSTEM },
@@ -88,20 +90,20 @@ const TRUNK: Station[] = [
     ],
   },
   {
-    num: "3",
+    key: "bezuege",
+    strand: "st",
     name: "Bezüge zwischen Punkten",
     script: "backfill-relations.ts",
     kinds: ["ki"],
-    phase: 1,
     text: "Stützt- und Angriffs-Beziehungen: welcher Punkt ist Prämisse wofür, welcher Einwand zielt auf welche Behauptung. Die Angriffskanten tragen als Vokabular die fünf Türen — daran hängt später die deterministische Türen-Zuordnung.",
     prompts: [{ label: "Bezüge-Prompt", text: RELATIONS_SYSTEM }],
   },
   {
-    num: "4",
+    key: "redaktion",
+    strand: "st",
     name: "Redaktion: Punkte",
     script: "ai-review.ts --what points",
     kinds: ["ki", "gate"],
-    phase: 1,
     text: "Kein Punkt erscheint ungeprüft auf der Karte. Ein KI-Redakteur schlägt Freigabe oder Ablehnung vor; in der Redaktions-Workbench kann ein Mensch jede Entscheidung einsehen und umdrehen.",
     prompts: [{ label: "Redaktions-Prompt: Punkte", text: AI_REVIEW_POINTS_SYSTEM }],
   },
@@ -110,20 +112,20 @@ const TRUNK: Station[] = [
 /** Strand A: the structure of the dispute — needs no votes. */
 const STRAND_A: Station[] = [
   {
-    num: "A1",
+    key: "tueren",
+    strand: "sa",
     name: "Fünf Türen",
     script: "classify-cq.ts",
     kinds: ["det", "ki"],
-    phase: 1,
     text: "Jeder Einwand wird einer der fünf kritischen Fragen zugeordnet: Empirie, Alternativen, Zielkonflikt, Machbarkeit, Wertkonflikt. Wo die Angriffskanten die Tür bereits eindeutig bestimmen, geschieht das deterministisch; nur der Rest geht ans Sprachmodell. Türen, durch die niemand gekommen ist, werden später als Lücken ausgewiesen.",
     prompts: [{ label: "Türen-Prompt", text: CLASSIFY_CQ_SYSTEM }],
   },
   {
-    num: "A2",
+    key: "zuschnitt",
+    strand: "sa",
     name: "Maßnahmen-Zuschnitt",
     script: "segment-measures.ts",
     kinds: ["ki"],
-    phase: 1,
     text: "Ein Gesetzentwurf oder Maßnahmenkatalog ist selten eine einzige Entscheidung. Die Karte wird in getrennt entscheidbare Teilentscheidungen zerlegt — jede bekommt ihre eigene Landkarte; übergreifende Punkte bilden den gemeinsamen Stamm („Das Vorhaben als Ganzes“).",
     prompts: [
       { label: "Zuschnitt-Prompt (Vorschlag)", text: MEASURES_PROPOSE_SYSTEM },
@@ -131,13 +133,13 @@ const STRAND_A: Station[] = [
     ],
   },
   {
-    num: "A3",
+    key: "verdichtung",
+    strand: "sa",
     name: "Verdichtung",
     script: "condense-map.ts",
     kinds: ["ki"],
-    phase: 1,
     text: "Aus den fein-granularen Extraktionspunkten (oft 50 je Stellungnahme) werden je Maßnahme 15–25 kanonische Landkarten-Punkte — die Einheit, die ein Leser im Kopf behalten und über die ein Bürger abstimmen kann. Nichts geht verloren: Jeder Extraktionspunkt bleibt als Beleg-Schicht seinem kanonischen Punkt zugeordnet.",
-    note: "Im Zielverfahren erzeugt dieser Schritt den Startbestand für die Abstimmung (Strang B). In den bisherigen Testdaten lief die Abstimmung noch auf der feineren Ebene; die Profile werden auf die kanonischen Punkte aggregiert.",
+    note: "Im Zielverfahren erzeugt dieser Schritt den Startbestand für die Abstimmung (blauer Strang, T2). In den bisherigen Testdaten lief die Abstimmung noch auf der feineren Ebene; die Profile werden auf die kanonischen Punkte aggregiert.",
     prompts: [
       { label: "Verdichtungs-Prompt", text: CONDENSE_SYSTEM },
       { label: "Verdichtungs-Prompt (Nachzuordnung)", text: CONDENSE_ASSIGN_SYSTEM },
@@ -148,11 +150,11 @@ const STRAND_A: Station[] = [
 /** Strand B: the people behind the arguments — needs no doors/measures. */
 const STRAND_B: Station[] = [
   {
-    num: "B1",
+    key: "aussagen",
+    strand: "sb",
     name: "Abstimmbare Aussagen",
     script: "generate-statements.ts + ai-review.ts",
     kinds: ["ki", "gate"],
-    phase: 1,
     text: "Jeder freigegebene Punkt wird in genau eine abstimmbare Aussage übersetzt: neutral, eine Behauptung pro Aussage, zweisprachig. Auch hier prüft die Redaktion vor der Freigabe.",
     prompts: [
       { label: "Aussagen-Prompt", text: STATEMENT_SYSTEM },
@@ -160,53 +162,53 @@ const STRAND_B: Station[] = [
     ],
   },
   {
-    num: "B2",
+    key: "tuer1",
+    strand: "sb",
     name: "Tür 1: Abstimmen",
     script: "Vote-Deck (App)",
     kinds: ["det"],
-    phase: 2,
     text: "Die niedrigste Schwelle der Beteiligung: Aussage für Aussage zustimmen, ablehnen oder überspringen — einen Antworten-Knopf gibt es mit Absicht nicht, Streitspiralen werden strukturell verhindert.",
   },
   {
-    num: "B3",
+    key: "tuer2",
+    strand: "sb",
     name: "Tür 2: Eigene Kurzaussage",
     script: null,
     kinds: ["plan"],
-    phase: 2,
     text: "Zwei Sätze, automatisch geprüft: bekannt oder neu? Die Maschinerie dahinter — Abgleich und Redaktions-Gate — existiert und läuft im Stamm; das Bürger-Formular davor ist noch nicht gebaut.",
   },
   {
-    num: "B4",
+    key: "tuer3",
+    strand: "sb",
     name: "Tür 3: Volle Stellungnahme",
     script: "decompose.ts",
     kinds: ["ki"],
-    phase: 2,
-    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt zurück in die Zerlegung (Station 2) und landet als Punkte und Belege auf derselben Karte.",
+    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt zurück in die Zerlegung (T1.2) und landet als Punkte und Belege auf derselben Karte.",
   },
   {
-    num: "B5",
+    key: "stances",
+    strand: "sb",
     name: "Stance-Ableitung",
     script: "infer-stances.ts",
     kinds: ["ki"],
-    phase: 2,
     text: "Für bereits gelaufene Konsultationen (unsere Testdaten) wird die Haltung der Freitext-Einreicher zu den Aussagen aus ihren eigenen Texten abgeleitet und als Votum gewertet — überall als „abgeleitet“ gekennzeichnet.",
     note: "Im echten Verfahren ergänzt diese Stufe die Live-Beteiligung (Stellungnahmen zählen mit), sie ersetzt sie nicht.",
     prompts: [{ label: "Stance-Prompt", text: STANCE_SYSTEM }],
   },
   {
-    num: "B6",
+    key: "analyse",
+    strand: "sb",
     name: "Lager & Brücken",
     script: "analyze.ts",
     kinds: ["det"],
-    phase: 3,
     text: "Das Polis-Verfahren: Wer ähnlich votet, bildet ein Lager (PCA + k-means, deterministisch, differentialgetestet gegen die Referenz-Implementierung). Brücken und Konfliktlinien folgen Signifikanztests; jede Aussage bekommt ein Zustimmungsprofil je Lager.",
   },
   {
-    num: "B7",
+    key: "namen",
+    strand: "sb",
     name: "Lager-Namen",
     script: "name-camps.ts",
     kinds: ["ki"],
-    phase: 3,
     text: "Damit „Gruppe 0“ und „Gruppe 1“ lesbar werden, benennt ein Sprachmodell die Lager anhand ihrer charakteristischen Positionen — reine Benennung, keine Zahl wird angefasst.",
     prompts: [{ label: "Lager-Namen-Prompt", text: NAME_CAMPS_SYSTEM }],
   },
@@ -215,29 +217,29 @@ const STRAND_B: Station[] = [
 /** Convergence: structure × people, then the report. */
 const JOIN: Station[] = [
   {
-    num: "5",
+    key: "diagnose",
+    strand: "sh",
     name: "Diagnose je Punkt — das Scharnier",
     script: "diagnose-map.ts",
     kinds: ["det", "ki"],
-    phase: 3,
-    text: "Hier treffen sich die Stränge: Die kanonischen Punkte aus Strang A bekommen die Zustimmungsprofile aus Strang B — und daraus fällt für jeden Punkt die Diagnose, aus festen Schwellen gerechnet: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen. Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Einzige KI-Beteiligung: Der Scheinbrücken-Check prüft bei Brücken, ob die sichtbaren Begründungen wirklich in dieselbe Richtung tragen; ein Fund wird als Warnung markiert — als maschinelle Markierung mit redaktionellem Prüfvermerk, nicht als Faktum.",
+    text: "Hier treffen sich die Stränge: Die kanonischen Punkte (grüner Strang) bekommen die Zustimmungsprofile (blauer Strang) — und daraus fällt für jeden Punkt die Diagnose, aus festen Schwellen gerechnet: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen. Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Einzige KI-Beteiligung: Der Scheinbrücken-Check prüft bei Brücken, ob die sichtbaren Begründungen wirklich in dieselbe Richtung tragen; ein Fund wird als Warnung markiert — als maschinelle Markierung mit redaktionellem Prüfvermerk, nicht als Faktum.",
     prompts: [{ label: "Scheinbrücken-Check-Prompt", text: REASONS_CHECK_SYSTEM }],
   },
   {
-    num: "6",
+    key: "befund",
+    strand: "sh",
     name: "Befund je Punkt",
     script: "diagnose-map.ts (Befund-Teil)",
     kinds: ["ki"],
-    phase: 4,
     text: "Zu jeder gerechneten Diagnose entsteht der Befund: zwei bis fünf Sätze Klartext — was die Zahlen zeigen, was daraus für das Verfahren folgt (Kurzgutachten? Ratsentscheidung? Lücke schließen?), was im Material dahintersteht. Die Diagnose selbst ist dem Modell vorgegeben und unantastbar.",
     prompts: [{ label: "Befund-Prompt (mit Bindungsregel)", text: BEFUND_SYSTEM }],
   },
   {
-    num: "7",
+    key: "landkarte",
+    strand: "sh",
     name: "Die Landkarte",
     script: "render-landkarte.ts",
     kinds: ["det"],
-    phase: 4,
     text: "Aus den Daten wird je Maßnahme eine eigenständige Seite gebaut: das Grundmuster als Leiste, die Zone der Gutachter mit ihren Bezirken, die Zone des Rates, die Ausgestaltung — jeder Punkt mit Lagerprofil, Befund, Originalzitaten und aufklappbarer Beleg-Schicht. Reines Rendern, keine KI.",
   },
 ];
@@ -252,10 +254,11 @@ const AUX: { label: string; text: string }[] = [
  *  beneath the phase in which they run. Horizontally scrollable (desktop). */
 interface Mini {
   label: string;
-  st: string;
+  key: string;
   note: string;
 }
 interface Column {
+  code: string;
   title: string;
   dur: string;
   text: string;
@@ -265,53 +268,59 @@ interface Column {
   minis?: Mini[];
 }
 
-function byNum(all: Station[], num: string): Station {
-  const f = all.find((x) => x.num === num);
-  if (!f) throw new Error(`station ${num} not found`);
+function byKey(all: Station[], key: string): Station {
+  const f = all.find((x) => x.key === key);
+  if (!f) throw new Error(`station ${key} not found`);
   return f;
 }
 
 function columns(): Column[] {
   const all = [...TRUNK, ...STRAND_A, ...STRAND_B, ...JOIN];
-  const n = (num: string) => byNum(all, num);
+  const n = (key: string) => byKey(all, key);
   return [
     {
+      code: "T0",
       title: "T0 · Anlass & Zuschnitt",
       dur: "Woche 0",
       text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
-      cards: [n("A2")],
+      cards: [n("zuschnitt")],
     },
     {
+      code: "T1",
       title: "T1 · Vorbereitung",
       dur: "≈ 2 Wochen",
       text: "Vorhandenes Material — die Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — wird zerlegt, geordnet und je Maßnahme zu 15–25 kanonischen, abstimmbaren Punkten verdichtet. Die Redaktion gibt den Startbestand frei.",
-      cards: [n("1"), n("2"), n("3"), n("4"), n("A1"), n("A3"), n("B1")],
+      cards: [n("import"), n("zerlegung"), n("bezuege"), n("redaktion"), n("tueren"), n("verdichtung"), n("aussagen")],
     },
     {
+      code: "T2",
       title: "T2 · Offene Beteiligung",
       dur: "≈ 3 Wochen",
       text: "Die drei Türen sind offen; die Karte wächst live. Neue Punkte aus Tür 2 und 3 gehen nach Freigabe selbst in die Abstimmung — der Rückkanal, keine eingefrorene Landkarte.",
       sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
-      cards: [n("B2"), n("B3"), n("B4"), n("B5")],
+      cards: [n("tuer1"), n("tuer2"), n("tuer3"), n("stances")],
       minis: [
-        { label: "↻ Zerlegung + Abgleich", st: "2", note: "läuft durchgehend weiter — jede neue Eingabe wird sofort zerlegt und abgeglichen" },
-        { label: "↻ Redaktion", st: "4", note: "läuft durchgehend weiter — neue Punkte werden laufend freigegeben" },
-        { label: "↻ Lagerbildung", st: "b6", note: "läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung" },
+        { label: "↻ Zerlegung + Abgleich", key: "zerlegung", note: "läuft durchgehend weiter — jede neue Eingabe wird sofort zerlegt und abgeglichen" },
+        { label: "↻ Redaktion", key: "redaktion", note: "läuft durchgehend weiter — neue Punkte werden laufend freigegeben" },
+        { label: "↻ Lagerbildung", key: "analyse", note: "läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung" },
       ],
     },
     {
+      code: "T3",
       title: "T3 · Auswertung",
       dur: "≈ 1 Woche",
       text: "Finale Analyse über dem vollständigen Material: Lager und Brücken, Diagnose je Punkt, Lücken, Scheinbrücken-Prüfung, Befunde.",
-      cards: [n("B6"), n("B7"), n("5"), n("6")],
+      cards: [n("analyse"), n("namen"), n("diagnose"), n("befund")],
     },
     {
+      code: "T4",
       title: "T4 · Bericht & Entscheidung",
       dur: "Ratsbefassung",
       text: "Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.",
-      cards: [n("7")],
+      cards: [n("landkarte")],
     },
     {
+      code: "T5",
       title: "T5 · Nach der Entscheidung",
       dur: "Perspektive",
       text: "Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).",
@@ -321,11 +330,19 @@ function columns(): Column[] {
   ];
 }
 
-function miniHtml(m: Mini): string {
-  return `<a class="mini" href="#st-${m.st}"><strong>${esc(m.label)}</strong><span>${esc(m.note)}</span></a>`;
+/** Display codes computed from board position: T1.1, T1.2, … */
+function codeMap(cols: Column[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const c of cols)
+    c.cards.forEach((st, i) => m.set(st.key, `${c.code}.${i + 1}`));
+  return m;
 }
 
-function columnHtml(c: Column): string {
+function miniHtml(m: Mini, codes: Map<string, string>): string {
+  return `<a class="mini" href="#st-${m.key}"><strong>${esc(m.label)}</strong><span>${esc(m.note)} (→ ${codes.get(m.key) ?? ""})</span></a>`;
+}
+
+function columnHtml(c: Column, codes: Map<string, string>): string {
   return `<div class="col ${c.cls ?? ""}">
     <div class="col-head">
       <div class="tl-head">${esc(c.title)}</div>
@@ -333,8 +350,8 @@ function columnHtml(c: Column): string {
       <p>${esc(c.text)}</p>
       ${c.sat ? `<p class="tl-sat">┄ ${esc(c.sat)}</p>` : ""}
     </div>
-    ${c.cards.map(stationHtml).join("")}
-    ${(c.minis ?? []).map(miniHtml).join("")}
+    ${c.cards.map((st) => stationHtml(st, codes.get(st.key) ?? "")).join("")}
+    ${(c.minis ?? []).map((m) => miniHtml(m, codes)).join("")}
   </div>`;
 }
 
@@ -344,23 +361,16 @@ function badge(k: Kind): string {
   return `<span class="badge" style="color:${m.fg};background:${m.bg};border:1px solid ${m.border};${dashed}">${m.label}</span>`;
 }
 
-function strandOf(num: string): string {
-  const n = num.toLowerCase();
-  if (n.startsWith("a")) return "sa";
-  if (n.startsWith("b")) return "sb";
-  return Number(n) >= 5 ? "sh" : "st";
-}
-
-function stationHtml(s: Station): string {
+function stationHtml(s: Station, code: string): string {
   const prompts = (s.prompts ?? [])
     .map(
       (p) =>
         `<details class="prompt"><summary>Prompt ansehen: ${esc(p.label)}</summary><pre>${esc(p.text)}</pre></details>`,
     )
     .join("");
-  return `<div class="station strand-${strandOf(s.num)}${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.num.toLowerCase()}">
+  return `<div class="station strand-${s.strand}${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.key}">
     <div class="station-head">
-      <span class="station-num">${s.num}</span>
+      <span class="station-num">${code}</span>
       <strong>${esc(s.name)}</strong>
       ${s.script ? `<code>${esc(s.script)}</code>` : ""}
     </div>
@@ -490,7 +500,7 @@ function main() {
   <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“). Unter jedem
     Zeitblock hängen die Pipeline-Stufen, die dort laufen — horizontal scrollen für den ganzen Ablauf.</p>
   <div class="board-scroll">
-    <div class="board">${columns().map(columnHtml).join("")}</div>
+    <div class="board">${(() => { const cols = columns(); const codes = codeMap(cols); return cols.map((c) => columnHtml(c, codes)).join(""); })()}</div>
   </div>
   <p class="strand-legend">Kartenkante = Strang: <i style="color:#6B6E76">▍</i> Stamm ·
     <i style="color:#0F6E56">▍</i> Struktur des Streits (läuft ohne Voten) ·
