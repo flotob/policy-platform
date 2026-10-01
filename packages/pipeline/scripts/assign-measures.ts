@@ -85,7 +85,7 @@ async function main() {
     async (p, answers, provenance) => {
       const a = answers.measure as { choice: string; confidence: number };
       const m = decideMeasure(measures, a);
-      if (a.confidence < MEASURE_SECOND_OPINION_BELOW) unsure.push({ id: p.id, label: p.label, summary: p.summary, jev: a.choice });
+      const pending = a.confidence < MEASURE_SECOND_OPINION_BELOW;
       await saveJudgment(db, {
         tenantId: cons.tenantId,
         consultationId: cons.id,
@@ -94,8 +94,14 @@ async function main() {
         family: MEASURE_FAMILY,
         provenance,
         answers,
-        decided: { measure: m, confidence: a.confidence },
+        decided: { measure: m, confidence: a.confidence, pendingSecondOpinion: pending },
       });
+      // An unsure assignment is NOT saved yet: the point stays open until the
+      // LLM has decided — a crash or failed call leaves it for the next run.
+      if (pending) {
+        unsure.push({ id: p.id, label: p.label, summary: p.summary, jev: a.choice });
+        return;
+      }
       await db.execute(sql`UPDATE points SET measure = ${m} WHERE id = ${p.id}`);
       count(m);
     },
@@ -105,7 +111,7 @@ async function main() {
   const provider = new AgentSdkProvider();
   const options = measureOptionsText(measures);
   let changed = 0;
-  await runPool(
+  const second = await runPool(
     unsure,
     async (p) => {
       const r = await provider.generateStructured({
@@ -117,24 +123,29 @@ async function main() {
       const pick = measurePickOutput.parse(r.output);
       const m = decideMeasure(measures, { choice: pick.choice, confidence: 1 });
       const before = decideMeasure(measures, { choice: p.jev, confidence: 1 });
-      if (m !== before) {
-        changed++;
-        count(m);
-        dist.set(before, dist.get(before)! - 1);
-        await db.execute(sql`UPDATE points SET measure = ${m} WHERE id = ${p.id}`);
-      }
-      await db.execute(sql`
-        UPDATE judgments SET decided = decided || ${JSON.stringify({ secondOpinion: { measure: m, reason: pick.reason, model: r.provenance.model } })}::jsonb
-        WHERE subject_kind = 'point' AND subject_id = ${p.id} AND family = ${MEASURE_FAMILY}
-      `);
+      if (m !== before) changed++;
+      count(m);
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`UPDATE points SET measure = ${m} WHERE id = ${p.id}`);
+        await tx.execute(sql`
+          UPDATE judgments SET decided = decided || ${JSON.stringify({ pendingSecondOpinion: false, secondOpinion: { measure: m, reason: pick.reason, model: r.provenance.model } })}::jsonb
+          WHERE subject_kind = 'point' AND subject_id = ${p.id} AND family = ${MEASURE_FAMILY}
+        `);
+      });
     },
     Number(arg("llm-concurrency") ?? 6),
   );
+  const llmFailed = second.failed;
   console.log(
     `by named section: ${bySection} · by Jev: ${toJudge.length} (${statsLine(stats)}) · ` +
       `unsure → LLM second opinion: ${unsure.length}, changed ${changed}`,
   );
   for (const [m, n] of [...dist.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(4)}  ${m}`);
+  // Anything not decided stays without a measure; a rerun picks it up.
+  if (stats.failed > 0 || llmFailed > 0) {
+    console.log(`INCOMPLETE: ${stats.failed} Jev judgments and ${llmFailed} second opinions failed — rerun to finish`);
+    process.exit(1);
+  }
   process.exit(0);
 }
 

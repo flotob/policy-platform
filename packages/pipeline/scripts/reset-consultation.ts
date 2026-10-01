@@ -38,10 +38,12 @@ async function main() {
   const dbName = ((await db.execute(sql`SELECT current_database() AS d`)).rows[0] as { d: string }).d;
 
   const real = await db.execute(sql`
-    SELECT count(*)::int AS n FROM votes v JOIN participants pa ON pa.id = v.participant_id
-    WHERE pa.consultation_id = ${cons.id} AND v.method <> 'inferred'
+    SELECT (SELECT count(*) FROM votes v JOIN participants pa ON pa.id = v.participant_id
+            WHERE pa.consultation_id = ${cons.id} AND v.method <> 'inferred')
+         + (SELECT count(*) FROM map_point_votes v JOIN participants pa ON pa.id = v.participant_id
+            WHERE pa.consultation_id = ${cons.id} AND v.method <> 'inferred') AS n
   `);
-  const realVotes = (real.rows[0] as { n: number }).n;
+  const realVotes = Number((real.rows[0] as { n: number | string }).n);
   if (realVotes > 0 && !process.argv.includes("--include-real-votes")) {
     throw new Error(
       `${cons.title} has ${realVotes} real votes — this reset is for pipeline-derived data only ` +

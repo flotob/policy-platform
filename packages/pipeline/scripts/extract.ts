@@ -110,7 +110,11 @@ async function main() {
         `${s.possibleDuplicates} possible duplicates, ${s.noQuote} without quote · ${s.skipped} windows already done · ` +
         `Jev ${s.jevTokens.toLocaleString("en")} tokens ≈ $${(s.jevTokens * USD_PER_JEV_TOKEN).toFixed(3)}`,
     );
-    await resolvePossibleDuplicates(db, provider, cons, Number(arg("editor-concurrency") ?? 4));
+    const dup = await resolvePossibleDuplicates(db, provider, cons, Number(arg("editor-concurrency") ?? 4));
+    if (dup.failed > 0) {
+      console.log("some duplicate checks failed — rerun to retry them");
+      process.exit(1);
+    }
   }
   process.exit(0);
 }

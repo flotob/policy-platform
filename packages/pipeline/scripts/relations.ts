@@ -14,7 +14,7 @@ import { createDb, sql } from "@policy/db";
 import { JevJudge } from "@policy/llm";
 
 import { textSimilarity } from "../src/jev-match.ts";
-import { decideRelation, RELATION_SHORTLIST, relationRequest, RELATIONS_FAMILY } from "../src/jev-relations.ts";
+import { decideRelation, EDGE_MIN, RELATION_SHORTLIST, relationRequest, RELATIONS_FAMILY } from "../src/jev-relations.ts";
 import { judgeAll, resolveConsultation, saveJudgment, statsLine } from "../src/jev-stage.ts";
 import { WHOLE } from "../src/measures.ts";
 
@@ -43,21 +43,32 @@ async function main() {
     SELECT p.id, p.label, p.summary, p.measure,
       COALESCE((SELECT array_agg(DISTINCT ps.submission_id::text) FROM point_sources ps WHERE ps.point_id = p.id), '{}') AS subs
     FROM points p
-    WHERE p.consultation_id = ${cons.id} AND p.status IN ('draft','released') AND p.created_by <> 'import:questionnaire'
+    WHERE p.consultation_id = ${cons.id} AND p.status = 'released' AND p.created_by <> 'import:questionnaire'
   `);
   const pts = res.rows as unknown as P[];
-  const neighbours = (p: P) =>
-    pts
-      .filter((o) => o.id !== p.id && (!p.measure || o.measure === p.measure || o.measure === WHOLE || p.measure === WHOLE))
-      .map((o) => ({ o, sim: textSimilarity(`${p.label} ${p.summary ?? ""}`, `${o.label} ${o.summary ?? ""}`) }))
-      .sort((a, b) => b.sim - a.sim)
-      .slice(0, RELATION_SHORTLIST)
-      .map((x) => x.o);
+  const shortlistOf = new Map<string, P[]>();
+  const neighbours = (p: P) => {
+    if (!shortlistOf.has(p.id)) {
+      shortlistOf.set(
+        p.id,
+        pts
+          .filter((o) => o.id !== p.id && (!p.measure || o.measure === p.measure || o.measure === WHOLE || p.measure === WHOLE))
+          .map((o) => ({ o, sim: textSimilarity(`${p.label} ${p.summary ?? ""}`, `${o.label} ${o.summary ?? ""}`) }))
+          .sort((a, b) => b.sim - a.sim)
+          .slice(0, RELATION_SHORTLIST)
+          .map((x) => x.o),
+      );
+    }
+    return shortlistOf.get(p.id)!;
+  };
   console.log(`${pts.length} points · up to ${RELATION_SHORTLIST} neighbours each`);
 
   const edges: { from: string; to: string; kind: string; p: number }[] = [];
   const kinds = new Map<string, number>();
   let crossSubmission = 0;
+  // "point attacks other": the door is only asked from the other side — if
+  // the other point did not shortlist this one, it gets a follow-up question.
+  const reverseAttacks: { attacker: P; target: P }[] = [];
   const stats = await judgeAll(
     new JevJudge(),
     pts,
@@ -74,6 +85,8 @@ async function main() {
           const [from, to] = d.edge.reverse ? [p.id, o.id] : [o.id, p.id];
           edges.push({ from, to, kind: d.edge.kind, p: d.p });
           if (!o.subs.some((s) => p.subs.includes(s))) crossSubmission++;
+        } else if (d.kind === "point_attacks" && d.p >= EDGE_MIN && !neighbours(o).some((x) => x.id === p.id)) {
+          reverseAttacks.push({ attacker: p, target: o });
         }
         return { other: o.id, ...d };
       });
@@ -90,6 +103,26 @@ async function main() {
     },
     Number(arg("concurrency") ?? 8),
   );
+
+  // Follow-up: the target judges its attacker (gives the door).
+  const followUp = await judgeAll(
+    new JevJudge(),
+    reverseAttacks,
+    (r) => relationRequest(cons.title, { label: r.target.label, summary: r.target.summary }, [r.attacker]),
+    async (r, answers) => {
+      const d = decideRelation(answers.o1 as { choice: string; probabilities: Record<string, number> });
+      if (d.edge && !d.edge.reverse) edges.push({ from: r.attacker.id, to: r.target.id, kind: d.edge.kind, p: d.p });
+    },
+    Number(arg("concurrency") ?? 8),
+  );
+
+  // Replace the old edge set only when EVERY judgment succeeded — a partial
+  // set would silently delete good edges.
+  if (stats.failed > 0 || followUp.failed > 0) {
+    console.log(`\n${statsLine(stats)}`);
+    console.log(`INCOMPLETE: ${stats.failed + followUp.failed} judgments failed — existing edges kept, rerun to retry`);
+    process.exit(1);
+  }
 
   // The same edge can come from both points' requests — keep the stronger.
   const best = new Map<string, (typeof edges)[number]>();
@@ -113,7 +146,10 @@ async function main() {
   });
   console.log(`\n${statsLine(stats)}`);
   console.log(`judged pairs: ${[...kinds.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · ")}`);
-  console.log(`edges written: ${edges.length} (${crossSubmission} between points without a shared submission)`);
+  console.log(
+    `edges written: ${edges.length} (${crossSubmission} between points without a shared submission) · ` +
+      `reverse attacks re-asked from the other side: ${reverseAttacks.length}`,
+  );
   process.exit(0);
 }
 

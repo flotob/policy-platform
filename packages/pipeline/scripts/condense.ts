@@ -66,7 +66,7 @@ async function assign(
   const options: Record<string, { label: string; text: string }> = {};
   mps.forEach((m, i) => (options[`k${i + 1}`] = { label: m.label, text: m.text }));
   const uncovered: Pt[] = [];
-  await runPool(
+  const res = await runPool(
     pts,
     async (p) => {
       const { answers, provenance } = await judge.judge(
@@ -90,6 +90,9 @@ async function assign(
     },
     8,
   );
+  // A failed judgment is neither assigned nor "none": the scope is incomplete
+  // (its points stay unassigned and are picked up by the next run).
+  if (res.failed > 0) throw new Error(`${scope}: ${res.failed} assignments failed — rerun to finish`);
   return uncovered;
 }
 
@@ -101,16 +104,19 @@ async function insertMapPoints(
   model: string,
   firstOrd: number,
 ): Promise<Mp[]> {
+  // All or nothing: a half-saved proposal would later look complete.
   const out: Mp[] = [];
   let ord = firstOrd;
-  for (const p of proposals) {
-    const r = await db.execute(sql`
-      INSERT INTO map_points (tenant_id, consultation_id, scope, ord, typ, bezirk, text, label, created_by)
-      VALUES (${cons.tenantId}, ${cons.id}, ${scope}, ${ord++}, ${p.typ}, ${p.bezirk}, ${p.text}, ${p.label}, ${`ai-condense:${model}`})
-      RETURNING id
-    `);
-    out.push({ id: (r.rows[0] as { id: string }).id, ...p });
-  }
+  await db.transaction(async (tx) => {
+    for (const p of proposals) {
+      const r = await tx.execute(sql`
+        INSERT INTO map_points (tenant_id, consultation_id, scope, ord, typ, bezirk, text, label, created_by)
+        VALUES (${cons.tenantId}, ${cons.id}, ${scope}, ${ord++}, ${p.typ}, ${p.bezirk}, ${p.text}, ${p.label}, ${`ai-condense:${model}`})
+        RETURNING id
+      `);
+      out.push({ id: (r.rows[0] as { id: string }).id, ...p });
+    }
+  });
   return out;
 }
 
@@ -126,7 +132,7 @@ async function main() {
 
   const scopeRes = await db.execute(sql`
     SELECT DISTINCT measure FROM points
-    WHERE consultation_id = ${cons.id} AND measure IS NOT NULL AND status IN ('draft','released')
+    WHERE consultation_id = ${cons.id} AND measure IS NOT NULL AND status = 'released'
     ORDER BY measure
   `);
   let scopes = (scopeRes.rows as { measure: string }[]).map((r) => r.measure);
@@ -140,7 +146,7 @@ async function main() {
       const t0 = Date.now();
       const ptRes = await db.execute(sql`
         SELECT id, label, summary, kind, cq, map_point_id FROM points
-        WHERE consultation_id = ${cons.id} AND measure = ${scope} AND status IN ('draft','released')
+        WHERE consultation_id = ${cons.id} AND measure = ${scope} AND status = 'released'
           AND kind <> 'gap' AND created_by <> 'import:questionnaire'
         ORDER BY created_at
       `);
@@ -180,7 +186,7 @@ async function main() {
       const memRes = await db.execute(sql`
         SELECT map_point_id, cq, count(*) OVER (PARTITION BY map_point_id)::int AS n FROM points
         WHERE consultation_id = ${cons.id} AND measure = ${scope} AND map_point_id IS NOT NULL
-          AND status IN ('draft','released')
+          AND status = 'released'
       `);
       const doors = new Map<string, (string | null)[]>();
       for (const m of memRes.rows as { map_point_id: string; cq: string | null }[]) {
@@ -188,20 +194,22 @@ async function main() {
       }
       const kept = mps.filter((m) => doors.has(m.id));
       const empty = mps.filter((m) => !doors.has(m.id));
-      for (const m of empty) await db.execute(sql`DELETE FROM map_points WHERE id = ${m.id}`);
       const ordered = kept
         .map((m) => ({ ...m, bezirk: deriveBezirk(m.typ, doors.get(m.id)!, m.bezirk), n: doors.get(m.id)!.length }))
         .sort((a, b) => BEZIRK_ORDER.indexOf(a.bezirk) - BEZIRK_ORDER.indexOf(b.bezirk) || b.n - a.n);
-      // (consultation, scope, ord) is unique: move to temporary numbers first.
-      await db.execute(sql`UPDATE map_points SET ord = ord + 10000 WHERE consultation_id = ${cons.id} AND scope = ${scope}`);
-      for (const [i, m] of ordered.entries()) {
-        await db.execute(sql`UPDATE map_points SET ord = ${i + 1}, bezirk = ${m.bezirk} WHERE id = ${m.id}`);
-      }
-      await db.execute(sql`
-        INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
-        VALUES (${cons.tenantId}, 'pipeline:condense', 'consultation.condense_map', 'consultation', ${cons.id},
-                ${JSON.stringify({ scope, proposed: proposedNow, topUp, kept: kept.length, removedEmpty: empty.length, points: pts.length, uncovered: uncovered.length })})
-      `);
+      await db.transaction(async (tx) => {
+        for (const m of empty) await tx.execute(sql`DELETE FROM map_points WHERE id = ${m.id}`);
+        // (consultation, scope, ord) is unique: move to temporary numbers first.
+        await tx.execute(sql`UPDATE map_points SET ord = ord + 10000 WHERE consultation_id = ${cons.id} AND scope = ${scope}`);
+        for (const [i, m] of ordered.entries()) {
+          await tx.execute(sql`UPDATE map_points SET ord = ${i + 1}, bezirk = ${m.bezirk} WHERE id = ${m.id}`);
+        }
+        await tx.execute(sql`
+          INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+          VALUES (${cons.tenantId}, 'pipeline:condense', 'consultation.condense_map', 'consultation', ${cons.id},
+                  ${JSON.stringify({ scope, proposed: proposedNow, topUp, kept: kept.length, removedEmpty: empty.length, points: pts.length, uncovered: uncovered.length })})
+        `);
+      });
       const line =
         `${scope}: ${pts.length} points → ${kept.length} map points` +
         `${proposedNow ? ` (proposed ${proposedNow}${topUp ? ` + top-up ${topUp}` : ""}, ${empty.length} empty removed)` : ""} · ` +

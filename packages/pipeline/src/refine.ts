@@ -20,7 +20,8 @@ import { EDITOR_SYSTEM, editorPrompt } from "./prompts.ts";
 import { locateQuote } from "./quote-span.ts";
 import { editorJsonSchema, editorOutput, type ExtractedPoint } from "./schemas.ts";
 
-export const REFINE_POLICY = "refine.v1";
+/** Bump when the refine policy or the intake questions change: windows refined under another policy are refined again. */
+export const REFINE_POLICY = "refine.v2";
 
 /** Flags that a text repair can fix. Role flags (role_uncertain, demand_as_claim) are recorded only. */
 export const REPAIR_FLAGS = new Set([

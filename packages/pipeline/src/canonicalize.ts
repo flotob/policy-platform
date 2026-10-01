@@ -24,7 +24,6 @@
 import {
   and,
   eq,
-  inArray,
   matchDecisions,
   ne,
   points,
@@ -158,7 +157,8 @@ export async function canonicalize(
       .where(
         and(
           eq(points.consultationId, consultation.id),
-          inArray(points.status, ["draft", "released"]),
+          // Held-back points (unresolved personal data) never absorb others.
+          eq(points.status, "released"),
           ne(points.createdBy, "import:questionnaire"),
         ),
       )
@@ -342,7 +342,7 @@ export async function resolvePossibleDuplicates(
   consultation: { id: string; tenantId: string },
   concurrency: number,
   log: (line: string) => void = console.log,
-): Promise<{ checked: number; merged: number }> {
+): Promise<{ checked: number; merged: number; failed: number }> {
   const res = await db.execute(sql`
     SELECT p.id, p.label, p.summary, q.id AS q_id, q.label AS q_label, q.summary AS q_summary, md.id AS md_id
     FROM match_decisions md
@@ -350,10 +350,13 @@ export async function resolvePossibleDuplicates(
     JOIN points q ON q.id = (md.provenance->'match'->>'reviewCandidate')::uuid AND q.status IN ('draft','released')
     WHERE md.consultation_id = ${consultation.id} AND md.provenance->>'review' = 'possible_duplicate'
       AND md.provenance->>'second_opinion' IS NULL AND p.id <> q.id
+    ORDER BY md.created_at, md.id
   `);
   const cases = res.rows as { id: string; label: string; summary: string | null; q_id: string; q_label: string; q_summary: string | null; md_id: string }[];
-  let merged = 0;
-  await runPool(
+
+  // 1. Judgments in parallel — no writes yet.
+  const verdicts = new Map<string, { same: boolean; confidence: number; model: string }>();
+  const pool = await runPool(
     cases,
     async (c) => {
       const r = await provider.generateStructured({
@@ -362,36 +365,58 @@ export async function resolvePossibleDuplicates(
         schema: matchJsonSchema,
       });
       const d = matchOutput.parse(r.output);
-      const same = d.decision === "matched" && d.matched_index === 0;
-      await db.transaction(async (tx) => {
-        if (same) {
-          // Move sources that the earlier point does not have yet; the rest go with the merged point.
-          await tx.execute(sql`
-            UPDATE point_sources ps SET point_id = ${c.q_id}
-            WHERE ps.point_id = ${c.id} AND NOT EXISTS (
-              SELECT 1 FROM point_sources o WHERE o.point_id = ${c.q_id} AND o.submission_id = ps.submission_id
-                AND o.quote IS NOT DISTINCT FROM ps.quote)
-          `);
-          await tx.execute(sql`UPDATE points SET status = 'merged', merged_into = ${c.q_id} WHERE id = ${c.id}`);
-          await tx.execute(sql`UPDATE points SET merged_into = ${c.q_id} WHERE merged_into = ${c.id}`);
-          await tx.execute(sql`
-            INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
-            VALUES (${consultation.tenantId}, ${`ai-editor:${r.provenance.model}`}, 'point.merge', 'point', ${c.id},
-                    ${JSON.stringify({ into: c.q_id, confidence: d.confidence, reason: "possible_duplicate second opinion" })})
-          `);
-          merged++;
-        }
-        await tx.execute(sql`
-          UPDATE match_decisions SET provenance = provenance || ${JSON.stringify({
-            second_opinion: { same, confidence: d.confidence, model: r.provenance.model },
-          })}::jsonb WHERE id = ${c.md_id}
-        `);
-      });
+      verdicts.set(c.md_id, { same: d.decision === "matched" && d.matched_index === 0, confidence: d.confidence, model: r.provenance.model });
     },
     concurrency,
   );
-  log(`possible duplicates: ${cases.length} checked by the LLM, ${merged} merged`);
-  return { checked: cases.length, merged };
+
+  // 2. Merges applied one after another, in decision order, each against the
+  // CURRENT live root of both points (an earlier merge may have moved either).
+  const root = async (id: string): Promise<string> => {
+    for (let cur = id, hops = 0; hops < 50; hops++) {
+      const r = (await db.execute(sql`SELECT status, merged_into FROM points WHERE id = ${cur}`)).rows[0] as
+        | { status: string; merged_into: string | null }
+        | undefined;
+      if (!r || r.status !== "merged" || !r.merged_into) return cur;
+      cur = r.merged_into;
+    }
+    throw new Error(`merge chain from ${id} does not end`);
+  };
+  let merged = 0;
+  for (const c of cases) {
+    const v = verdicts.get(c.md_id);
+    if (!v) continue; // failed judgment: stays pending for the next run
+    await db.transaction(async (tx) => {
+      if (v.same) {
+        const from = await root(c.id);
+        const into = await root(c.q_id);
+        if (from !== into) {
+          // Sources the target does not have yet move over; exact duplicates stay behind.
+          await tx.execute(sql`
+            UPDATE point_sources ps SET point_id = ${into}
+            WHERE ps.point_id = ${from} AND NOT EXISTS (
+              SELECT 1 FROM point_sources o WHERE o.point_id = ${into} AND o.submission_id = ps.submission_id
+                AND o.quote IS NOT DISTINCT FROM ps.quote)
+          `);
+          await tx.execute(sql`UPDATE points SET status = 'merged', merged_into = ${into} WHERE id = ${from}`);
+          await tx.execute(sql`UPDATE points SET merged_into = ${into} WHERE merged_into = ${from}`);
+          await tx.execute(sql`
+            INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+            VALUES (${consultation.tenantId}, ${`ai-editor:${v.model}`}, 'point.merge', 'point', ${from},
+                    ${JSON.stringify({ into, decidedFor: { point: c.id, candidate: c.q_id }, confidence: v.confidence, reason: "possible_duplicate second opinion" })})
+          `);
+          merged++;
+        }
+      }
+      await tx.execute(sql`
+        UPDATE match_decisions SET provenance = provenance || ${JSON.stringify({
+          second_opinion: { same: v.same, confidence: v.confidence, model: v.model },
+        })}::jsonb WHERE id = ${c.md_id}
+      `);
+    });
+  }
+  log(`possible duplicates: ${cases.length} to check · ${verdicts.size} judged by the LLM · ${merged} merged · ${pool.failed} failed`);
+  return { checked: verdicts.size, merged, failed: pool.failed };
 }
 
 function locatedQuote(text: string, quote: string): QuotePick {

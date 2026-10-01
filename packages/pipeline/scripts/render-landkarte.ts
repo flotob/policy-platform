@@ -128,7 +128,7 @@ function detailHtml(p: MapPoint, campA: string, campB: string): string {
   const reviewNote =
     p.diag === "warnung" && flags.scheinbruecke
       ? `<p class="review-note">⚠ Maschinell markiert (Begründungs-Check) — redaktionell zu prüfen.</p>`
-      : typeof flags.reasons === "string" && flags.reasons === "same_reasons"
+      : p.diag === "bruecke" && typeof flags.reasons === "string" && flags.reasons === "same_reasons"
         ? `<p class="muted small">Begründungs-Check: die sichtbaren Gründe tragen in dieselbe Richtung.</p>`
         : "";
   const quotes = (p.quotes ?? [])

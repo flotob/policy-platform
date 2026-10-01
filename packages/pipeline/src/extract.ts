@@ -24,7 +24,7 @@ import { noul, type JevJudge, type LlmProvider } from "@policy/llm";
 
 import { runPool, Semaphore } from "./pool.ts";
 import { extractPrompt, extractSystem } from "./prompts.ts";
-import { refineWindow, type RefineStats } from "./refine.ts";
+import { REFINE_POLICY, refineWindow, type RefineStats } from "./refine.ts";
 import {
   extractionJsonSchema,
   extractionOutput,
@@ -138,21 +138,31 @@ export async function planCuts(
   return { cuts, answers };
 }
 
-/** Stored cut points for a submission, computed with Jev on first use. */
+/** Version of the cut policy — part of the plan's validity key. */
+export const CUT_POLICY = `cuts.v1:${CUT_FROM}:${TAIL_SLACK}:${CUT_CANDIDATES}`;
+
+/**
+ * Stored cut points for a submission, computed with Jev on first use. A plan
+ * is valid only for the text and cut policy it was made for (text_hash);
+ * otherwise it is recomputed and replaced.
+ */
 export async function windowPlan(
   db: Db,
   judge: JevJudge,
   sub: { id: string; text: string },
   maxChars: number,
 ): Promise<number[]> {
-  const r = await db.execute(sql`SELECT cuts FROM window_plans WHERE submission_id = ${sub.id} AND max_chars = ${maxChars}`);
-  const row = r.rows[0] as { cuts: number[] } | undefined;
-  if (row) return row.cuts;
+  const textHash = createHash("sha256").update(`${CUT_POLICY}\n${sub.text}`).digest("hex");
+  const r = await db.execute(sql`SELECT cuts, text_hash FROM window_plans WHERE submission_id = ${sub.id} AND max_chars = ${maxChars}`);
+  const row = r.rows[0] as { cuts: number[]; text_hash: string | null } | undefined;
+  const ascending = (c: number[]) => c.every((x, i) => i === 0 || x > c[i - 1]!);
+  if (row && row.text_hash === textHash && row.cuts.at(-1) === sub.text.length && ascending(row.cuts)) return row.cuts;
   const plan = await planCuts(judge, sub.text, maxChars);
   await db.execute(sql`
-    INSERT INTO window_plans (submission_id, max_chars, cuts, answers)
-    VALUES (${sub.id}, ${maxChars}, ${sql.raw(`ARRAY[${plan.cuts.join(",")}]::integer[]`)}, ${JSON.stringify(plan.answers)})
-    ON CONFLICT (submission_id, max_chars) DO NOTHING
+    INSERT INTO window_plans (submission_id, max_chars, cuts, answers, text_hash)
+    VALUES (${sub.id}, ${maxChars}, ${sql.raw(`ARRAY[${plan.cuts.join(",")}]::integer[]`)}, ${JSON.stringify(plan.answers)}, ${textHash})
+    ON CONFLICT (submission_id, max_chars) DO UPDATE SET cuts = excluded.cuts, answers = excluded.answers,
+      text_hash = excluded.text_hash, created_at = now()
   `);
   return plan.cuts;
 }
@@ -232,18 +242,27 @@ export async function extractWindows(
   log: (line: string) => void = console.log,
 ): Promise<ExtractStats> {
   const started = Date.now();
+  // Cache rows belong to a submission: identical texts (campaign letters)
+  // share a call hash but each submission keeps its own row.
+  const key = (w: { submissionId: string; index: number; hash: string }) => `${w.submissionId}:${w.index}:${w.hash}`;
   const res = windows.length
     ? await db.execute(sql`
-        SELECT call_hash, refined IS NOT NULL AS refined FROM extractions
+        SELECT submission_id, window_index, call_hash,
+          (refined IS NOT NULL AND refined->>'policy' = ${REFINE_POLICY}) AS refined FROM extractions
         WHERE call_hash IN (${sql.join(windows.map((w) => sql`${w.hash}`), sql`, `)})`)
     : { rows: [] };
-  const state = new Map((res.rows as { call_hash: string; refined: boolean }[]).map((r) => [r.call_hash, r.refined]));
+  const state = new Map(
+    (res.rows as { submission_id: string; window_index: number; call_hash: string; refined: boolean }[]).map((r) => [
+      key({ submissionId: r.submission_id, index: r.window_index, hash: r.call_hash }),
+      r.refined,
+    ]),
+  );
   const todo = windows
-    .filter((w) => state.get(w.hash) !== true)
+    .filter((w) => state.get(key(w)) !== true)
     .sort((a, b) => b.end - b.start - (a.end - a.start));
   const stats: ExtractStats = {
     windows: windows.length,
-    cached: windows.filter((w) => state.has(w.hash)).length,
+    cached: windows.filter((w) => state.has(key(w))).length,
     extracted: 0,
     refinedOnly: 0,
     failed: 0,
@@ -253,7 +272,7 @@ export async function extractWindows(
     refine: { candidates: 0, flagged: 0, kept: 0, rewritten: 0, split: 0, dropped: 0, rejected: 0, out: 0, residualFlags: 0 },
   };
   log(
-    `extraction: ${windows.length} windows · ${stats.cached} cached · ${todo.filter((w) => !state.has(w.hash)).length} to extract, ` +
+    `extraction: ${windows.length} windows · ${stats.cached} cached · ${todo.filter((w) => !state.has(key(w))).length} to extract, ` +
       `${todo.length} to refine (${concurrency} extraction calls, ${editorConcurrency} editor calls in parallel)`,
   );
   const parse = cfg.quotes === "llm" ? extractionOutputWithQuote : extractionOutput;
@@ -263,7 +282,7 @@ export async function extractWindows(
     async (w) => {
       let points: ExtractedPoint[];
       let callMs = 0;
-      if (!state.has(w.hash)) {
+      if (!state.has(key(w))) {
         const r = await provider.generateStructured({ system: w.system, prompt: w.prompt, schema: w.schema, model: cfg.model });
         points = (parse.parse(r.output) as { points: ExtractedPoint[] }).points;
         callMs = r.provenance.durationMs;
@@ -295,7 +314,7 @@ export async function extractWindows(
         cfg.model,
       );
       await db.execute(sql`
-        UPDATE extractions SET refined = ${JSON.stringify({ policy: "refine.v1", candidates: refined, stats: rs })}, refined_at = now()
+        UPDATE extractions SET refined = ${JSON.stringify({ policy: REFINE_POLICY, candidates: refined, stats: rs })}, refined_at = now()
         WHERE submission_id = ${w.submissionId} AND window_index = ${w.index} AND call_hash = ${w.hash}
       `);
       for (const k of Object.keys(stats.refine) as (keyof RefineStats)[]) stats.refine[k] += rs[k];

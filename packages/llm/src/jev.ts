@@ -7,7 +7,9 @@
  * tokens, request id) so judgments stay auditable.
  *
  * Auth: TYPESAFE_API_KEY (env). The client is created lazily so importing
- * this module never requires the key.
+ * this module never requires the key. All requests of a process share one
+ * concurrency ceiling (JEV_CONCURRENCY, default 16) and retry transient
+ * failures (429, 5xx, network) with backoff; a final failure still throws.
  */
 
 import { createHash } from "node:crypto";
@@ -23,6 +25,33 @@ export { choice, noul, score } from "@typesafe-ai/sdk";
 export type { EntryType, Questions } from "@typesafe-ai/sdk";
 
 const DEFAULT_JEV_MODEL = process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest";
+
+/**
+ * One ceiling for ALL Jev requests of a process, whatever pool they come
+ * from (intake per candidate × windows in parallel × scopes in parallel would
+ * otherwise multiply into hundreds of simultaneous requests).
+ */
+const JEV_CONCURRENCY = Number(process.env.JEV_CONCURRENCY ?? 16);
+let free = JEV_CONCURRENCY;
+const waiting: (() => void)[] = [];
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (free > 0) free--;
+  else await new Promise<void>((resolve) => waiting.push(resolve));
+  try {
+    return await fn();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else free++;
+  }
+}
+
+/** Transient = rate limit, server error, or no HTTP status at all (network). */
+function transient(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  return status === undefined || status === 429 || status >= 500;
+}
+const RETRIES = 3;
 
 export interface JudgeProvenance {
   provider: "typesafe";
@@ -57,9 +86,16 @@ export class JevJudge {
     questions: Q,
   ): Promise<JudgeResult<Q>> {
     const startedAt = new Date();
-    const { data, requestId } = await this.client
-      .systemOne({ state, questions })
-      .withResponse();
+    const { data, requestId } = await limited(async () => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          return await this.client.systemOne({ state, questions }).withResponse();
+        } catch (err) {
+          if (attempt >= RETRIES || !transient(err)) throw err;
+          await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+        }
+      }
+    });
     return {
       answers: data.answers,
       provenance: {

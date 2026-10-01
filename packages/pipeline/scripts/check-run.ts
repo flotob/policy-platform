@@ -75,7 +75,7 @@ async function main() {
     if (ex.n > 0) {
       const noIntake = (await q<{ n: number }>(sql`
         SELECT count(*)::int n FROM points p WHERE p.consultation_id = ${cons.id} AND p.created_by <> 'import:questionnaire'
-          AND NOT EXISTS (SELECT 1 FROM judgments j WHERE j.subject_kind = 'point' AND j.subject_id = p.id::text AND j.family = 'intake.v1')`))[0]!.n;
+          AND NOT EXISTS (SELECT 1 FROM judgments j WHERE j.subject_kind = 'point' AND j.subject_id = p.id::text AND j.family LIKE 'intake.%')`))[0]!.n;
       if (noIntake) failures.push(`${noIntake} points without intake judgment`);
     }
     const dupLabels = (await q<{ n: number }>(sql`

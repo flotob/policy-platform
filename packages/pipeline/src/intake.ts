@@ -9,18 +9,31 @@
  * follow once that structure exists (jev-classify).
  */
 
-import type { EntryType } from "@policy/llm";
+import { noul, type EntryType } from "@policy/llm";
 
 import { roleQuestions } from "./jev-classify.ts";
 import { decideGrammar, grammarQuestions, type Slot } from "./jev-grammar.ts";
 import { decidePointReview, pointReviewQuestions, type ReviewVerdict } from "./jev-review.ts";
 
-export const INTAKE_FAMILY = "intake.v1";
+export const INTAKE_FAMILY = "intake.v2";
+
+/**
+ * Whether a point really MIXES a fact and a judgment is its own question —
+ * a middle P(evidence) only means Jev is unsure which of the two it is
+ * (TypeSafe: a Noul is the probability of the criterion, not a degree).
+ */
+const MIXED = noul(
+  "Does `point` combine a checkable factual claim and a separate value judgment or demand that a reader could accept or reject independently of each other?",
+  {
+    true: "Two parts: one that evidence could settle (e.g. 'costs will rise by 20 percent') and a separate judgment or demand (e.g. 'this burden is unacceptable') — someone could accept one part and reject the other.",
+    false: "One claim — either something evidence could settle or a judgment/demand; naming what it refers to does not make it two claims.",
+  },
+);
 
 export function intakeRequest(consultation: string, point: { label: string; summary: string }) {
   return {
     state: { consultation, point } as EntryType,
-    questions: { ...pointReviewQuestions(), ...roleQuestions(), ...grammarQuestions() },
+    questions: { ...pointReviewQuestions(), ...roleQuestions(), ...grammarQuestions(), mixed: MIXED },
   };
 }
 
@@ -58,7 +71,12 @@ export function decideIntake(a: Record<string, unknown>): IntakeDecision {
   const flags = [...review.flags];
   if (roleA.confidence < ROLE_MIN_CONFIDENCE) flags.push("role_uncertain");
   if (role === "claim" && g.demand) flags.push("demand_as_claim");
-  if ((role === "claim" || role === "objection") && g.mixed) flags.push("mixed_fact_value");
+  // A confirmed mix is a text defect (the editor splits it); a middle
+  // P(evidence) is only classification uncertainty (recorded, not repaired).
+  if ((role === "claim" || role === "objection") && (a.mixed as { noul: number } | undefined)?.noul !== undefined) {
+    if ((a.mixed as { noul: number }).noul >= 0.5) flags.push("mixed_fact_value");
+    else if (g.mixed) flags.push("fact_value_uncertain");
+  }
 
   return {
     status: review.verdict === "release" ? "released" : review.verdict === "reject" ? "rejected" : "draft",

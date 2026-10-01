@@ -194,6 +194,7 @@ async function main() {
   const provider = new AgentSdkProvider();
 
   const befundJobs: { scope: string; row: MapRow; members: { id: string; label: string }[] }[] = [];
+  const reasonsPending = new Set<string>();
   for (const scope of scopes) {
     console.log(`\n=== scope: ${scope} ===`);
 
@@ -201,7 +202,7 @@ async function main() {
     const doorRes = await db.execute(sql`
       SELECT cq, count(*)::int AS n FROM points
       WHERE consultation_id = ${consultationId} AND measure = ${scope}
-        AND status IN ('draft','released') AND cq IS NOT NULL
+        AND status = 'released' AND cq IS NOT NULL
       GROUP BY cq
     `);
     const asked = new Set((doorRes.rows as { cq: string }[]).map((r) => r.cq));
@@ -238,7 +239,7 @@ async function main() {
     const membersRes = await db.execute(sql`
       SELECT id, label, map_point_id FROM points
       WHERE consultation_id = ${consultationId} AND measure = ${scope}
-        AND map_point_id IS NOT NULL AND status IN ('draft','released')
+        AND map_point_id IS NOT NULL AND status = 'released'
     `);
     const membersByMap = new Map<string, { id: string; label: string }[]>();
     for (const m of membersRes.rows as { id: string; label: string; map_point_id: string }[]) {
@@ -297,6 +298,9 @@ async function main() {
           diag = row.typ === "T" ? "klaerbar" : row.typ === "W" ? "wert" : "offen";
         }
       }
+      // A bridge that the reasons check found to be a false bridge stays a
+      // warning on reruns (the check itself is not repeated).
+      if (diag === "bruecke" && row.diag_flags?.reasons === "diverging_reasons") diag = "warnung";
       computed.set(row.id, { pa, pb, nVoted, diag, gap });
     }
 
@@ -399,6 +403,7 @@ async function main() {
     // Jev pre-screen (map-points engine): only bridges with a sign of
     // diverging reasons go to the LLM check.
     let toCheck = bridges;
+    const reasonsDone = new Set<string>();
     if (judge && bridges.length > 0) {
       const flagged: typeof bridges = [];
       await runPool(
@@ -427,8 +432,11 @@ async function main() {
           if (p >= REASONS_SCREEN_MIN) flagged.push(row);
           else {
             const flags = { reasons: "same_reasons", reasons_screen: Number(p.toFixed(3)) };
-            await db.execute(sql`UPDATE map_points SET diag_flags = ${JSON.stringify(flags)} WHERE id = ${row.id}`);
-            row.diag_flags = flags;
+            await db.execute(sql`
+              UPDATE map_points SET diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify(flags)}::jsonb
+              WHERE id = ${row.id}`);
+            row.diag_flags = { ...(row.diag_flags ?? {}), ...flags };
+            reasonsDone.add(row.id);
           }
         },
         8,
@@ -456,37 +464,51 @@ async function main() {
             reasons: parsed.verdict,
             reasons_rationale: parsed.rationale,
           };
+          // Merge, never replace: diag_flags also carries the vote counts.
           if (parsed.verdict === "diverging_reasons") {
             flags.scheinbruecke = true;
             flags.needs_review = true;
             await db.execute(sql`
-              UPDATE map_points SET diag = 'warnung', diag_flags = ${JSON.stringify(flags)}
+              UPDATE map_points SET diag = 'warnung',
+                diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify(flags)}::jsonb
               WHERE id = ${row.id}
             `);
             row.diag = "warnung";
-            row.diag_flags = flags;
             console.log(`    ⚠ Scheinbrücke: ${row.label}`);
           } else {
             await db.execute(sql`
-              UPDATE map_points SET diag_flags = ${JSON.stringify(flags)} WHERE id = ${row.id}
+              UPDATE map_points SET diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify(flags)}::jsonb
+              WHERE id = ${row.id}
             `);
-            row.diag_flags = flags;
           }
+          row.diag_flags = { ...(row.diag_flags ?? {}), ...flags };
+          reasonsDone.add(row.id);
         },
         concurrency,
       );
     }
 
+    // Bridges whose reasons check failed are pending: no Befund now (it
+    // would describe a bridge that may turn out to be a false one).
+    const pendingReasons = toCheck.filter((r) => !reasonsDone.has(r.id)).concat(
+      judge ? bridges.filter((r) => !reasonsDone.has(r.id) && !toCheck.includes(r)) : [],
+    );
+    for (const r of pendingReasons) reasonsPending.add(r.id);
+    if (pendingReasons.length) console.log(`  reasons check INCOMPLETE for ${pendingReasons.length} bridges — rerun`);
+
     // ——— Befunde: collected here, written below in ONE pool across all
-    // scopes (small scopes no longer leave the parallelism unused).
+    // scopes (small scopes no longer leave the parallelism unused). Every
+    // row is a candidate; the worker skips Befunde whose inputs are unchanged.
     if (skipBefund) continue;
-    for (const row of freshRows.filter((r) => force || !r.befund)) {
+    for (const row of freshRows.filter((r) => !reasonsPending.has(r.id))) {
       befundJobs.push({ scope, row, members: membersByMap.get(row.id) ?? [] });
     }
   }
 
+  let befundsWritten = 0;
+  let befundsUnchanged = 0;
   if (befundJobs.length > 0) {
-    console.log(`\nbefunde: ${befundJobs.length} to write (${concurrency} in parallel)`);
+    console.log(`\nbefunde: ${befundJobs.length} to check (${concurrency} in parallel)`);
     const { ok, failed } = await runPool(
       befundJobs,
       async ({ scope, row, members }) => {
@@ -498,6 +520,21 @@ async function main() {
           diag_flags: Record<string, unknown> | null;
           quotes: { quelle: string; text: string; lager?: string }[] | null;
         };
+        // A Befund is valid for the inputs it was written from; when the
+        // diagnosis, numbers, reasons, or camps change, it is rewritten.
+        const fingerprint = JSON.stringify({
+          text: row.text,
+          diag: cur.diag,
+          pa: cur.pa,
+          pb: cur.pb,
+          votes: cur.diag_flags?.votes ?? null,
+          reasons: cur.diag_flags?.reasons ?? null,
+          camps: [campA, campB],
+        });
+        if (!force && row.befund && cur.diag_flags?.befund_for === fingerprint) {
+          befundsUnchanged++;
+          return;
+        }
         const result = await provider.generateStructured({
           system: BEFUND_SYSTEM,
           prompt: befundPrompt({
@@ -523,11 +560,15 @@ async function main() {
           schema: befundJsonSchema,
         });
         const parsed = befundOutput.parse(result.output);
-        await db.execute(sql`UPDATE map_points SET befund = ${parsed.befund} WHERE id = ${row.id}`);
+        await db.execute(sql`
+          UPDATE map_points SET befund = ${parsed.befund},
+            diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify({ befund_for: fingerprint })}::jsonb
+          WHERE id = ${row.id}`);
+        befundsWritten++;
       },
       concurrency,
     );
-    console.log(`befunde done: ${ok} ok, ${failed} failed`);
+    console.log(`befunde done: ${befundsWritten} written, ${befundsUnchanged} unchanged, ${failed} failed`);
     await db.execute(sql`
       INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
       VALUES (${tenantId}, 'ai-editor:befund', 'map_point.befund',
@@ -535,6 +576,10 @@ async function main() {
               ${JSON.stringify({ written: ok, failed })})
     `);
     if (failed > 0) process.exit(1);
+  }
+  if (reasonsPending.size > 0) {
+    console.log(`INCOMPLETE: reasons check failed for ${reasonsPending.size} bridges (no Befund written) — rerun`);
+    process.exit(1);
   }
   process.exit(0);
 }

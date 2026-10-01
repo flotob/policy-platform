@@ -51,6 +51,7 @@ describe("decideIntake", () => {
     single_claim: n(0.9), standalone: n(0.9), neutral: n(0.9), on_topic: n(0.95), meta: n(0.05), personal: n(0.01),
     evidence: n(0.9), p1: n(0.1), p2: n(0.8), p3: n(0.2), p4: n(0.1), stance: n(0.1), demand: n(0.1),
     role: c("claim"), door_objection: c("empirics"), door_instrument: c("feasibility"),
+    mixed: n(0.1),
   };
 
   it("a clean prognosis claim: released fact at P2, no door", () => {
@@ -73,6 +74,11 @@ describe("decideIntake", () => {
     expect(decideIntake({ ...base, meta: n(0.9) }).status).toBe("rejected");
   });
 
+  it("only a confirmed mix is a repair flag; a middle P(evidence) is uncertainty", () => {
+    expect(decideIntake({ ...base, evidence: n(0.5) }).flags).toEqual(["fact_value_uncertain"]);
+    expect(decideIntake({ ...base, mixed: n(0.8) }).flags).toContain("mixed_fact_value");
+  });
+
   it("flags an uncertain role and a demand filed as a claim", () => {
     const d = decideIntake({ ...base, role: c("claim", 0.4), demand: n(0.7) });
     expect(d.flags).toEqual(expect.arrayContaining(["role_uncertain", "demand_as_claim"]));
@@ -91,5 +97,18 @@ describe("measureBySection", () => {
     expect(measureBySection("§§ 29 und 30 zusammenführen", measures)).toBeNull();
     expect(measureBySection("Die Quote ist zu ehrgeizig", measures)).toBeNull();
     expect(measureBySection("§ 29 WPG und § 71 GEG abstimmen", measures)).toBe("Quoten");
+  });
+});
+
+describe("decideRelation", () => {
+  it("writes support in the direction Jev chose and never guesses a reverse attack's door", async () => {
+    const { decideRelation } = await import("../src/jev-relations.ts");
+    const a = (choice: string, p: number) => ({ choice, probabilities: { [choice]: p } });
+    expect(decideRelation(a("x_supports", 0.9)).edge).toEqual({ kind: "supports", reverse: false });
+    expect(decideRelation(a("point_supports", 0.9)).edge).toEqual({ kind: "supports", reverse: true });
+    expect(decideRelation(a("feasibility", 0.9)).edge).toEqual({ kind: "feasibility", reverse: false });
+    expect(decideRelation(a("point_attacks", 0.95)).edge).toBeNull();
+    expect(decideRelation(a("x_supports", 0.6)).edge).toBeNull();
+    expect(decideRelation(a("same_direction", 0.99)).edge).toBeNull();
   });
 });

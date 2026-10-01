@@ -60,7 +60,9 @@ async function main() {
 
   const prompt = `Draft law (cover sheet and law text):\n\n---\n${law}\n---\n\nName the separately decidable measures.`;
   const model = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
-  const callHash = createHash("sha256").update(JSON.stringify({ BILL_MEASURES_SYSTEM, prompt, model })).digest("hex");
+  const callHash = createHash("sha256")
+    .update(JSON.stringify({ BILL_MEASURES_SYSTEM, prompt, model, schema: billMeasuresJsonSchema }))
+    .digest("hex");
   const cached = process.argv.includes("--force")
     ? undefined
     : ((

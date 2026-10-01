@@ -58,6 +58,7 @@ async function main() {
   const subRes = await db.execute(sql`SELECT id, text FROM submissions WHERE consultation_id = ${cons.id} AND text IS NOT NULL`);
   const subText = new Map((subRes.rows as { id: string; text: string }[]).map((s) => [s.id, s.text]));
   const report: Record<string, unknown> = { consultation: ref, what, apply };
+  let failedAny = 0;
 
   if (what === "spans") {
     const res = await db.execute(sql`
@@ -133,7 +134,7 @@ async function main() {
       SELECT p.map_point_id, ps.quote, ps.span_start, ps.span_end, ps.submission_id, s.author_org
       FROM point_sources ps JOIN points p ON p.id = ps.point_id JOIN submissions s ON s.id = ps.submission_id
       WHERE p.consultation_id = ${cons.id} AND p.map_point_id IS NOT NULL AND ps.quote IS NOT NULL
-        AND p.status IN ('draft','released')
+        AND p.status = 'released'
     `);
     type Cand = { text: string; org: string; submission: string };
     const cands = new Map<string, Cand[]>();
@@ -205,6 +206,7 @@ async function main() {
     const emptyAfter = changes.filter((c) => (c as { after: string[] }).after.length === 0).length;
     console.log(`map points left without a quote (no candidate clearly supports the claim): ${emptyAfter}`);
     report.landkarte = { changes };
+    if (stats.failed > 0) failedAny = stats.failed;
   }
 
   const outDir = resolve(".eval");
@@ -212,6 +214,10 @@ async function main() {
   const out = `${outDir}/jev-quotes-${what}-${ref}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
   writeFileSync(out, JSON.stringify(report, null, 2));
   console.log(`report → ${out}`);
+  if (failedAny > 0) {
+    console.log(`INCOMPLETE: ${failedAny} judgments failed (those map points keep their old quotes) — rerun`);
+    process.exit(1);
+  }
   process.exit(0);
 }
 
