@@ -1,0 +1,150 @@
+/* Landkarte building blocks (lk-*). Tokens: one meaning per colour —
+   diagnoses own the colours; camps are monochrome (a = ink, b = hatched grey). */
+
+:root {
+  --canvas: #e9ecee;
+  --sheet: #ffffff;
+  --ink: #1e2329;
+  --ink-2: #4a525c;
+  --muted: #6c747e;
+  --rule: #d9dde1;
+  --rule-strong: #b9c0c7;
+  --evidence: #24578c;
+  --evidence-soft: #e6eef6;
+  --political: #a8701a;
+  --political-soft: #f8efdf;
+  --bridge: #2b7a57;
+  --bridge-soft: #e3f1ea;
+  --design: #6b4c93;
+  --design-soft: #efe9f6;
+  --open: #7b8189;
+  --open-soft: #eff1f3;
+  --camp-a: #1e2329;
+  --camp-b: #9aa3ad;
+  --serif: "Literata", Georgia, serif;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.lk-tone-bridge { --tone: var(--bridge); --tone-soft: var(--bridge-soft); }
+.lk-tone-evidence { --tone: var(--evidence); --tone-soft: var(--evidence-soft); }
+.lk-tone-political { --tone: var(--political); --tone-soft: var(--political-soft); }
+.lk-tone-design { --tone: var(--design); --tone-soft: var(--design-soft); }
+.lk-tone-open { --tone: var(--open); --tone-soft: var(--open-soft); }
+
+/* Diagnosis mark */
+.lk-mark {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  background: var(--tone);
+  border: 1.5px solid var(--tone);
+  border-radius: 2px;
+  flex: none;
+  vertical-align: baseline;
+}
+.lk-mark.lk-dashed { background: transparent; border-style: dashed; }
+.lk-diag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--tone);
+}
+.lk-typ {
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 0.05em 0.4em;
+}
+.lk-door { display: block; font-family: var(--sans); font-size: 0.75rem; color: var(--muted); }
+
+/* Voices: one circle per organisation of a camp */
+.lk-campvoices { display: grid; gap: 0.35rem; margin: 0.5rem 0; }
+.lk-voices {
+  display: grid;
+  grid-template-columns: minmax(7rem, 14rem) auto 1fr;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+}
+.lk-voices-name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-voices-dots { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+.lk-voices-count { color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lk-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; box-sizing: border-box; }
+.lk-side-a .lk-dot-agree { background: var(--camp-a); }
+.lk-side-b .lk-dot-agree { background: repeating-linear-gradient(135deg, var(--camp-b) 0 2px, #6f7881 2px 3.5px); }
+.lk-dot-disagree { border: 2px solid currentColor; position: relative; }
+.lk-side-a .lk-dot-disagree { color: var(--camp-a); }
+.lk-side-b .lk-dot-disagree { color: #6f7881; }
+.lk-dot-disagree::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: -1px; bottom: -1px;
+  border-left: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+.lk-dot-silent { border: 1px dotted var(--rule-strong); }
+@media (max-width: 640px) {
+  .lk-voices { grid-template-columns: 1fr auto; }
+  .lk-voices-name { grid-column: 1 / -1; }
+}
+
+/* Quotes */
+.lk-quote {
+  margin: 0.75rem 0;
+  padding: 0.1rem 0 0.1rem 0.9rem;
+  border-left: 3px solid var(--rule-strong);
+}
+.lk-quote p { margin: 0; font-family: var(--serif); font-size: 0.95rem; line-height: 1.55; }
+.lk-quote footer { margin-top: 0.3rem; font-family: var(--sans); font-size: 0.75rem; color: var(--muted); display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.lk-quote-camp { color: var(--ink-2); }
+
+/* The Landkarte */
+.lk-map { display: grid; gap: 0.9rem; }
+.lk-zone { border-radius: 10px; padding: 0.9rem; border: 1px solid; }
+.lk-zone > header h3 { margin: 0; font-family: var(--sans); font-size: 0.95rem; font-weight: 600; }
+.lk-zone > header p { margin: 0.15rem 0 0.6rem; font-family: var(--sans); font-size: 0.75rem; color: var(--muted); }
+.lk-zone-evidence { background: var(--evidence-soft); border-color: #c6d6e8; }
+.lk-zone-evidence > header h3 { color: var(--evidence); }
+.lk-zone-political { background: var(--political-soft); border-color: #e7d2a8; }
+.lk-zone-political > header h3 { color: var(--political); }
+.lk-zone-design { background: var(--design-soft); border-color: #d9cdea; }
+.lk-zone-design > header h3 { color: var(--design); }
+.lk-districts { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.lk-district { background: var(--sheet); border: 1px solid var(--rule); border-radius: 7px; padding: 0.6rem; }
+.lk-district-head strong { display: block; font-family: var(--sans); font-size: 0.8125rem; }
+.lk-district-head span { display: block; font-family: var(--sans); font-size: 0.7rem; color: var(--muted); margin-bottom: 0.3rem; }
+.lk-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 0.6rem; }
+.lk-kern { margin-bottom: 0.5rem; }
+.lk-chip {
+  display: block;
+  margin-top: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1.5px solid var(--tone);
+  border-left-width: 5px;
+  border-radius: 5px;
+  background: var(--sheet);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.lk-grid2 .lk-chip { margin-top: 0; }
+.lk-chip.lk-dashed { border-style: dashed; border-left-style: solid; }
+.lk-chip:hover { background: var(--tone-soft); }
+.lk-chip:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.lk-chip-kern { font-weight: 600; font-size: 0.9rem; padding: 0.55rem 0.7rem; background: var(--tone-soft); }
+.lk-chip-sub { display: block; font-weight: 400; font-size: 0.75rem; color: var(--ink-2); margin-top: 0.15rem; }
+@media (max-width: 720px) {
+  .lk-districts, .lk-grid2 { grid-template-columns: 1fr; }
+}
+
+.lk-legend { list-style: none; padding: 0; margin: 0.6rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; font-family: var(--sans); font-size: 0.75rem; color: var(--ink-2); }
+.lk-legend li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.lk-figure b { font-family: var(--sans); font-variant-numeric: tabular-nums; font-weight: 600; }

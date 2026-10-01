@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Die Pipeline — So entsteht die Landkarte des Streits</title>
+<style>
+  body { margin:0; background:#FBFAF6; color:#1C1E24; line-height:1.55;
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  .wrap { max-width: 56rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .narrow { max-width: 34rem; margin-left:auto; margin-right:auto; }
+  .kicker { font-size:.75rem; letter-spacing:.1em; text-transform:uppercase; color:#6B6E76; }
+  h1 { font-family: Georgia, 'Times New Roman', serif; font-weight:500; font-size:1.875rem; margin:.25rem 0 0; }
+  .sub { font-size:.9rem; color:#6B6E76; margin-top:.5rem; max-width:46rem; }
+  .principle { margin-top:1rem; background:#FFF; border:1px solid #E3E1D8; border-left:4px solid #0F6E56;
+    border-radius:.6rem; padding:.8rem 1rem; font-size:.9rem; max-width:46rem; }
+  .legend { margin-top:.9rem; display:flex; flex-wrap:wrap; gap:.4rem; }
+  .badge, .phase-chip { font-size:.68rem; border-radius:9999px; padding:.12rem .55rem; white-space:nowrap; }
+  .phase-chip { color:#9A6A14; border:1px solid #E4C990; background:#FBF3E0; margin-left:auto; }
+  .seg-title { font-family:Georgia,serif; font-weight:500; font-size:1.2rem; margin:1.8rem 0 .1rem; text-align:center; }
+  .seg-sub { font-size:.8rem; color:#6B6E76; text-align:center; margin:0 0 .7rem; }
+  .board-scroll { overflow-x:auto; margin-top:.6rem; padding-bottom:.6rem;
+    width:calc(100vw - 2rem); margin-left:50%; transform:translateX(-50%); }
+  .board { display:flex; gap:.7rem; align-items:flex-start; width:max-content; padding:0 .2rem; }
+  .col { width:360px; flex:0 0 auto; background:#F1EFE8; border:1px solid #E3E1D8;
+    border-radius:.9rem; padding:.55rem; }
+  .col-t5 { background:transparent; border-style:dashed; }
+  .col-head { padding:.35rem .45rem .5rem; }
+  .tl-head { font-family:Georgia,serif; font-size:1rem; font-weight:500; }
+  .tl-dur { font-size:.66rem; color:#9A6A14; text-transform:uppercase; letter-spacing:.06em; margin-top:.05rem; }
+  .col-head p { font-size:.76rem; margin:.35rem 0 0; color:#3D4046; }
+  .tl-sat { color:#9A6A14 !important; font-style:italic; border-top:1px dashed #E4C990; padding-top:.3rem; margin-top:.45rem !important; }
+  .station { position:relative; background:#FFF; border:1px solid #E3E1D8; border-radius:.75rem;
+    padding:.8rem .9rem; margin:.5rem 0 0; border-left-width:4px; }
+  .strand-st { border-left-color:#6B6E76; }
+  .strand-sa { border-left-color:#0F6E56; }
+  .strand-sb { border-left-color:#1E4A7A; }
+  .strand-sh { border-left-color:#9A6A14; }
+  .station-plan { border-style:dashed; border-left-style:solid; background:transparent; }
+  .station-head { display:flex; align-items:center; gap:.45rem; flex-wrap:wrap; }
+  .station-num { min-width:1.55rem; height:1.55rem; border-radius:50%; background:#FBFAF6;
+    border:2px solid #B4B8A9; color:#6B6E76; font-size:.66rem; font-weight:600;
+    display:inline-flex; align-items:center; justify-content:center; padding:0 .2rem; }
+  .station-head strong { font-size:.88rem; }
+  .station-head code { font-size:.66rem; color:#6B6E76; background:#F1EFE8; border-radius:.25rem; padding:.1rem .35rem; }
+  .station-badges { display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; margin-top:.35rem; }
+  .station p { font-size:.8rem; margin:.45rem 0 0; }
+  .note { color:#9A6A14; background:#FBF3E0; border-radius:.4rem; padding:.4rem .55rem; font-size:.74rem !important; }
+  details.prompt { margin-top:.45rem; font-size:.78rem; }
+  details.prompt summary { cursor:pointer; color:#1E4A7A; }
+  details.prompt-jev summary { color:#4B2E83; }
+  details.prompt pre { white-space:pre-wrap; background:#F1EFE8; border:1px solid #E3E1D8;
+    border-radius:.5rem; padding:.6rem .8rem; font-size:.68rem; line-height:1.5; margin:.35rem 0 0; }
+  .mini { display:block; background:transparent; border:1px dashed #B4B8A9; border-radius:.6rem;
+    padding:.5rem .7rem; margin:.5rem 0 0; text-decoration:none; }
+  .mini strong { font-size:.78rem; color:#1C1E24; display:block; }
+  .mini span { font-size:.7rem; color:#6B6E76; }
+  .mini:hover { border-color:#1E4A7A; }
+  .t12 { flex:0 0 auto; display:grid; grid-template-columns:360px 360px; gap:.55rem .7rem;
+    background:#F1EFE8; border:1px solid #E3E1D8; border-radius:.9rem; padding:.55rem; align-content:start; }
+  .band { grid-column:1 / 3; background:#FBFAF6; border:1.5px solid #B4B8A9; border-radius:.75rem;
+    padding:.5rem .6rem .6rem; }
+  .band-title { font-family:Georgia,serif; font-size:.95rem; font-weight:500; text-align:center; }
+  .band-sub { font-size:.7rem; color:#6B6E76; text-align:center; margin:.15rem 0 .3rem; }
+  .band-cards { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; align-items:start; }
+  .band-cards .station { margin:0; }
+  .t12-sub { display:flex; flex-direction:column; }
+  .sub-label { font-size:.68rem; letter-spacing:.07em; text-transform:uppercase; color:#6B6E76;
+    margin:.1rem 0 0 .2rem; }
+  .strand-legend { font-size:.72rem; color:#6B6E76; text-align:center; margin:.4rem 0 0; }
+  .strand-legend i { font-style:normal; font-weight:700; }
+  .aux { margin-top:2.4rem; max-width:34rem; margin-left:auto; margin-right:auto; }
+  .aux h2 { font-family:Georgia,serif; font-weight:500; font-size:1.05rem; }
+  .foot { margin-top:2rem; font-size:.72rem; color:#6B6E76; text-align:center; }
+  .backlink { font-size:.8rem; } .backlink a { color:#1E4A7A; }
+  .tl-scroll { overflow-x:auto; margin-top:.6rem; padding-bottom:.5rem;
+    width:min(1480px, calc(100vw - 2rem)); margin-left:50%; transform:translateX(-50%); }
+  .timeline { display:flex; gap:.45rem; min-width:1180px; align-items:stretch; }
+  .tl-sep { align-self:center; color:#6B6E76; font-size:.9rem; flex:0 0 auto; }
+  .tl-block { flex:1 1 0; background:#FFF; border:1px solid #E3E1D8; border-radius:.7rem; padding:.65rem .75rem; }
+  .tl-t2 { flex:1.55 1 0; }
+  .tl-t5 { flex:.85 1 0; border-style:dashed; background:transparent; }
+  .tl-head { font-family:Georgia,serif; font-size:.92rem; font-weight:500; }
+  .tl-dur { font-size:.66rem; color:#9A6A14; text-transform:uppercase; letter-spacing:.06em; margin-top:.05rem; }
+  .tl-block p { font-size:.74rem; margin:.35rem 0 .45rem; color:#3D4046; }
+  .tl-sat { color:#9A6A14 !important; font-style:italic; border-top:1px dashed #E4C990; padding-top:.3rem; }
+  .tl-chips { display:flex; flex-wrap:wrap; gap:.25rem; }
+  .tl-chip { font-size:.64rem; border:1px solid #C6D6E8; background:#EDF2F8; color:#0C447C;
+    border-radius:9999px; padding:.08rem .5rem; text-decoration:none; display:inline-block; }
+  .tl-chip:hover { background:#DCE9F6; }
+  .tl-chip.run::before { content:"↻ "; }
+  .tl-chip.plan { border:1px dashed #5F5E5A; background:transparent; color:#444441; }
+  .tl-chip.test { background:#FBF3E0; border-color:#E4C990; color:#633806; }
+  .tl-legend { font-size:.68rem; color:#6B6E76; margin:.15rem 0 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="backlink"><a href="index.html">← Zu den Landkarten</a></p>
+  <p class="kicker">Methodik · Stand 1. Oktober 2026 · alle Prompts im Original aus dem laufenden System</p>
+  <h1>So entsteht die Landkarte des Streits</h1>
+  <p class="sub">Ein Bild für die ganze Idee: <strong>die Zeitachse des Verfahrens</strong>, wie eine
+    Kommune es erlebt — von Anlass bis Ratsentscheidung (Zielbild nach §8 und §12 des Konzeptpapiers) —
+    und <strong>unter jedem Zeitblock die Pipeline-Stufen</strong>, die dort arbeiten. Die farbige Kante
+    jeder Karte zeigt den Strang: Die Struktur des Streits und die Menschen dahinter (die Komplementarität
+    aus §7): Die Struktur bringt die Landkarten-Punkte hervor, die Menschen stimmen über sie ab, beides trifft
+    sich im Scharnier der Diagnose. Jede Stufe zeigt, wer entscheidet: das Sprachmodell schreibt, Jev
+    entscheidet mit Wahrscheinlichkeit, der Code rechnet — mit den tatsächlichen Prompts und Jev-Fragen,
+    direkt aus dem Code eingebettet. Jede Stufe ist wiederholbar und protokolliert ihre Entscheidungen.</p>
+  <p class="principle">Das Vertrauensprinzip auf jeder Ebene: <strong>Das Sprachmodell schreibt, Jev entscheidet,
+    der Code rechnet. Die Diagnosen werden gerechnet, nicht gemeint. Wertungsfragen entscheidet die Maschine nie.
+    Jede Entscheidung ist protokolliert — ein Mensch kann jede nachprüfen und umdrehen.</strong></p>
+  <div class="legend"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span><span class="badge" style="color:#444441;background:transparent;border:1px solid #5F5E5A;border-style:dashed;">Geplant — noch nicht gebaut</span></div>
+
+  <h2 class="seg-title">Das Verfahren — und die Maschine darunter</h2>
+  <p class="seg-sub">Zielbild für ein kommunales Verfahren (§12: „Eine Kommune, sechs Wochen“). Unter jedem
+    Zeitblock hängen die Pipeline-Stufen, die dort laufen — horizontal scrollen für den ganzen Ablauf.</p>
+  <div class="board-scroll">
+    <div class="board"><div class="col ">
+    <div class="col-head">
+      <div class="tl-head">T0 · Anlass &amp; Zuschnitt</div>
+      <div class="tl-dur">Woche 0</div>
+      <p>Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: Der Zuschnitt kommt aus der Beschlussvorlage selbst — jede Teilentscheidung bekommt ihre eigene Landkarte. Die KI liest den Entwurf und schlägt vor; die Kommune bestätigt.</p>
+      
+    </div>
+    <div class="station strand-sa" id="st-zuschnitt">
+    <div class="station-head">
+      <span class="station-num">T0.1</span>
+      <strong>Zuschnitt aus dem Entwurf</strong>
+      <code>propose-measures-bill.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Worüber entschieden wird, steht im Entwurf: Das Sprachmodell liest den Gesetzentwurf oder die Beschlussvorlage einmal und benennt die getrennt entscheidbaren Maßnahmen — jede mit ihren Paragraphen. Jede Maßnahme bekommt ihre eigene Landkarte; dazu „Das Vorhaben als Ganzes“ und „Über den Entwurf hinaus“.</p>
+    <p class="note">Im Zielverfahren bestätigt die Kommune den Zuschnitt; die KI schlägt vor.</p>
+    <details class="prompt"><summary>Prompt ansehen: Zuschnitt-Prompt</summary><pre>You read a draft law and name its separately decidable MEASURES — the units a parliament or council could adopt, change, or reject on their own. Each measure gets its own argument map, so the cut must follow what is decided, not how the law is ordered.
+
+Per measure:
+- name: short German name (e.g. &quot;Pflicht zur Wärmeplanung&quot;, &quot;Quoten für Wärmenetze&quot;).
+- description: one or two German sentences — what exactly is decided (who must do what, by when, with which exceptions).
+- paragraphs: the section numbers (§) of the main law that make up the measure.
+- other: provisions outside the main law that belong to it (e.g. &quot;Artikel 2: Änderung des BauGB&quot;), else empty.
+
+Cover the substantive provisions. Definitions, goals, transitional and final provisions are no measure of their own: list their sections under the measure whose obligations they shape (e.g. the definition of unavoidable waste heat belongs to the measures that set renewable shares for heat networks; a section may appear under several measures). Name 4 to 10 measures. Do not create a measure for the law as a whole — that bucket exists already.</pre></details>
+  </div>
+    
+  </div><div class="t12">
+    
+    <div class="col-head">
+      <div class="tl-head">T1 · Vorbereitung — der Anlauf</div>
+      <div class="tl-dur">≈ 2 Wochen</div>
+      <p>Der vorhandene Bestand — Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — läuft einmal komplett im Stapel durch die Verarbeitungsstrecke (S1–S6), alle Abschnitte gleichzeitig: für ein Verfahren in der Größe des Wärmeplanungsgesetzes in rund einer halben Stunde.</p>
+      
+    </div>
+    
+    <div class="col-head">
+      <div class="tl-head">T2 · Offene Beteiligung — der Dauerbetrieb</div>
+      <div class="tl-dur">≈ 3 Wochen</div>
+      <p>Dieselbe Strecke läuft weiter, jetzt gespeist aus den drei Türen — je Beitrag statt im Stapel. Neue Punkte gehen nach Freigabe selbst in die Abstimmung: der Rückkanal, keine eingefrorene Landkarte.</p>
+      <p class="tl-sat">┄ endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)</p>
+    </div>
+    <div class="band">
+      <div class="band-title">Die Verarbeitungsstrecke — identisch in T1 und T2</div>
+      <div class="band-sub">in T1 als Stapel über den Bestand · in T2 laufend über jeden neuen Beitrag (jede Stufe ist idempotent — Dauerbetrieb heißt: dieselben Stufen laufen wiederholt)</div>
+      <div class="band-cards"><div class="station strand-st" id="st-zerlegung">
+    <div class="station-head">
+      <span class="station-num">S1</span>
+      <strong>Zerlegung</strong>
+      <code>extract.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Lange Stellungnahmen werden in Abschnitte geteilt — dort, wo Jev einen Themenwechsel erkennt, nicht nach Zeichenzahl. Alle Abschnitte laufen gleichzeitig: Das Sprachmodell sieht jeweils die ganze Stellungnahme und schreibt die Punkte seines Abschnitts — jeder Punkt genau eine Behauptung, Tatsachen und Wertungen getrennt, Prämissen als eigene Punkte, dazu ein wörtliches Beleg-Zitat. Etikettieren muss das Sprachmodell nichts mehr; das entscheidet Jev in der nächsten Stufe.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Zerlegungs-Prompt</summary><pre>You extract the distinct argumentative points from a consultation submission, for a public argument map.
+
+What counts as a point — in the debate about a proposed measure, contributions are:
+- claims about the present situation, about what the measure will cause, about whether that effect serves a goal, and about whether the goal is worth its price;
+- support for or rejection of the measure or one of its provisions;
+- objections: the claimed effect will not occur; a milder or cheaper means would reach the goal; the measure harms another goal (costs, side effects); it cannot be implemented as proposed; the value is not worth what it sacrifices;
+- shaping proposals (&quot;if we do it, then like this&quot;): transition periods, hardship clauses, exemptions, staggering, concrete changes to a provision;
+- open questions the submission raises that nobody answers (missing evidence, an unexamined alternative).
+
+Long submissions are shown IN FULL for context with one section marked between ⟦SECTION START⟧ and ⟦SECTION END⟧. Extract only the points made in the marked section — use the rest to understand what the section refers to. An argument that begins inside the section belongs to it even if it runs past the end marker; one that began before the start marker belongs to the previous section — skip it. Without markers, the whole text is yours.
+
+Rules:
+1. Extract every DISTINCT point; merge repetitions.
+2. One point = one claim. Premises are points of their own: a factual claim that supports a demand or a judgment — figures, the current state, an observed development, an expected effect — is extracted SEPARATELY from the demand or judgment it supports (e.g. &quot;the building sector has repeatedly missed its climate targets&quot; and &quot;emissions must fall immediately&quot; are two points). Keep facts and value judgments apart: a point is either something evidence could settle or a judgment no study can settle, not both.
+3. Extract factual premises and open questions even when the submission uses them only as support or in passing — they are points on the map.
+4. Strip rhetoric and tone; keep the argumentative core, neutrally phrased. A point must be understandable on its own: name what it refers to (the provision, the instrument, the actor) instead of &quot;this&quot; or &quot;the regulation&quot;.
+5. label: a short editorial label (at most 80 characters). summary: one neutral sentence stating the claim. Write both in the language of the submission.
+6. quote: a short VERBATIM excerpt from the text (copy exactly, no ellipses) that best evidences the point. The text comes from PDFs: repair broken word spacing and line-break hyphens while copying (&quot;Ein e Quo- te&quot; → &quot;Eine Quote&quot;), change nothing else.
+7. Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
+8. A dense section often holds 15–25 points; never pad. An empty list is fine for a section without substantive content.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Wo wird geschnitten?</summary><pre>[schnitt · ja/nein, als Wahrscheinlichkeit] Does a new topic, section, or argument begin with `cuts.cN.after`, rather than `cuts.cN.after` continuing the argument of `cuts.cN.before`?
+   – true: The text after the break turns to another provision, topic, or argument — a reader could start reading there.
+   – false: The text after the break continues the sentence, list, example, or line of reasoning before it.</pre></details>
+  </div><div class="station strand-st" id="st-redaktion">
+    <div class="station-head">
+      <span class="station-num">S2</span>
+      <strong>Automatische Redaktion</strong>
+      <code>extract.ts (refine)</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Jev prüft jeden Punkt in einer einzigen Anfrage: freigabefähig (eine Behauptung, für sich verständlich, sachlich, zum Thema, keine persönlichen Daten)? Welche Rolle — Behauptung, Einwand, Lösungsvorschlag, offene Frage —, durch welche der fünf Türen, Tatsache oder Wertung, welche Stelle im Grundmuster P1–P4? Findet Jev ein Problem, repariert es das Sprachmodell (teilen, umformulieren, streichen), und Jev prüft erneut. Die Redakteure sind Maschinen; jede Entscheidung ist protokolliert, damit ein Mensch sie jederzeit nachprüfen und umdrehen kann.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Redaktions-Prompt (Reparatur)</summary><pre>You are the editor of a public argument map. An automatic check flagged a point that was extracted from a consultation submission. Repair it so it can stand on the map, using the submission passage for context.
+
+What the flags mean and how to repair:
+- several_claims: the point combines claims a reader could accept or reject independently → split: one point per claim.
+- mixed_fact_value: a checkable fact and a value judgment are mixed → split into the factual claim and the judgment.
+- not_standalone: the point cannot be understood without the submission → rewrite it naming what it refers to (provision, instrument, actor).
+- not_neutral: polemic or loaded wording → rewrite it neutrally, keeping the claim and its direction.
+- personal_data: personal data about a private individual or an attack on a person → rewrite without it, or drop if nothing substantive remains.
+- meta / off_topic: possibly greetings, procedure, or another subject → drop if there is no substantive claim about the consultation's subject; otherwise keep or rewrite.
+
+Actions: &quot;keep&quot; (false alarm; points empty), &quot;rewrite&quot; (exactly one point), &quot;split&quot; (two to four points), &quot;drop&quot; (points empty).
+Each point: label (at most 80 characters), summary (one neutral sentence), quote (a short VERBATIM excerpt from the passage that evidences this point; repair broken PDF word spacing and line-break hyphens while copying, change nothing else). Write in the language of the submission. Never add a claim the passage does not make; never soften or sharpen its direction.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Die Prüffragen je Punkt</summary><pre>[single_claim · ja/nein, als Wahrscheinlichkeit] Does `point` make one coherent claim, rather than several separate claims combined?
+   – true: One claim — possibly with its reason, mechanism, or detail, which belong to the same claim.
+   – false: Several separate claims someone could agree with independently (e.g. 'the deadline is too short and the funding should be doubled').
+
+[standalone · ja/nein, als Wahrscheinlichkeit] Is `point` understandable on its own, without the submission it was extracted from?
+
+[neutral · ja/nein, als Wahrscheinlichkeit] Is `point` phrased neutrally — without polemics, insults, or loaded rhetoric?
+
+[on_topic · ja/nein, als Wahrscheinlichkeit] Is `point` about the subject of the consultation named in `consultation`?
+
+[meta · ja/nein, als Wahrscheinlichkeit] Is `point` mere meta-commentary — greetings, thanks, or complaints about the procedure — without any substantive claim about the subject?
+
+[personal · ja/nein, als Wahrscheinlichkeit] Does `point` contain personal data about a private individual, or attack a person?
+
+[role · Auswahl] What role does `point` play in the debate about the proposed measure?
+   – claim: A premise in favour of the measure or a neutral statement: the situation the measure responds to, an effect it achieves, a goal it serves, a value that carries it, or approval of the measure or one of its provisions.
+   – objection: Bears against the measure or one of its premises: rejection of a provision, criticism, or a plain statement of fact that counts against the measure in this debate (e.g. 'planning offices lack staff' is a feasibility objection; 'district heating emissions are underestimated' is an empirics objection).
+   – instrument: A shaping proposal ('if we do it, then like this'): a concrete change to a provision, a transition period, hardship clause, exemption, staggering, funding, or procedural safeguard.
+   – gap: An open question the point raises that nobody answers: missing evidence or an unexamined alternative.
+
+[door_objection · Auswahl] Assume `point` is an objection. Through which critical question does it attack the measure?
+   – empirics: Empirics: disputes whether the claimed effect actually occurs (e.g. 'the grid cannot absorb the power', 'the heat pumps will not reach the efficiency assumed').
+   – alternatives: Alternatives: argues that a milder, cheaper, or different means reaches the same goal (e.g. 'tenders instead of an obligation', 'incentives instead of compulsion').
+   – goal_conflict: Goal conflict: the measure incidentally harms another goal we also care about — costs, affordability, competition, side effects (e.g. 'rents rise', 'monopoly prices').
+   – feasibility: Feasibility: the measure cannot be implemented as proposed — capacity, skilled workers, data, deadlines, administrative effort (e.g. 'the municipalities lack staff').
+   – value_conflict: Value conflict: disputes whether the underlying value is worth what is sacrificed for it (e.g. 'climate protection does not justify restricting property rights').
+
+[door_instrument · Auswahl] Assume `point` is a shaping proposal. Which critical question does it primarily answer — which concern does it cushion?
+   – empirics: Empirics: disputes whether the claimed effect actually occurs (e.g. 'the grid cannot absorb the power', 'the heat pumps will not reach the efficiency assumed').
+   – alternatives: Alternatives: argues that a milder, cheaper, or different means reaches the same goal (e.g. 'tenders instead of an obligation', 'incentives instead of compulsion').
+   – goal_conflict: Goal conflict: the measure incidentally harms another goal we also care about — costs, affordability, competition, side effects (e.g. 'rents rise', 'monopoly prices').
+   – feasibility: Feasibility: the measure cannot be implemented as proposed — capacity, skilled workers, data, deadlines, administrative effort (e.g. 'the municipalities lack staff').
+   – value_conflict: Value conflict: disputes whether the underlying value is worth what is sacrificed for it (e.g. 'climate protection does not justify restricting property rights').
+
+[evidence · ja/nein, als Wahrscheinlichkeit] Could evidence — data, measurements, studies, expert reports, or legal analysis — in principle settle whether the claim in `point` is true?
+   – true: The claim is about facts, effects, costs, legal consequences, or prognoses: evidence can confirm or refute it, even if that evidence does not exist yet.
+   – false: The claim is a value judgment, a priority, a demand about what ought to be done, or a stance of approval or rejection ('X is welcomed', 'X is rejected'): no study could settle it; it has to be decided politically.
+
+[p1 · ja/nein, als Wahrscheinlichkeit] Does `point` describe the present situation — how things are today, independently of the proposed measure — so that it could already be checked with data today?
+
+[p2 · ja/nein, als Wahrscheinlichkeit] Does `point` make a prognosis about what the proposed measure will cause — an effect in the future that would turn out differently without the measure?
+
+[p3 · ja/nein, als Wahrscheinlichkeit] Does `point` claim that an effect does or does not serve a stated goal — such that one could accept the effect itself and still dispute that it serves the goal?
+
+[p4 · ja/nein, als Wahrscheinlichkeit] Does `point` judge whether a goal or value is worth its price — a setting of priorities that no study could prove or disprove?
+
+[stance · ja/nein, als Wahrscheinlichkeit] Does `point` state support for or rejection of the proposed measure or one of its provisions — a verdict on the measure, rather than a reason for or against it?
+
+[demand · ja/nein, als Wahrscheinlichkeit] Is `point` a demand about how the measure should be designed, changed, or implemented — saying what should be done, rather than claiming how things are, will be, or what matters?
+
+[mixed · ja/nein, als Wahrscheinlichkeit] Does `point` combine a checkable factual claim and a separate value judgment or demand that a reader could accept or reject independently of each other?
+   – true: Two parts: one that evidence could settle (e.g. 'costs will rise by 20 percent') and a separate judgment or demand (e.g. 'this burden is unacceptable') — someone could accept one part and reject the other.
+   – false: One claim — either something evidence could settle or a judgment/demand; naming what it refers to does not make it two claims.</pre></details>
+  </div><div class="station strand-st" id="st-abgleich">
+    <div class="station-head">
+      <span class="station-num">S3</span>
+      <strong>Abgleich: bekannt oder neu?</strong>
+      <code>extract.ts (canonicalize)</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Jeder neue Punkt wird mit den ähnlichsten Punkten der Karte verglichen: dasselbe Argument, verwandt oder verschieden? Ab 50 % Wahrscheinlichkeit für „dasselbe“ wird zusammengeführt; Fälle zwischen 20 und 50 % entscheidet das Sprachmodell als Zweitmeinung. Unter einer Sekunde je Punkt — die Voraussetzung dafür, dass Tür 2 sofort antworten kann: „Das wurde schon gesagt“ oder „neu“.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Abgleich-Prompt (Zweitmeinung)</summary><pre>You decide whether a candidate point from a consultation submission is the SAME point as one already on the argument map, or a genuinely new point.
+
+The same point = the same claim content, even in different words, tone, or detail level. A different aspect, a narrower/broader claim with different implications, or a different mechanism = a new point.
+
+Be conservative about matching: when in doubt whether nuance is lost by merging, prefer &quot;new&quot;. A false merge silently erases a voice; a false new point is cheaply merged later by editors.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Wie verhält sich der neue Punkt zu einem bekannten?</summary><pre>[bezug · Skala] How does the candidate argument `candidate` relate to the existing map point `existing.pN`?
+   0: Different arguments: the two points make different claims, even if they concern the same topic, measure, or actor.
+   1: Related but not the same argument: same topic or a neighbouring claim, but a different aspect, a narrower or broader claim with different implications, a different mechanism, or the opposite position. Merging them would lose a nuance someone actually argued.
+   2: The same argument: the same claim content in the same direction; the points differ only in wording, tone, or level of detail.</pre></details>
+  </div><div class="station strand-sa" id="st-zuordnung">
+    <div class="station-head">
+      <span class="station-num">S4</span>
+      <strong>Zuordnung zur Maßnahme</strong>
+      <code>assign-measures.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Jeder Punkt kommt zu der Maßnahme, die er betrifft. Nennt er seinen Paragraphen („§ 29 Abs. 7 streichen“), ordnet der Code direkt zu; sonst entscheidet Jev — und wo Jev unsicher ist, das Sprachmodell.</p>
+    
+    <details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Welche Maßnahme betrifft der Punkt?</summary><pre>[measure · Auswahl] Which measure of the draft law does `point` concern?
+   – m1: The point concerns the measure &quot;&lt;Maßnahme aus dem Entwurf&gt;&quot; (§ 0): &lt;was entschieden wird&gt;
+   – whole: The point concerns the draft law AS A WHOLE — an overall verdict on the law, its general direction or goal, a fact about the general situation the whole debate builds on (the building stock, emissions, prices, the state of heat networks), or values that cut across the whole law. NOT a point about a specific rule: a rule that matters for several measures (a biomass limit, how waste heat is counted, a deadline) belongs to the measure the point mainly concerns.
+   – beyond: The point DEMANDS or criticises something this draft law does not regulate — other laws (e.g. the building energy act, tenancy law), funding programmes, energy prices and taxes — rather than a provision of this draft or the situation it responds to.</pre></details>
+  </div><div class="station strand-sa" id="st-bezuege">
+    <div class="station-head">
+      <span class="station-num">S5</span>
+      <strong>Bezüge über alle Stellungnahmen</strong>
+      <code>relations.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span></div>
+    <p>Wer stützt wen, wer greift wen an — durch welche der fünf Türen? Jev vergleicht jeden Punkt mit seinen 15 nächsten Nachbarn aus allen Stellungnahmen, beide Richtungen ausdrücklich. Mit dem Sprachmodell war das unbezahlbar; mit Jev kostet es für eine ganze Konsultation Cent-Beträge. So wird sichtbar, welches Argument wo beantwortet wird — und welches unbeantwortet steht.</p>
+    
+    <details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Wie hängen zwei Punkte zusammen?</summary><pre>[o1 · Auswahl] How does `others.o1` relate to `point` in the debate?
+   – x_supports: `others.o1` is a REASON for `point`: it states a fact, effect, or value from which `point` follows or that makes `point` more plausible.
+   – point_supports: The reverse: `point` is a reason for `others.o1` (`others.o1` is the demand or conclusion, `point` the premise).
+   – empirics: `others.o1` argues against `point` by disputing that a claimed effect or fact actually holds.
+   – alternatives: `others.o1` argues against `point` by naming a milder, cheaper, or different means that reaches the same goal.
+   – goal_conflict: `others.o1` argues against `point` because it harms another goal we also care about — costs, affordability, side effects.
+   – feasibility: `others.o1` argues against `point` because it cannot be implemented as proposed — capacity, data, deadlines, administration.
+   – value_conflict: `others.o1` argues against `point` by disputing that the value behind it is worth what it sacrifices.
+   – point_attacks: The reverse: `point` argues against `others.o1`.
+   – same_direction: Both argue in the same direction (e.g. two demands with the same aim, two criticisms of the same provision), but neither is a reason for the other.
+   – restates: `others.o1` says essentially the same as `point` (a duplicate).
+   – unrelated: No argumentative relation — they may share the topic, but neither supports nor attacks the other.</pre></details>
+  </div><div class="station strand-sa" id="st-verdichtung">
+    <div class="station-head">
+      <span class="station-num">S6</span>
+      <strong>Verdichtung zu Landkarten-Punkten</strong>
+      <code>condense.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span></div>
+    <p>Zuerst wiegt Jev: Für jeden Extraktionspunkt leitet Jev aus allen Stellungnahmen ab, welche Organisationen ihm zustimmen und welche ihn ablehnen — auch wenn sie ihn selbst nicht formuliert haben. Dann sucht das Sprachmodell je Maßnahme die Fragen, um die wirklich gestritten wird, und schreibt je Frage einen Satz, über den man abstimmen kann — höchstens 20; alle Maßnahmen gleichzeitig. Verschiedene Positionen zur selben Frage („Biomasse-Grenze anheben“, „senken“, „streichen“) werden ein Landkarten-Punkt. Gewicht entscheidet, was auf die Karte kommt: zuerst Fragen mit Organisationen auf beiden Seiten — so bleibt „Holz ist vollwertig erneuerbar“ auf der Karte, obwohl es nur eine Organisation formuliert hat und zwei es ablehnen. Jev prüft jedes Paar: Fragen zwei Punkte dasselbe? Dann ordnet Jev jeden Extraktionspunkt der Frage zu, zu der er Stellung nimmt. Was keiner Frage gehört — meist die Forderung einer einzelnen Organisation —, steht als Einzelforderung unter der Karte: nicht verloren, aber nicht zur Abstimmung.</p>
+    <p class="note">Im Dauerbetrieb (T2) arbeitet die Verdichtung inkrementell: Neue Punkte werden bestehenden Landkarten-Punkten zugeordnet oder als neue vorgeschlagen.</p>
+    <details class="prompt"><summary>Prompt ansehen: Verdichtungs-Prompt</summary><pre>You build the Landkarte des Streits for ONE measure of a public consultation: the few questions that are really at stake, each as one statement people can vote on (Landkarten-Punkt).
+
+You get the extraction points of this measure — each one claim made by one or more organisations in their written statements — with the organisations that SAID it and, inferred from all statements, the other organisations that agree (&quot;for&quot;) or disagree (&quot;against&quot;).
+
+1. Find the QUESTIONS. Which questions about this measure do the organisations actually answer, in agreement or against each other? Different positions on the same question are answers to it, not separate questions: &quot;raise the biomass limit&quot;, &quot;lower it&quot;, &quot;delete it&quot;, &quot;make it flexible&quot; all answer ONE question — &quot;How strict should the biomass limit for new heat networks be?&quot;.
+2. One Landkarten-Punkt per question: a single neutral German statement that answers the question in one direction, so that agreeing means one side's position and disagreeing the other side's (e.g. &quot;Die Biomasse-Grenzen für neue Wärmenetze sind zu streng.&quot;). Phrase it the way the organisations that raise it hold it. Never two points for the same question. For a limit, quota, or deadline its LEVEL is one question — raising, lowering, deleting, or loosening it are answers to it; a separate point only for a genuinely different instrument someone could support while rejecting the other (a hardship clause next to the level).
+3. Facts, values, and design stay apart, because they are settled differently. A fact question — could a study, data, or a legal opinion settle it? (&quot;Das nachhaltige Biomassepotenzial reicht für höhere Anteile nicht aus&quot;) — is its own point next to the value or design question that rests on it.
+4. Weight decides what gets on the map: the organisations that take a position (said, for, against). First the questions with organisations on BOTH sides — even when only one organisation said it, a point others reject is contested, and such questions are often the core conflict of the measure. Then questions many organisations agree on (they are bridges). A demand only its own author takes a position on gets no point of its own: it is listed under the map as a single demand (Einzelforderung), so nothing is lost.
+5. At most 20 points; fewer when fewer questions are really at stake. A short map of real questions beats a long list of positions.
+
+Every statement is voted on as a whole: ONE claim — no justification or purpose clause (&quot;…, weil …&quot;, &quot;…, da …&quot;, &quot;…, um … zu …&quot;), no &quot;X und Y&quot; of two separable claims; neutral, no rhetoric.
+
+Per Landkarten-Punkt:
+- &quot;question&quot;: the open question it answers, German, ends with &quot;?&quot;.
+- &quot;text&quot;: the statement, German, one sentence.
+- &quot;label&quot;: a short German chip label for the map, &lt;= 45 characters.
+- &quot;typ&quot;: &quot;T&quot; if evidence could settle it (facts, prognoses, costs, legal effect), &quot;W&quot; if it is a pure value judgment no study can decide, &quot;verfahren&quot; if it is a design/implementation instrument (&quot;if we do it, then like this&quot;: deadlines, thresholds, transition periods, hardship clauses, exemptions, procedural safeguards).
+- &quot;bezirk&quot;: the district on the map — &quot;wirkung&quot; (does the measure work; effect prognosis and goal attainment), &quot;machbarkeit&quot; (can it be implemented), &quot;kosten&quot; (costs and side effects on other goals), &quot;alternativen&quot; (would another means do), &quot;wert&quot; (the value question itself), &quot;ausgestaltung&quot; (design instruments; always for typ &quot;verfahren&quot;).</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Wer stimmt dem Punkt zu, wer lehnt ihn ab? (Gewicht)</summary><pre>[haltung · Auswahl] {
+ &quot;task&quot;: &quot;What is the stance of the consultation submission excerpt in `submission` toward the claim? Judge only from the text, not from the author's presumed interests; text and claim may be in different languages — judge the meaning.&quot;,
+ &quot;claim&quot;: &quot;&lt;Extraktionspunkt&gt;&quot;
+}
+   – agrees: The text holds the claim to be true or demands what the claim demands — also when the claim itself is a criticism or a negation (a text that says 'the draft ignores X' agrees with the claim 'the draft ignores X').
+   – disagrees: The text holds the claim to be false or rejects what the claim demands. Criticising the draft law is not the same as disagreeing with the claim — judge the text's position on the claim itself.
+   – not_addressed: The text does not address this claim, or its position on it is unclear.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Fragen zwei Landkarten-Punkte dasselbe?</summary><pre>[gleiche_frage · ja/nein, als Wahrscheinlichkeit] Do the Landkarten-Punkte `points.k1` and `points.k2` ask the same question, so that a vote on one already decides the other — also when one is the mirror image (&quot;too strict&quot; / &quot;too lax&quot;) or a variant (&quot;delete it&quot; / &quot;loosen it&quot;) of the other?
+   – true: `points.k1` and `points.k2` ask the same question; one Landkarten-Punkt is enough.
+   – false: `points.k1` and `points.k2` ask different questions; someone could agree with one and hold a separate view on the other.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Zu welcher Frage nimmt der Punkt Stellung?</summary><pre>[map_point · Auswahl] Which question of this measure does `point` take a position on? Every Landkarten-Punkt in `map_points` stands for one question; its `text` answers it in one direction, and a point that holds the OPPOSITE answer belongs to the same Landkarten-Punkt.
+   – k1: `point` takes a position on the question of &quot;&lt;Landkarten-Punkt&gt;&quot; (`map_points.k1`) — the question &quot;&lt;Streitfrage&gt;&quot;: it agrees or disagrees with that statement, wants it stricter or looser, or gives a fact or reason for one side of it.
+   – none: `point` takes a position on none of these questions.</pre></details>
+  </div></div>
+    </div>
+    <div class="t12-sub">
+      <div class="sub-label">Nur im Anlauf (T1)</div>
+      <div class="station strand-st" id="st-import">
+    <div class="station-head">
+      <span class="station-num">T1.1</span>
+      <strong>Import &amp; Aufbereitung</strong>
+      <code>harvester · import-harvest.ts · import-documents.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span></div>
+    <p>Stellungnahmen, Fragebögen und Anhänge werden aus den Quellsystemen geholt und unverändert gespeichert — dazu der Entwurf selbst (Gesetzentwurf, Beschlussvorlage), aus dem der Zuschnitt in Maßnahmen kommt.</p>
+    <p class="note">Nur im Anlauf: Im Dauerbetrieb (T2) kommt neues Material durch die drei Türen herein, nicht per Import.</p>
+    
+  </div>
+    </div>
+    <div class="t12-sub">
+      <div class="sub-label">Nur im Dauerbetrieb (T2)</div>
+      <div class="station strand-sb station-plan" id="st-tuer1">
+    <div class="station-head">
+      <span class="station-num">T2.1</span>
+      <strong>Tür 1: Abstimmen</strong>
+      
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#444441;background:transparent;border:1px solid #5F5E5A;border-style:dashed;">Geplant — noch nicht gebaut</span></div>
+    <p>Die niedrigste Schwelle der Beteiligung: über die Landkarten-Punkte selbst abstimmen — zustimmen, ablehnen oder überspringen; einen Antworten-Knopf gibt es mit Absicht nicht. Die neue App dafür ist noch nicht gebaut; die Daten liegen schon in dieser Form vor.</p>
+    
+    
+  </div><div class="station strand-sb station-plan" id="st-tuer2">
+    <div class="station-head">
+      <span class="station-num">T2.2</span>
+      <strong>Tür 2: Eigene Kurzaussage</strong>
+      
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#444441;background:transparent;border:1px solid #5F5E5A;border-style:dashed;">Geplant — noch nicht gebaut</span></div>
+    <p>Zwei Sätze, sofort geprüft: Mit Jev läuft die Strecke S1–S3 in Sekunden — bekannt oder neu, freigabefähig, wohin gehört der Punkt. Das Bürger-Formular davor ist noch nicht gebaut.</p>
+    
+    
+  </div><div class="station strand-sb" id="st-tuer3">
+    <div class="station-head">
+      <span class="station-num">T2.3</span>
+      <strong>Tür 3: Volle Stellungnahme</strong>
+      <code>extract.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span></div>
+    <p>Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt in die Zerlegung (S1) und durchläuft dieselbe Strecke wie alles andere.</p>
+    
+    
+  </div><div class="station strand-sb" id="st-haltung">
+    <div class="station-head">
+      <span class="station-num">T2.4</span>
+      <strong>Haltung aus Stellungnahmen</strong>
+      <code>map-stances.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span></div>
+    <p>Für eingereichte Stellungnahmen leitet Jev ab, wie jede Organisation zu jedem Landkarten-Punkt steht — Zustimmung, Ablehnung oder nicht angesprochen —, aus ihrem eigenen Text und mit Wahrscheinlichkeit. Nicht angesprochen heißt: keine Stimme. Für eine ganze Konsultation dauert das Sekunden; überall als „abgeleitet“ gekennzeichnet.</p>
+    <p class="note">Im echten Verfahren ergänzt diese Stufe die Live-Beteiligung (Stellungnahmen zählen mit), sie ersetzt sie nicht.</p>
+    <details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Wie steht der Text zum Landkarten-Punkt?</summary><pre>[haltung · Auswahl] {
+ &quot;task&quot;: &quot;What is the stance of the consultation submission excerpt in `submission` toward the claim? The claim is one answer to the open question in `question`: a text that takes the other side of that question disagrees, even in different words (claim 'the limit is too strict', text 'the limit must be tightened' → disagrees). Judge only from the text, not from the author's presumed interests; text and claim may be in different languages — judge the meaning.&quot;,
+ &quot;question&quot;: &quot;&lt;Streitfrage&gt;&quot;,
+ &quot;claim&quot;: &quot;&lt;Landkarten-Punkt&gt;&quot;
+}
+   – agrees: The text holds the claim to be true or demands what the claim demands — also when the claim itself is a criticism or a negation (a text that says 'the draft ignores X' agrees with the claim 'the draft ignores X').
+   – disagrees: The text holds the claim to be false or rejects what the claim demands. Criticising the draft law is not the same as disagreeing with the claim — judge the text's position on the claim itself.
+   – not_addressed: The text does not address this claim, or its position on it is unclear.</pre></details>
+  </div>
+      <a class="mini" href="#st-analyse"><strong>↻ Lagerbildung</strong><span>läuft nächtlich mit — Lager und Brücken aktualisieren sich während der Beteiligung (→ T3.1)</span></a>
+    </div>
+  </div><div class="col ">
+    <div class="col-head">
+      <div class="tl-head">T3 · Auswertung</div>
+      <div class="tl-dur">≈ 1 Woche</div>
+      <p>Finale Analyse über dem vollständigen Material: Lager und Brücken, Diagnose je Punkt, Lücken, Scheinbrücken-Prüfung, Befunde.</p>
+      
+    </div>
+    <div class="station strand-sb" id="st-analyse">
+    <div class="station-head">
+      <span class="station-num">T3.1</span>
+      <strong>Lager &amp; Brücken</strong>
+      <code>camps.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span></div>
+    <p>Das Polis-Verfahren über den Stimmen zu den Landkarten-Punkten: Wer ähnlich stimmt, bildet ein Lager (PCA + k-means, deterministisch, differentialgetestet gegen die Referenz-Implementierung). Jeder Landkarten-Punkt bekommt sein Profil je Lager direkt — gezählt, nicht gemittelt.</p>
+    
+    
+  </div><div class="station strand-sb" id="st-namen">
+    <div class="station-head">
+      <span class="station-num">T3.2</span>
+      <strong>Lager-Namen</strong>
+      <code>name-camps.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Damit „Gruppe 0“ und „Gruppe 1“ lesbar werden, benennt ein Sprachmodell die Lager anhand der Punkte, die sie am deutlichsten trennen, und ihrer Mitglieder — reine Benennung, keine Zahl wird angefasst.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Lager-Namen-Prompt</summary><pre>You name opinion camps found by clustering votes on a public argument map, so readers grasp each camp at a glance.
+
+For each camp you get: its participant composition (organization types, notable members) and the statements it most strongly agrees and disagrees with. Produce:
+- name: a SHORT descriptive label (2–4 words, in the consultation's language) capturing the camp's substantive position — not its demographics alone. Good: &quot;Netz- und Gaswirtschaft&quot;, &quot;Ambitionierter Klimaschutz&quot;. Bad: &quot;Gruppe 1&quot;, &quot;Die Kritiker&quot;.
+- summary: ONE sentence stating what holds this camp together.
+
+Stay neutral and descriptive; never mock or valorize a camp.</pre></details>
+  </div><div class="station strand-sh" id="st-diagnose">
+    <div class="station-head">
+      <span class="station-num">T3.3</span>
+      <strong>Diagnose je Punkt — das Scharnier</strong>
+      <code>diagnose-map.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span><span class="badge" style="color:#4B2E83;background:#ECE6F7;border:1px solid #6A4BB0;">KI entscheidet — Jev, mit Wahrscheinlichkeit</span><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Hier treffen sich Struktur und Menschen: Jeder Landkarten-Punkt hat sein Profil je Lager, gezählt („3 von 4 Organisationen dafür“), und daraus fällt die Diagnose aus festen Schwellen: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Streit um die Ausgestaltung (Gestaltungspunkt, Lager auseinander), Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen (zu wenige Stimmen aus einem Lager). Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Scheinbrücken: Das Sprachmodell prüft jede Brücke mit genug Material — Jevs Vorprüfung ließ im ersten Lauf alle 53 Brücken durch und wird nur noch mitprotokolliert; ein Fund wird als Warnung markiert, nicht als Faktum.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Scheinbrücken-Check-Prompt</summary><pre>You check ONE bridge point of a consultation map for the Scheinbrücke pattern (Brücke der Ergebnisse): both camps agree with the claim — but for diverging, ultimately incompatible reasons (e.g. both want transition periods: one side so the obligation arrives cleanly, the other so it never arrives).
+
+First write the rationale: one German sentence on what the underlying material (member points, quotes) shows about WHY each side agrees. Then give the verdict that follows from that rationale:
+- &quot;same_reasons&quot;: the visible reasons point in the same direction, or differ only in detail or emphasis; the bridge carries.
+- &quot;diverging_reasons&quot;: the material shows clearly conflicting purposes behind the agreement — what one side wants from it, the other side rejects.
+- &quot;unclear&quot;: the material does not show the reasons; no verdict possible.
+
+Be conservative: &quot;diverging_reasons&quot; only when the material actually shows incompatible purposes. The verdict must match the rationale.</pre></details><details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: Scheinbrücken-Frage (nur protokolliert)</summary><pre>[verdacht · ja/nein, als Wahrscheinlichkeit] Do the points in `members` and the quotes in `quotes` back the claim in `claim` for DIVERGING reasons that cannot both be satisfied — e.g. one side wants a transition period so that the obligation arrives cleanly, the other so that it never arrives?
+   – true: The supporters agree with the claim but want different, ultimately incompatible things from it; the agreement would break at the first design question.
+   – false: The supporters agree for the same or compatible reasons, or the material shows no sign of diverging motives.</pre></details>
+  </div><div class="station strand-sh" id="st-befund">
+    <div class="station-head">
+      <span class="station-num">T3.4</span>
+      <strong>Befund je Punkt</strong>
+      <code>diagnose-map.ts (Befund-Teil)</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#0C447C;background:#DCE9F6;border:1px solid #185FA5;">KI schreibt — Sprachmodell</span></div>
+    <p>Zu jeder gerechneten Diagnose entsteht der Befund: zwei bis fünf Sätze Klartext — was die Zählungen zeigen, was daraus für das Verfahren folgt (Kurzgutachten? Ratsentscheidung? Lücke schließen?), was im Material dahintersteht. Die Diagnose selbst ist dem Modell vorgegeben und unantastbar.</p>
+    
+    <details class="prompt"><summary>Prompt ansehen: Befund-Prompt (mit Bindungsregel)</summary><pre>You write the BEFUND (finding) for one canonical point of a Landkarte des Streits — the annex of a consultation report read by the deciding body and the public.
+
+The verdict was computed deterministically and is BINDING. You verbalize it; you must not change, soften, invert, or second-guess it. The diagnosis vocabulary:
+- &quot;bruecke&quot; (Brücke der Gründe): both camps carry the claim (&gt;= 60 % each). Say what that makes possible.
+- &quot;klaerbar&quot; (klärbar durch Gutachten): a fact question divides the camps — evidence could settle it. Name what kind of evidence (Kurzgutachten, Messdaten, juristische Kurzstellungnahme) and recommend clearing it before the council decides.
+- &quot;wert&quot; (Wertdifferenz): a value judgment divides the camps. No study can settle it; it belongs to the council as an explicit value decision.
+- &quot;kern&quot; (Kernkonflikt): THE central value conflict of this measure — the largest camp gap on a value point. Make its weight clear.
+- &quot;gestaltung&quot; (Streit um die Ausgestaltung): the camps split on HOW the measure should be designed — a deadline, threshold, exemption, or procedure. Neither a fact a study settles nor a pure value question: a design choice to be negotiated. Name the design options on the table and, where the material shows it, where a middle ground could lie.
+- &quot;warnung&quot; (Scheinbrücke / Brücke der Ergebnisse): both camps agree, but for diverging reasons. Warn that a decision leaning on this number alone will crack at the first design question.
+- &quot;offen&quot;: too few organisations from one camp took a position (or both camps sit in the middle) — the point is neither carried nor settled; say what would firm it up. Never call a clear split between the camps &quot;offen&quot;.
+- &quot;luecke&quot;: an unanswered critical question — nobody in the consultation addressed it. Recommend actively closing it before the decision.
+
+Write 2–5 German sentences, plain language a first-time reader understands, confident report tone, no hedging about the computed numbers, no jargon, no meta-talk about AI. When counts of organisations are given, prefer them to percentages — the votes are inferred from a small number of written statements, and &quot;3 von 4&quot; says honestly what &quot;75 %&quot; overstates. Refer to the deciding body neutrally as &quot;die Entscheidungsebene&quot; or &quot;der Gesetzgeber&quot; for federal/EU material — never invent a concrete body (Stadtrat, Gemeinderat) the material does not name. Ground the text in the material you are given (member points, quotes); mention concrete actors or mechanisms where the material carries them. Do not invent numbers beyond the given percentages.</pre></details>
+  </div>
+    
+  </div><div class="col ">
+    <div class="col-head">
+      <div class="tl-head">T4 · Bericht &amp; Entscheidung</div>
+      <div class="tl-dur">Ratsbefassung</div>
+      <p>Landkarten und Bericht gehen an den Rat: Brücken als konsensfähige Beschlussteile, Klärfälle mit Gutachten-Empfehlung, Wertungspunkte als ausgewiesene politische Entscheidungen. Erfolgskriterium des Papiers: Der Rat zitiert den Bericht in der Beschlussvorlage.</p>
+      
+    </div>
+    <div class="station strand-sh" id="st-landkarte">
+    <div class="station-head">
+      <span class="station-num">T4.1</span>
+      <strong>Die Landkarte</strong>
+      <code>render-landkarte.ts</code>
+    </div>
+    <div class="station-badges"><span class="badge" style="color:#085041;background:#DFF1EA;border:1px solid #0F6E56;">Gerechnet — keine KI</span></div>
+    <p>Je Maßnahme eine eigenständige Seite: das Grundmuster als Leiste, die Zone der Gutachter mit ihren Bezirken, die Zone des Rates, die Ausgestaltung — jeder Punkt mit Zählung je Lager, Befund, Originalzitaten samt Lager der Organisation und aufklappbarer Beleg-Schicht. Reines Rendern, keine KI.</p>
+    
+    
+  </div>
+    
+  </div><div class="col col-t5">
+    <div class="col-head">
+      <div class="tl-head">T5 · Nach der Entscheidung</div>
+      <div class="tl-dur">Perspektive</div>
+      <p>Gutachten kommen zurück, Klärfälle werden auf der Karte tatsächlich geklärt, die Landkarte lebt als Gedächtnis des Verfahrens weiter (Evidenz-Graph — Zukunft).</p>
+      
+    </div>
+    
+    
+  </div></div>
+  </div>
+  <p class="strand-legend">Kartenkante = Strang: <i style="color:#6B6E76">▍</i> Stamm ·
+    <i style="color:#0F6E56">▍</i> Struktur des Streits (bringt die Landkarten-Punkte hervor) ·
+    <i style="color:#1E4A7A">▍</i> die Menschen dahinter (stimmen über die Landkarten-Punkte ab) ·
+    <i style="color:#9A6A14">▍</i> Scharnier &amp; Bericht (Struktur × Lagerprofile) ·
+    gestrichelte Karten = geplant · ↻ = läuft im Fenster durchgehend als Dienst</p>
+
+  <p class="foot">Alle Stufen quelloffen (MIT) unter github.com/flotob/policy-platform · Lagermathematik als
+    differentialgetestete Portierung des Polis-Verfahrens · Dieses Dokument wird generiert
+    (render-pipeline.ts) — die Prompt-Texte sind zwangsläufig aktuell.</p>
+</div>
+</body>
+</html>

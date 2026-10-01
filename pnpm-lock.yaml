@@ -18,6 +18,37 @@ importers:
         specifier: ^5.8.0
         version: 5.9.3
 
+  apps/auswertung:
+    dependencies:
+      '@policy/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@policy/landkarte':
+        specifier: workspace:*
+        version: link:../../packages/landkarte
+      '@policy/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
+      next:
+        specifier: ^15.3.0
+        version: 15.5.22(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.17)
+
   apps/common-ground:
     dependencies:
       '@policy/chain':
@@ -132,6 +163,22 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.1)
+
+  packages/landkarte:
+    dependencies:
+      '@policy/db':
+        specifier: workspace:*
+        version: link:../db
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.17
+      react:
+        specifier: ^19.0.0
+        version: 19.2.8
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
 
   packages/llm:
     dependencies:
