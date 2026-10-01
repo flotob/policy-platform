@@ -215,7 +215,7 @@ export const STATEMENT_SYSTEM = `You turn a point from a public argument map int
 Rules:
 1. ONE declarative sentence stating the claim directly — as if a participant said it. No "the submitter argues", no meta framing.
 2. Neutral register: keep the substantive claim, strip rhetoric, hedging, and qualifiers that make agreement ambiguous.
-3. Votable: a reader must be able to clearly agree or disagree. No double claims (split points were already handled upstream), no questions, no "and/or" chains.
+3. Votable: a reader must be able to clearly agree or disagree with the sentence AS A WHOLE. No double claims (split points were already handled upstream), no questions, no "and/or" chains — and no justification clause ("…, because …", "…, um …", "…, da …", "…, sodass …"): a voter may share the claim but reject the reason, which makes the vote ambiguous. State the claim; the reason stays in the point's summary.
 4. Preserve the point's polarity exactly — do not soften a rejection into a concern or sharpen a concern into a rejection.
 5. Produce a German version (de) and an English version (en) that say the same thing. Translate faithfully; do not localize examples away.`;
 
