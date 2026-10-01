@@ -13,26 +13,25 @@
  *   No opinion / I don't know / Neutral / leading 3 / blank → pass (0)
  * A question column becomes votable when ≥ 60% of its non-empty answers map;
  * skipped columns are logged (free text, multi-option categoricals).
+ *
+ * --mapper jev (exp/jev, needs TYPESAFE_API_KEY): votable questions and
+ * answer values come from Jev judgments + code rules (numeric scales,
+ * multi-select) instead of the English-only regex ladder — see
+ * packages/pipeline/src/jev-answers.ts. Identical values wherever the regex
+ * maps at all; maps German labels, other scales, and bare 0–5 ratings.
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
 
-function mapAnswer(value: string): -1 | 0 | 1 | null {
-  const v = value.trim().replace(/&apos;/g, "'");
-  if (!v) return 0;
-  const lower = v.toLowerCase();
-  if (/^(no opinion|i don'?t know|don'?t know|neutral|3\b)/.test(lower)) return 0;
-  if (/^(yes|much|very much|rather yes|agree|strongly agree)/.test(lower)) return 1;
-  if (/^(no|not at all|rather not|disagree|strongly disagree)/.test(lower)) return -1;
-  const likert = /^([1-5])\s*[-–]/.exec(v);
-  if (likert) {
-    const n = Number(likert[1]);
-    return n >= 4 ? 1 : n <= 2 ? -1 : 0;
-  }
-  return null;
-}
+import { JevJudge } from "../packages/llm/src/index.ts";
+import {
+  decideQuestion,
+  mapQuestion,
+  regexMapAnswer,
+  type AnswerValue,
+} from "../packages/pipeline/src/jev-answers.ts";
 
 async function main() {
   const [, , exportDir, ...rest] = process.argv;
@@ -67,22 +66,43 @@ async function main() {
   const consultationId = consultation.rows[0].id;
 
   // 1. Determine votable questions across the whole dataset.
-  const questionStats = new Map<string, { mapped: number; total: number }>();
+  const useJev = rest.includes("--mapper") && rest[rest.indexOf("--mapper") + 1] === "jev";
+  const labelCounts = new Map<string, Map<string, number>>();
   for (const r of responses) {
     const answers: Record<string, string> = JSON.parse(r.answers);
     for (const [q, v] of Object.entries(answers)) {
       if (!v.trim()) continue;
-      const s = questionStats.get(q) ?? { mapped: 0, total: 0 };
-      s.total++;
-      if (mapAnswer(v) !== null) s.mapped++;
-      questionStats.set(q, s);
+      const m = labelCounts.get(q) ?? new Map<string, number>();
+      m.set(v.trim(), (m.get(v.trim()) ?? 0) + 1);
+      labelCounts.set(q, m);
     }
   }
-  const votable = [...questionStats.entries()]
-    .filter(([, s]) => s.total >= 20 && s.mapped / s.total >= 0.6)
-    .map(([q]) => q);
-  const skipped = questionStats.size - votable.length;
-  console.log(`questions: ${questionStats.size} total → ${votable.length} votable, ${skipped} skipped (free text / categorical)`);
+  const valueOf = new Map<string, Map<string, AnswerValue>>();
+  const votable: string[] = [];
+  const judge = useJev ? new JevJudge() : null;
+  for (const [q, counts] of labelCounts) {
+    const total = [...counts.values()].reduce((s, n) => s + n, 0);
+    if (total < 20) continue;
+    if (judge) {
+      const { mapping } = await mapQuestion(judge, q, [...counts.keys()]);
+      const d = decideQuestion(counts, mapping);
+      if (d.votable) {
+        votable.push(q);
+        valueOf.set(q, d.values);
+      }
+    } else {
+      const values = new Map([...counts.keys()].map((l) => [l, regexMapAnswer(l)]));
+      let mapped = 0;
+      for (const [l, n] of counts) if (values.get(l) !== null) mapped += n;
+      if (mapped / total >= 0.6) {
+        votable.push(q);
+        valueOf.set(q, values);
+      }
+    }
+  }
+  const skipped = labelCounts.size - votable.length;
+  console.log(`answer mapper: ${useJev ? "jev" : "regex"}`);
+  console.log(`questions: ${labelCounts.size} total → ${votable.length} votable, ${skipped} skipped (free text / categorical)`);
 
   // 2. Points + statements for votable questions (released — they ARE the questionnaire).
   const statementIdByQuestion = new Map<string, string>();
@@ -118,7 +138,8 @@ async function main() {
     const params: unknown[] = [];
     for (const q of votable) {
       const statementId = statementIdByQuestion.get(q)!;
-      const value = mapAnswer(answers[q] ?? "");
+      const raw = (answers[q] ?? "").trim();
+      const value = raw ? (valueOf.get(q)!.get(raw) ?? null) : 0;
       if (value === null) continue; // unmappable individual answer on a votable question
       params.push(tenantId, participantId, statementId, value);
       values.push(`($${params.length - 3}, $${params.length - 2}, $${params.length - 1}, $${params.length})`);
