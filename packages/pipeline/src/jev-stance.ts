@@ -30,12 +30,23 @@ const CRITERIA = {
   not_addressed: "The text does not address this claim, or its position on it is unclear.",
 } as const;
 
-export function stanceQuestion(claim: string) {
+/**
+ * With `question` (Landkarten-Punkte, condense v2) the claim is one answer to
+ * an open question: a text taking the other side of it disagrees even in
+ * different words — direction is a Jev weak spot (CLAUDE.md gotcha 19).
+ */
+export function stanceQuestion(claim: string, question?: string | null) {
   return choice(
-    {
-      task: "What is the stance of the consultation submission excerpt in `submission` toward the claim? Judge only from the text, not from the author's presumed interests; text and claim may be in different languages — judge the meaning.",
-      claim,
-    },
+    question
+      ? {
+          task: "What is the stance of the consultation submission excerpt in `submission` toward the claim? The claim is one answer to the open question in `question`: a text that takes the other side of that question disagrees, even in different words (claim 'the limit is too strict', text 'the limit must be tightened' → disagrees). Judge only from the text, not from the author's presumed interests; text and claim may be in different languages — judge the meaning.",
+          question,
+          claim,
+        }
+      : {
+          task: "What is the stance of the consultation submission excerpt in `submission` toward the claim? Judge only from the text, not from the author's presumed interests; text and claim may be in different languages — judge the meaning.",
+          claim,
+        },
     CRITERIA,
   );
 }

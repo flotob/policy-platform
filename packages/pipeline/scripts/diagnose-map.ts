@@ -4,12 +4,15 @@
  * Three parts per scope, in the concept paper's trust architecture:
  *  1. DETERMINISTIC: camp profiles (mean agreement of the two largest camps
  *     over the voted extraction points underneath), diagnosis from the fixed
- *     vocabulary (bruecke/klaerbar/wert/kern/offen), Lücken rows for the
- *     critical questions nobody asked, quotes pulled from point_sources.
- *     No AI involved — "die Diagnosen werden gerechnet, nicht gemeint".
- *  2. REASONS CHECK (machine-flagged, editorial review pending): bridge
- *     points are screened for the Scheinbrücke pattern (agreement for
- *     diverging reasons) → diag 'warnung' + needs_review flag.
+ *     vocabulary (bruecke/klaerbar/wert/gestaltung/kern/offen), Lücken rows
+ *     for the critical questions nobody asked, quotes pulled from
+ *     point_sources. No AI involved — "die Diagnosen werden gerechnet, nicht
+ *     gemeint".
+ *  2. REASONS CHECK (machine-flagged, editorial review pending): every
+ *     bridge with enough material goes to the LLM check for the
+ *     Scheinbrücke pattern (agreement for diverging reasons) → diag
+ *     'warnung' + needs_review flag. Jev's answer to the same question is
+ *     recorded next to it, no longer a gate (it let 53/53 WPG bridges pass).
  *  3. BEFUND: the LLM verbalizes the computed verdict — binding, it may
  *     phrase but never change it (paper, Phase 4).
  *
@@ -41,7 +44,7 @@ import {
 } from "../src/schemas.ts";
 import { runPool } from "../src/pool.ts";
 import { saveJudgment } from "../src/jev-stage.ts";
-import { REASONS_SCREEN, REASONS_SCREEN_MIN } from "../src/jev-map.ts";
+import { REASONS_SCREEN } from "../src/jev-map.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -108,6 +111,7 @@ interface MapRow {
   ord: number;
   typ: string;
   bezirk: string;
+  question: string | null;
   text: string;
   label: string;
   diag: string | null;
@@ -237,7 +241,7 @@ async function main() {
 
     // ——— Deterministic profiles + diagnoses.
     const rowsRes = await db.execute(sql`
-      SELECT id, ord, typ, bezirk, text, label, diag, befund, diag_flags, quotes
+      SELECT id, ord, typ, bezirk, question, text, label, diag, befund, diag_flags, quotes
       FROM map_points
       WHERE consultation_id = ${consultationId} AND scope = ${scope}
       ORDER BY ord
@@ -303,7 +307,8 @@ async function main() {
         const min = Math.min(pa, pb);
         if (min >= AGREE_FLOOR) diag = "bruecke";
         else if (gap >= FORK_GAP) {
-          diag = row.typ === "T" ? "klaerbar" : row.typ === "W" ? "wert" : "offen";
+          // A split on a design point is a dispute about the design, not missing evidence.
+          diag = row.typ === "T" ? "klaerbar" : row.typ === "W" ? "wert" : "gestaltung";
         }
       }
       // The numbers make a bridge; a CURRENT false-bridge verdict (same
@@ -395,7 +400,7 @@ async function main() {
 
     // ——— Reasons check on bridges (machine flag, editorial review pending).
     const fresh = await db.execute(sql`
-      SELECT id, ord, typ, bezirk, text, label, diag, befund, diag_flags, quotes
+      SELECT id, ord, typ, bezirk, question, text, label, diag, befund, diag_flags, quotes
       FROM map_points
       WHERE consultation_id = ${consultationId} AND scope = ${scope}
       ORDER BY ord
@@ -426,12 +431,13 @@ async function main() {
       }
     }
 
-    // Jev pre-screen (map-points engine): only bridges with a sign of
-    // diverging reasons go to the LLM check.
-    let toCheck = bridges;
+    // Every bridge goes to the LLM check. Jev answers the same question on
+    // the side (recorded for calibration, never a gate; a failed Jev call
+    // only leaves the record empty).
+    const toCheck = bridges;
     const reasonsDone = new Set<string>();
+    const screen = new Map<string, number>();
     if (judge && bridges.length > 0) {
-      const flagged: typeof bridges = [];
       await runPool(
         bridges,
         async (row) => {
@@ -450,34 +456,16 @@ async function main() {
             consultationId,
             subjectKind: "map_point",
             subjectId: row.id,
-            family: "reasons-screen.v1",
+            family: "reasons-screen.v2",
             provenance,
             answers,
-            decided: { diverging: p, toLlm: p >= REASONS_SCREEN_MIN },
+            decided: { diverging: p, gate: false },
           });
-          if (p >= REASONS_SCREEN_MIN) flagged.push(row);
-          else {
-            // Replace the whole verdict (obsolete keys → null), keep unrelated flags.
-            const flags = {
-              reasons: "same_reasons",
-              reasons_screen: Number(p.toFixed(3)),
-              reasons_rationale: null,
-              scheinbruecke: null,
-              needs_review: null,
-              reasons_for: fpOf(row),
-            };
-            await db.execute(sql`
-              UPDATE map_points SET diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify(flags)}::jsonb
-              WHERE id = ${row.id}`);
-            row.diag_flags = { ...(row.diag_flags ?? {}), ...flags };
-            reasonsDone.add(row.id);
-          }
+          screen.set(row.id, Number(p.toFixed(3)));
         },
         8,
-        { label: (row) => `reasons pre-screen "${row.label}"` },
+        { label: (row) => `reasons screen (Jev, recorded only) "${row.label}"` },
       );
-      console.log(`  reasons pre-screen (Jev): ${bridges.length} bridges → ${flagged.length} to the LLM check`);
-      toCheck = flagged;
     }
     if (toCheck.length > 0) {
       console.log(`  reasons check on ${toCheck.length} bridges`);
@@ -498,6 +486,7 @@ async function main() {
           const flags: Record<string, unknown> = {
             reasons: parsed.verdict,
             reasons_rationale: parsed.rationale,
+            reasons_screen: screen.get(row.id) ?? null,
             scheinbruecke: null,
             needs_review: null,
             reasons_for: fpOf(row),
@@ -529,9 +518,7 @@ async function main() {
 
     // Bridges whose reasons check failed are pending: no Befund now (it
     // would describe a bridge that may turn out to be a false one).
-    const pendingReasons = toCheck.filter((r) => !reasonsDone.has(r.id)).concat(
-      judge ? bridges.filter((r) => !reasonsDone.has(r.id) && !toCheck.includes(r)) : [],
-    );
+    const pendingReasons = toCheck.filter((r) => !reasonsDone.has(r.id));
     for (const r of pendingReasons) reasonsPending.add(r.id);
     if (pendingReasons.length) console.log(`  reasons check INCOMPLETE for ${pendingReasons.length} bridges — rerun`);
 
@@ -561,6 +548,7 @@ async function main() {
         };
         const prompt = befundPrompt({
           scope,
+          question: row.question,
           text: row.text,
           typ: row.typ,
           diag: cur.diag,

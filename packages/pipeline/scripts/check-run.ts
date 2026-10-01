@@ -10,6 +10,7 @@
 import { createDb, sql } from "@policy/db";
 
 import { resolveConsultation } from "../src/jev-stage.ts";
+import { MAP_POINTS_MAX } from "../src/prompts.ts";
 import { displayQuote } from "../src/quote-span.ts";
 
 function arg(name: string): string | undefined {
@@ -177,6 +178,12 @@ async function main() {
     const scopes = new Map<string, number>();
     for (const m of mps) scopes.set(m.scope, (scopes.get(m.scope) ?? 0) + 1);
     console.log(`map points: ${mps.length} in ${scopes.size} measures (${[...scopes.values()].join("/")})`);
+    // condense v2: at most MAP_POINTS_MAX Landkarten-Punkte per measure (Lücken come on top).
+    const live = new Map<string, number>();
+    for (const m of mps) if (m.typ !== "luecke") live.set(m.scope, (live.get(m.scope) ?? 0) + 1);
+    const over = [...live.entries()].filter(([, n]) => n > MAP_POINTS_MAX);
+    if (over.length) failures.push(`${over.length} measures with more than ${MAP_POINTS_MAX} Landkarten-Punkte (${over.map(([s, n]) => `${s}: ${n}`).join(", ")})`);
+    if (st.mapped) console.log(`Einzelforderungen (on no Landkarten-Punkt): ${st.nongap - st.mapped}`);
     const bad = mps.filter(
       (m) =>
         (m.typ === "W" && m.bezirk !== "wert") ||

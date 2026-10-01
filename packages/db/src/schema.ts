@@ -67,9 +67,10 @@ export const points = pgTable("points", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Canonical Landkarten-Punkte (map grain, ~15-25 per measure) — the unit
- *  of Stephan's prototype. Extraction points reference them via
- *  points.map_point_id; diagnosis vocabulary matches the prototype. */
+/** Canonical Landkarten-Punkte (map grain, at most 20 per measure) — the
+ *  unit of Stephan's prototype: one disputed question each. Extraction
+ *  points reference them via points.map_point_id; diagnosis vocabulary
+ *  matches the prototype (+ 'gestaltung', migration 0014). */
 export const mapPoints = pgTable("map_points", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
@@ -78,6 +79,8 @@ export const mapPoints = pgTable("map_points", {
   ord: integer("ord").notNull().default(0),
   typ: text("typ").notNull(),
   bezirk: text("bezirk").notNull(),
+  /** The open question this point answers (condense v2; NULL before). */
+  question: text("question"),
   text: text("text").notNull(),
   label: text("label").notNull(),
   diag: text("diag"),

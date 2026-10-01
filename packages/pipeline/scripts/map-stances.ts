@@ -26,7 +26,8 @@ function arg(name: string): string | undefined {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 }
 
-export const MAP_STANCE_FAMILY = "map-stance.v1";
+/** v2: the stance question carries the Landkarten-Punkt's open question (condense v2). */
+export const MAP_STANCE_FAMILY = "map-stance.v2";
 
 interface Sub {
   id: string;
@@ -45,9 +46,9 @@ async function main() {
   const cons = await resolveConsultation(db, ref);
 
   const mpRes = await db.execute(sql`
-    SELECT id, text FROM map_points WHERE consultation_id = ${cons.id} AND typ <> 'luecke' ORDER BY scope, ord
+    SELECT id, question, text FROM map_points WHERE consultation_id = ${cons.id} AND typ <> 'luecke' ORDER BY scope, ord
   `);
-  const mps = mpRes.rows as { id: string; text: string }[];
+  const mps = mpRes.rows as { id: string; question: string | null; text: string }[];
   const subRes = await db.execute(sql`
     SELECT id, author_org, author_type, language, text FROM submissions
     WHERE consultation_id = ${cons.id} AND text IS NOT NULL ORDER BY length(text) DESC
@@ -70,7 +71,7 @@ async function main() {
     reqs,
     (r) => {
       const questions: Record<string, ReturnType<typeof stanceQuestion>> = {};
-      r.mps.forEach((m, i) => (questions[`s${i}`] = stanceQuestion(m.text)));
+      r.mps.forEach((m, i) => (questions[`s${i}`] = stanceQuestion(m.text, m.question)));
       return { state: { submission: r.text }, questions };
     },
     async (r, answers, provenance) => {

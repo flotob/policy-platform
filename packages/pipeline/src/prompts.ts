@@ -413,36 +413,57 @@ export function condensePrompt(
   );
 }
 
+/** Most Landkarten-Punkte per measure (Stephan's prototype: ~19). */
+export const MAP_POINTS_MAX = 20;
+
 /**
- * Condensation proposal (exp/jev): the LLM writes the canonical Landkarten-
- * Punkte of one measure; Jev assigns every extraction point afterwards
- * (no index lists in the LLM output).
+ * Condensation (exp/jev, v2): the LLM finds the disputed QUESTIONS of one
+ * measure and writes one votable statement per question; Jev assigns every
+ * extraction point afterwards (no index lists in the LLM output). Points no
+ * question takes stay unassigned — the Landkarte lists them as
+ * Einzelforderungen.
  */
-export const CONDENSE_PROPOSE_SYSTEM = `You condense the extraction-grain points of one measure of a public consultation into canonical MAP POINTS (Landkarten-Punkte).
+export const CONDENSE_PROPOSE_SYSTEM = `You build the Landkarte des Streits for ONE measure of a public consultation: the few questions that are really at stake, each as one statement people can vote on (Landkarten-Punkt).
 
-A map point is ONE argument a reader can hold in mind and a citizen can vote on: a single, neutral, declarative German sentence. The extraction points underneath are formulations, details, sub-aspects, and repetitions of these few real arguments — the map grows by insight, not by paper. Merge aggressively: every variant, sub-aspect, example, and restatement of the same argument belongs to the same map point. Aim for roughly one map point per three extraction points (a list of 30 → about 10); never more than 25. Fewer, sharper points beat many small ones.
+You get the extraction points of this measure — each one claim made by one or more organisations in their written statements — with the organisations that made it.
 
-A map point is voted on as a whole: it states ONE claim at the level of the argument — no justification or purpose clause ("…, weil …", "…, da …", "…, um … zu …"), no "X und Y" of two separable claims. Keep facts and value judgments in separate map points.
+1. Find the QUESTIONS. Which questions about this measure do the organisations actually answer, in agreement or against each other? Different positions on the same question are answers to it, not separate questions: "raise the biomass limit", "lower it", "delete it", "make it flexible" all answer ONE question — "How strict should the biomass limit for new heat networks be?".
+2. One Landkarten-Punkt per question: a single neutral German statement that answers the question in one direction, so that agreeing means one side's position and disagreeing the other side's (e.g. "Die Biomasse-Grenzen für neue Wärmenetze sind zu streng."). Phrase it the way the organisations that raise it hold it. Never two points for the same question.
+3. Facts, values, and design stay apart, because they are settled differently. A fact question — could a study, data, or a legal opinion settle it? ("Das nachhaltige Biomassepotenzial reicht für höhere Anteile nicht aus") — is its own point next to the value or design question that rests on it.
+4. Weight decides what gets on the map. First the questions several organisations address, and those on which organisations take opposite positions; questions all of them agree on count too (they are bridges). A demand only ONE organisation raises and no other touches gets no point of its own, unless it concerns the core of the measure: it is listed under the map as a single demand (Einzelforderung), so nothing is lost.
+5. At most ${MAP_POINTS_MAX} points; fewer when fewer questions are really at stake. A short map of real questions beats a long list of positions.
 
-Per map point:
-- "text": the canonical claim, German, one sentence, votable (someone can agree or disagree), neutral phrasing, no rhetoric.
+Every statement is voted on as a whole: ONE claim — no justification or purpose clause ("…, weil …", "…, da …", "…, um … zu …"), no "X und Y" of two separable claims; neutral, no rhetoric.
+
+Per Landkarten-Punkt:
+- "question": the open question it answers, German, ends with "?".
+- "text": the statement, German, one sentence.
 - "label": a short German chip label for the map, <= 45 characters.
-- "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": transition periods, hardship clauses, exemptions, staggering, procedural safeguards).
-- "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself), "ausgestaltung" (design instruments; always for typ "verfahren").
+- "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": deadlines, thresholds, transition periods, hardship clauses, exemptions, procedural safeguards).
+- "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself), "ausgestaltung" (design instruments; always for typ "verfahren").`;
 
-Cover every substantive argument, usually by a map point that bundles it with related extraction points — another step assigns each extraction point to the map point it belongs to.`;
-
-export function condenseTopUpPrompt(
+export function condenseQuestionsPrompt(
   scope: string,
-  existing: { label: string; text: string }[],
-  uncovered: { label: string; summary: string | null; kind: string; cq: string | null }[],
+  description: string | null,
+  points: { label: string; summary: string | null; kind: string; cq: string | null; orgs: string[] }[],
 ): string {
+  // Organisations as short keys: the weight of a point is visible without
+  // repeating long names on every line.
+  const orgs = [...new Set(points.flatMap((p) => p.orgs))].sort();
+  const key = new Map(orgs.map((o, i) => [o, `O${i + 1}`]));
+  const list = points
+    .map(
+      (p, i) =>
+        `${i}. [${p.kind}${p.cq ? "/" + p.cq : ""}] ${p.label}${p.summary ? " — " + p.summary : ""}` +
+        ` · ${p.orgs.length ? p.orgs.map((o) => key.get(o)).join(", ") : "—"}`,
+    )
+    .join("\n");
   return (
-    `Measure under decision: ${scope}\n\nMap points that already exist:\n` +
-    existing.map((m) => `- ${m.text}`).join("\n") +
-    `\n\nThese extraction points fit none of them:\n` +
-    uncovered.map((p) => `- [${p.kind}${p.cq ? "/" + p.cq : ""}] ${p.label}${p.summary ? " — " + p.summary : ""}`).join("\n") +
-    `\n\nPropose ADDITIONAL map points for the real arguments among these (none for noise or for points an existing map point already covers).`
+    `Measure under decision: ${scope}\n` +
+    (description ? `What the bill says: ${description}\n` : "") +
+    `\nOrganisations:\n${orgs.map((o) => `${key.get(o)} = ${o}`).join("\n")}\n` +
+    `\nExtraction points (index. [kind/door] label — summary · organisations):\n${list}\n\n` +
+    `Write the Landkarten-Punkte for this measure: one per disputed question, at most ${MAP_POINTS_MAX}.`
   );
 }
 
@@ -472,8 +493,9 @@ The verdict was computed deterministically and is BINDING. You verbalize it; you
 - "klaerbar" (klärbar durch Gutachten): a fact question divides the camps — evidence could settle it. Name what kind of evidence (Kurzgutachten, Messdaten, juristische Kurzstellungnahme) and recommend clearing it before the council decides.
 - "wert" (Wertdifferenz): a value judgment divides the camps. No study can settle it; it belongs to the council as an explicit value decision.
 - "kern" (Kernkonflikt): THE central value conflict of this measure — the largest camp gap on a value point. Make its weight clear.
+- "gestaltung" (Streit um die Ausgestaltung): the camps split on HOW the measure should be designed — a deadline, threshold, exemption, or procedure. Neither a fact a study settles nor a pure value question: a design choice to be negotiated. Name the design options on the table and, where the material shows it, where a middle ground could lie.
 - "warnung" (Scheinbrücke / Brücke der Ergebnisse): both camps agree, but for diverging reasons. Warn that a decision leaning on this number alone will crack at the first design question.
-- "offen": no sufficient vote data or mid-range profiles — the point is neither carried nor settled; say what would firm it up.
+- "offen": too few organisations from one camp took a position (or both camps sit in the middle) — the point is neither carried nor settled; say what would firm it up. Never call a clear split between the camps "offen".
 - "luecke": an unanswered critical question — nobody in the consultation addressed it. Recommend actively closing it before the decision.
 
 Write 2–5 German sentences, plain language a first-time reader understands, confident report tone, no hedging about the computed numbers, no jargon, no meta-talk about AI. When counts of organisations are given, prefer them to percentages — the votes are inferred from a small number of written statements, and "3 von 4" says honestly what "75 %" overstates. Refer to the deciding body neutrally as "die Entscheidungsebene" or "der Gesetzgeber" for federal/EU material — never invent a concrete body (Stadtrat, Gemeinderat) the material does not name. Ground the text in the material you are given (member points, quotes); mention concrete actors or mechanisms where the material carries them. Do not invent numbers beyond the given percentages.`;
@@ -486,6 +508,8 @@ export interface VoteCounts {
 
 export function befundPrompt(input: {
   scope: string;
+  /** The open question the point answers (condense v2). */
+  question?: string | null;
   text: string;
   typ: string;
   diag: string;
@@ -512,7 +536,9 @@ export function befundPrompt(input: {
     .map((q) => `- ${q.quelle}: "${q.text}"`)
     .join("\n");
   return (
-    `Measure: ${input.scope}\nCanonical claim: ${input.text}\nTyp: ${input.typ}\n` +
+    `Measure: ${input.scope}\n` +
+    (input.question ? `Open question: ${input.question}\n` : "") +
+    `Canonical claim: ${input.text}\nTyp: ${input.typ}\n` +
     `Computed diagnosis (binding): ${input.diag}\nCamp profile: ${profile}\n` +
     (input.reasonsRationale
       ? `Reasons check (machine-flagged, editorial review pending): ${input.reasonsRationale}\n`

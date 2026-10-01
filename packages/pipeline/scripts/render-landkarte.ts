@@ -39,6 +39,7 @@ interface MapPoint {
   ord: number;
   typ: string;
   bezirk: string;
+  question: string | null;
   text: string;
   label: string;
   diag: string | null;
@@ -51,12 +52,19 @@ interface MapPoint {
   members: string[];
 }
 
+/** A point of the measure that no Landkarten-Punkt took (listed, not voted on). */
+interface Single {
+  label: string;
+  orgs: string[];
+}
+
 const DIAG_META: Record<string, { label: string; fg: string; bg: string; stroke: string }> = {
   bruecke: { label: "Brücke der Gründe", fg: "#085041", bg: "#DFF1EA", stroke: "#0F6E56" },
   klaerbar: { label: "Klärbar durch Gutachten", fg: "#0C447C", bg: "#DCE9F6", stroke: "#185FA5" },
   offen: { label: "Offen — Evidenz fehlt", fg: "#444441", bg: "#EDECE4", stroke: "#5F5E5A" },
   wert: { label: "Wertdifferenz", fg: "#712B13", bg: "#F6E3DB", stroke: "#993C1D" },
   kern: { label: "Kernkonflikt — politisch zu entscheiden", fg: "#633806", bg: "#F7E8CB", stroke: "#9A6A14" },
+  gestaltung: { label: "Streit um die Ausgestaltung", fg: "#4B2E6B", bg: "#EDE6F4", stroke: "#6E4C96" },
   warnung: { label: "Warnung: Brücke der Ergebnisse", fg: "#633806", bg: "#F7E8CB", stroke: "#9A6A14" },
   luecke: { label: "Lücke — unbeantwortete Frage", fg: "#444441", bg: "none", stroke: "#5F5E5A" },
 };
@@ -149,6 +157,7 @@ function detailHtml(p: MapPoint, campA: string, campB: string): string {
       <span class="typ-badge">${TYP_LABEL[p.typ] ?? p.typ}</span>
       <span class="diag-badge" style="background:${m.bg === "none" ? "#F1EFE8" : m.bg};color:${m.fg}">${m.label}</span>
     </div>
+    ${p.question ? `<p class="question">Streitfrage: ${esc(p.question)}</p>` : ""}
     <p class="detail-text">${esc(p.text)}</p>
     ${lagerBars(p.pa, p.pb, campA, campB, (p.diag_flags as { votes?: { a: Count; b: Count } } | null)?.votes)}
     ${reviewNote}
@@ -168,6 +177,7 @@ function renderScope(input: {
   participants: number;
   inferredNote: string;
   points: MapPoint[];
+  singles: Single[];
   indexHref: string;
 }): string {
   const { points, campA, campB } = input;
@@ -180,6 +190,7 @@ function renderScope(input: {
     bruecken: points.filter((p) => p.diag === "bruecke").length,
     klaerbar: points.filter((p) => p.diag === "klaerbar").length,
     kern: kern.length,
+    gestaltung: points.filter((p) => p.diag === "gestaltung").length,
     warnung: points.filter((p) => p.diag === "warnung").length,
     luecken: points.filter((p) => p.diag === "luecke").length,
   };
@@ -278,6 +289,13 @@ function renderScope(input: {
   .typ-badge { font-size:.72rem; border:1px solid var(--line); border-radius:.25rem; padding:.1rem .4rem; background:var(--grayBg); }
   .diag-badge { font-size:.72rem; border-radius:9999px; padding:.15rem .6rem; }
   .detail-text { font-family:Georgia,serif; font-size:1.05rem; margin:.6rem 0 .4rem; }
+  .question { font-size:.8rem; color:var(--muted); margin:.6rem 0 0; }
+  .singles { margin-top:1.25rem; background:var(--card); border:1px solid var(--line); border-radius:.75rem; padding:1rem; }
+  .singles summary { cursor:pointer; font-weight:600; font-size:.9rem; }
+  .singles p { font-size:.8rem; color:var(--muted); margin:.4rem 0 .2rem; }
+  .singles ul { margin:.4rem 0 0; padding-left:1.2rem; font-size:.85rem; }
+  .singles li { margin-top:.3rem; }
+  .singles li span { color:var(--muted); font-size:.75rem; }
   .bars { margin:.5rem 0; display:grid; gap:.3rem; }
   .bar-row { display:grid; grid-template-columns:minmax(8rem,14rem) 1fr 6.5rem; gap:.5rem; align-items:center; font-size:.75rem; }
   .bar-name { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -315,6 +333,7 @@ function renderScope(input: {
     <div><b>${counts.bruecken}</b><span>Brücken</span></div>
     <div><b>${counts.klaerbar}</b><span>Klärfälle</span></div>
     <div><b style="color:var(--amber)">${counts.kern}</b><span>Kernkonflikt</span></div>
+    <div><b>${counts.gestaltung}</b><span>Gestaltungsstreit</span></div>
     <div><b>${counts.luecken}</b><span>Lücken</span></div>
   </div>
   <p class="camps"><i style="background:#44639A"></i>${esc(campA)} (${input.sizeA} Beteiligte) &nbsp; <i style="background:#B26E24"></i>${esc(campB)} (${input.sizeB} Beteiligte)</p>
@@ -362,7 +381,7 @@ function renderScope(input: {
     <div class="filters">
       <button data-f="alle" class="on">Alle Punkte</button>
       <button data-f="bruecke">Brücken (${counts.bruecken})</button>
-      <button data-f="konflikt">Kernkonflikt &amp; Wertdifferenzen</button>
+      <button data-f="konflikt">Kernkonflikt, Wert- &amp; Gestaltungsstreit</button>
       <button data-f="klaer">Warnungen &amp; Klärfälle</button>
       <button data-f="T">Nur Tatsachen [T]</button>
       <button data-f="W">Nur Wertungen [W]</button>
@@ -370,8 +389,14 @@ function renderScope(input: {
     <div id="list">${listCards}</div>
   </div>
 
+  ${input.singles.length > 0 ? `<details class="singles"><summary>Weitere Einzelforderungen (${input.singles.length})</summary>
+    <p>Punkte, die keiner Streitfrage der Landkarte zugeordnet sind — meist Forderungen einer einzelnen Organisation.
+      Sie gehen nicht verloren, stehen aber nicht zur Abstimmung.</p>
+    <ul>${input.singles.map((x) => `<li>${esc(x.label)}${x.orgs.length ? ` <span>· ${esc(x.orgs.join(", "))}</span>` : ""}</li>`).join("")}</ul>
+  </details>` : ""}
+
   <p class="foot">Methodik: Zerlegung der Stellungnahmen per Sprachmodell in Schablonen (praktisches Schließen, fünf kritische Fragen),
-    Verdichtung auf kanonische Landkarten-Punkte mit vollständiger Zuordnung der Extraktionsebene · Voten teils direkt, teils aus
+    Verdichtung auf die Streitfragen (höchstens 20 Landkarten-Punkte je Maßnahme), Punkte ohne eigene Streitfrage als Einzelforderungen gelistet · Voten teils direkt, teils aus
     Freitext abgeleitet und gekennzeichnet · Lagerbildung und Brückenwerte statistisch aus der Abstimmungsmatrix (Verfahren nach Polis) ·
     Diagnosen deterministisch gerechnet, Wertungspunkte zu keinem Zeitpunkt maschinell entschieden · Befunde sprachlich ausformuliert
     bei bindender Schlussfolgerung · Jeder Schritt ist protokolliert (Audit-Log). Entwurf — redaktionelle Freigabe ausstehend.</p>
@@ -403,7 +428,7 @@ document.querySelectorAll('.filters button').forEach(function (b) {
     document.querySelectorAll('.list-card').forEach(function (card) {
       var d = card.dataset.diag, t = card.dataset.typ, show = true;
       if (f === 'bruecke') show = d === 'bruecke';
-      else if (f === 'konflikt') show = d === 'kern' || d === 'wert';
+      else if (f === 'konflikt') show = d === 'kern' || d === 'wert' || d === 'gestaltung';
       else if (f === 'klaer') show = d === 'warnung' || d === 'klaerbar' || d === 'offen' || d === 'luecke';
       else if (f === 'T' || f === 'W') show = t === f;
       card.hidden = !show;
@@ -482,7 +507,7 @@ async function main() {
   const indexRows: { scope: string; display: string; file: string; counts: string }[] = [];
   for (const scope of scopes) {
     const rowsRes = await db.execute(sql`
-      SELECT mp.id, mp.ord, mp.typ, mp.bezirk, mp.text, mp.label, mp.diag, mp.pa, mp.pb,
+      SELECT mp.id, mp.ord, mp.typ, mp.bezirk, mp.question, mp.text, mp.label, mp.diag, mp.pa, mp.pb,
         mp.n_voted, mp.befund, mp.diag_flags, mp.quotes,
         COALESCE((SELECT json_agg(p.label ORDER BY p.created_at) FROM points p
           WHERE p.map_point_id = mp.id), '[]'::json) AS members
@@ -491,6 +516,17 @@ async function main() {
       ORDER BY mp.ord
     `);
     const points = (rowsRes.rows as unknown as (Omit<MapPoint, "members"> & { members: string[] })[]);
+    // Einzelforderungen: points of this measure no Landkarten-Punkt took (condense v2).
+    const singlesRes = await db.execute(sql`
+      SELECT p.label,
+        COALESCE((SELECT array_agg(DISTINCT COALESCE(s.author_org, 'Stellungnahme')) FROM point_sources ps
+          JOIN submissions s ON s.id = ps.submission_id WHERE ps.point_id = p.id), '{}') AS orgs
+      FROM points p
+      WHERE p.consultation_id = ${consultationId} AND p.measure = ${scope} AND p.map_point_id IS NULL
+        AND p.status = 'released' AND p.kind <> 'gap' AND p.created_by <> 'import:questionnaire'
+      ORDER BY 2, p.label
+    `);
+    const singles = singlesRes.rows as unknown as Single[];
     const displayScope = scope === "übergreifend" ? "Das Vorhaben als Ganzes" : scope;
     const html = renderScope({
       scope,
@@ -503,6 +539,7 @@ async function main() {
       participants: st.participants,
       inferredNote,
       points,
+      singles,
       indexHref: "index.html",
     });
     const file = `${slug(displayScope)}.html`;
@@ -512,12 +549,13 @@ async function main() {
       bruecken: points.filter((p) => p.diag === "bruecke").length,
       kern: points.filter((p) => p.diag === "kern").length,
       luecken: points.filter((p) => p.diag === "luecke").length,
+      einzel: singles.length,
     };
     indexRows.push({
       scope,
       display: displayScope,
       file,
-      counts: `${c.punkte} Punkte · ${c.bruecken} Brücken · ${c.kern} Kernkonflikt · ${c.luecken} Lücken`,
+      counts: `${c.punkte} Punkte · ${c.bruecken} Brücken · ${c.kern} Kernkonflikt · ${c.luecken} Lücken · ${c.einzel} Einzelforderungen`,
     });
     console.log(`  ${file}: ${points.length} points`);
   }

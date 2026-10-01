@@ -1,15 +1,19 @@
 /**
- * Condensation into Landkarten-Punkte (exp/jev) — replaces condense-map.ts
- * in the Jev chain.
+ * Condensation into Landkarten-Punkte (exp/jev, v2) — replaces
+ * condense-map.ts in the Jev chain.
  *
  * Per measure (all measures in parallel):
- *  1. PROPOSE (LLM): canonical map points — text, label, typ, district —
- *     without member lists (index lists were the fragile part).
- *  2. ASSIGN (Jev): every extraction point → one map point or "none"
- *     (one calibrated choice per point, answers keyed by name).
- *  3. TOP-UP (LLM, once): when more than 15 % of the points fit no map
- *     point, the LLM proposes additional map points for exactly those, and
- *     Jev assigns them again.
+ *  1. PROPOSE (LLM): the disputed QUESTIONS of the measure, one votable
+ *     statement each (question, text, label, typ, district), at most
+ *     MAP_POINTS_MAX. The LLM sees which organisations made each point, so
+ *     weight decides what gets on the map; positions on the same question
+ *     (raise / lower / delete) are one Landkarten-Punkt.
+ *  2. DEDUPE (Jev): every pair of proposals of the same typ — "do these two
+ *     ask the same question?" — merges into the earlier one.
+ *  3. ASSIGN (Jev): every extraction point → the question it takes a
+ *     position on, or "none". Points no question takes stay unassigned: the
+ *     Landkarte lists them as Einzelforderungen (no top-up round any more —
+ *     it doubled the big maps with single demands).
  * Map points nobody was assigned to are removed; districts are derived in
  * code from typ and the members' critical questions (deriveBezirk); order
  * follows district, then size.
@@ -21,13 +25,14 @@
  */
 
 import { createDb, sql, type Db } from "@policy/db";
-import { AgentSdkProvider, JevJudge } from "@policy/llm";
+import { AgentSdkProvider, JevJudge, type JudgeProvenance } from "@policy/llm";
 
 import { deriveBezirk } from "../src/jev-grammar.ts";
-import { MAP_ASSIGN_FAMILY, mapAssignQuestion } from "../src/jev-map.ts";
-import { resolveConsultation, saveJudgment } from "../src/jev-stage.ts";
+import { MAP_ASSIGN_FAMILY, MAP_DEDUPE_FAMILY, mapAssignQuestion, mergeGroups, sameQuestion } from "../src/jev-map.ts";
+import { resolveConsultation, saveJudgment, sinceReset } from "../src/jev-stage.ts";
+import type { BillMeasure } from "../src/measures.ts";
 import { runPool } from "../src/pool.ts";
-import { CONDENSE_PROPOSE_SYSTEM, condensePrompt, condenseTopUpPrompt } from "../src/prompts.ts";
+import { CONDENSE_PROPOSE_SYSTEM, MAP_POINTS_MAX, condenseQuestionsPrompt } from "../src/prompts.ts";
 import { condenseProposeJsonSchema, condenseProposeOutput } from "../src/schemas.ts";
 
 function arg(name: string): string | undefined {
@@ -35,9 +40,9 @@ function arg(name: string): string | undefined {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 }
 
-/** Above this share of uncovered points, the LLM gets one top-up round. */
-const TOP_UP_ABOVE = 0.15;
 const BEZIRK_ORDER = ["wirkung", "machbarkeit", "kosten", "alternativen", "wert", "ausgestaltung"];
+/** Same-question pairs per Jev request (all proposals ride in the state). */
+const DEDUPE_BATCH = 60;
 
 interface Pt {
   id: string;
@@ -46,13 +51,18 @@ interface Pt {
   kind: string;
   cq: string | null;
   map_point_id: string | null;
+  orgs: string[];
 }
-interface Mp {
-  id: string;
-  label: string;
+type Typ = "T" | "W" | "verfahren";
+interface Proposal {
+  question: string;
   text: string;
-  typ: "T" | "W" | "verfahren";
+  label: string;
+  typ: Typ;
   bezirk: string;
+}
+interface Mp extends Proposal {
+  id: string;
 }
 
 async function assign(
@@ -63,8 +73,8 @@ async function assign(
   pts: Pt[],
   mps: Mp[],
 ): Promise<Pt[]> {
-  const options: Record<string, { label: string; text: string }> = {};
-  mps.forEach((m, i) => (options[`k${i + 1}`] = { label: m.label, text: m.text }));
+  const options: Record<string, { label: string; question: string; text: string }> = {};
+  mps.forEach((m, i) => (options[`k${i + 1}`] = { label: m.label, question: m.question, text: m.text }));
   const uncovered: Pt[] = [];
   const res = await runPool(
     pts,
@@ -101,28 +111,41 @@ async function assign(
   return uncovered;
 }
 
-async function insertMapPoints(
-  db: Db,
-  cons: { id: string; tenantId: string },
+/** Jev: which proposals ask the same question (pairs of the same typ only — facts, values, design stay apart). */
+async function dedupe(
+  judge: JevJudge,
   scope: string,
-  proposals: { text: string; label: string; typ: "T" | "W" | "verfahren"; bezirk: string }[],
-  model: string,
-  firstOrd: number,
-): Promise<Mp[]> {
-  // All or nothing: a half-saved proposal would later look complete.
-  const out: Mp[] = [];
-  let ord = firstOrd;
-  await db.transaction(async (tx) => {
-    for (const p of proposals) {
-      const r = await tx.execute(sql`
-        INSERT INTO map_points (tenant_id, consultation_id, scope, ord, typ, bezirk, text, label, created_by)
-        VALUES (${cons.tenantId}, ${cons.id}, ${scope}, ${ord++}, ${p.typ}, ${p.bezirk}, ${p.text}, ${p.label}, ${`ai-condense:${model}`})
-        RETURNING id
-      `);
-      out.push({ id: (r.rows[0] as { id: string }).id, ...p });
-    }
-  });
-  return out;
+  proposals: Proposal[],
+): Promise<{ keep: number[]; groups: number[]; records: { provenance: JudgeProvenance; answers: unknown; pairs: { i: number; j: number; p: number }[] }[] }> {
+  const key = (i: number) => `k${i + 1}`;
+  const pairs: { i: number; j: number }[] = [];
+  for (let i = 0; i < proposals.length; i++)
+    for (let j = i + 1; j < proposals.length; j++) if (proposals[i]!.typ === proposals[j]!.typ) pairs.push({ i, j });
+  const state = {
+    measure: scope,
+    points: Object.fromEntries(proposals.map((p, i) => [key(i), { question: p.question, text: p.text }])),
+  };
+  const batches: { i: number; j: number }[][] = [];
+  for (let o = 0; o < pairs.length; o += DEDUPE_BATCH) batches.push(pairs.slice(o, o + DEDUPE_BATCH));
+  const records: { provenance: JudgeProvenance; answers: unknown; pairs: { i: number; j: number; p: number }[] }[] = [];
+  const res = await runPool(
+    batches,
+    async (batch) => {
+      const questions: Record<string, ReturnType<typeof sameQuestion>> = {};
+      batch.forEach(({ i, j }) => (questions[`${key(i)}_${key(j)}`] = sameQuestion(key(i), key(j))));
+      const { answers, provenance } = await judge.judge(state, questions);
+      records.push({
+        provenance,
+        answers,
+        pairs: batch.map(({ i, j }) => ({ i, j, p: (answers[`${key(i)}_${key(j)}`] as { noul: number }).noul })),
+      });
+    },
+    4,
+    { label: (b) => `${scope}: same-question check (${b.length} pairs)` },
+  );
+  if (res.failed > 0) throw new Error(`${scope}: ${res.failed} same-question requests failed — rerun`);
+  const groups = mergeGroups(proposals.length, records.flatMap((r) => r.pairs));
+  return { keep: groups.flatMap((g, i) => (g === i ? [i] : [])), groups, records };
 }
 
 async function main() {
@@ -135,6 +158,16 @@ async function main() {
   const provider = new AgentSdkProvider();
   const judge = new JevJudge();
 
+  // What the bill says about each measure (propose-measures-bill.ts) — context for the questions.
+  const billRes = await db.execute(sql`
+    SELECT payload FROM audit_log a WHERE action = 'consultation.propose_measures' AND subject_id = ${cons.id}
+      AND payload ? 'details' AND a.created_at > ${sinceReset(cons.id)}
+    ORDER BY created_at DESC LIMIT 1
+  `);
+  const bill = new Map(
+    ((billRes.rows[0] as { payload: { details: BillMeasure[] } } | undefined)?.payload.details ?? []).map((m) => [m.name, m.description]),
+  );
+
   const scopeRes = await db.execute(sql`
     SELECT DISTINCT measure FROM points
     WHERE consultation_id = ${cons.id} AND measure IS NOT NULL AND status = 'released'
@@ -144,52 +177,77 @@ async function main() {
   if (arg("scope")) scopes = scopes.filter((s) => s === arg("scope"));
   const started = Date.now();
 
-  const summary: string[] = [];
   const { failed } = await runPool(
     scopes,
     async (scope) => {
       const t0 = Date.now();
       const ptRes = await db.execute(sql`
-        SELECT id, label, summary, kind, cq, map_point_id FROM points
-        WHERE consultation_id = ${cons.id} AND measure = ${scope} AND status = 'released'
-          AND kind <> 'gap' AND created_by <> 'import:questionnaire'
-        ORDER BY created_at
+        SELECT p.id, p.label, p.summary, p.kind, p.cq, p.map_point_id,
+          COALESCE((SELECT array_agg(DISTINCT COALESCE(s.author_org, 'Stellungnahme') ORDER BY COALESCE(s.author_org, 'Stellungnahme'))
+                    FROM point_sources ps JOIN submissions s ON s.id = ps.submission_id
+                    WHERE ps.point_id = p.id), '{}') AS orgs
+        FROM points p
+        WHERE p.consultation_id = ${cons.id} AND p.measure = ${scope} AND p.status = 'released'
+          AND p.kind <> 'gap' AND p.created_by <> 'import:questionnaire'
+        ORDER BY p.created_at
       `);
       const pts = ptRes.rows as unknown as Pt[];
       const exRes = await db.execute(sql`
-        SELECT id, label, text, typ, bezirk FROM map_points
+        SELECT id, question, label, text, typ, bezirk FROM map_points
         WHERE consultation_id = ${cons.id} AND scope = ${scope} AND typ <> 'luecke' ORDER BY ord
       `);
       let mps = exRes.rows as unknown as Mp[];
       let proposedNow = 0;
+      let mergedNow = 0;
       if (mps.length === 0) {
         const r = await provider.generateStructured({
           system: CONDENSE_PROPOSE_SYSTEM,
-          prompt: condensePrompt(pts, scope),
+          prompt: condenseQuestionsPrompt(scope, bill.get(scope) ?? null, pts),
           schema: condenseProposeJsonSchema,
         });
-        mps = await insertMapPoints(db, cons, scope, condenseProposeOutput.parse(r.output).map_points, r.provenance.model, 1);
-        proposedNow = mps.length;
-      }
-      let uncovered = await assign(db, judge, cons, scope, pts.filter((p) => !p.map_point_id), mps);
-      let topUp = 0;
-      if (uncovered.length >= 3 && uncovered.length > pts.length * TOP_UP_ABOVE) {
-        const r = await provider.generateStructured({
-          system: CONDENSE_PROPOSE_SYSTEM,
-          prompt: condenseTopUpPrompt(scope, mps, uncovered),
-          schema: condenseProposeJsonSchema,
+        const proposals = condenseProposeOutput.parse(r.output).map_points;
+        const d = await dedupe(judge, scope, proposals);
+        proposedNow = proposals.length;
+        mergedNow = proposals.length - d.keep.length;
+        // Proposals and the same-question record commit together: on resume
+        // existing map points mean "proposed and deduplicated".
+        mps = [];
+        await db.transaction(async (tx) => {
+          for (const [ord, i] of d.keep.entries()) {
+            const p = proposals[i]!;
+            const ins = await tx.execute(sql`
+              INSERT INTO map_points (tenant_id, consultation_id, scope, ord, typ, bezirk, question, text, label, created_by)
+              VALUES (${cons.tenantId}, ${cons.id}, ${scope}, ${ord + 1}, ${p.typ}, ${p.bezirk}, ${p.question}, ${p.text}, ${p.label},
+                      ${`ai-condense:${r.provenance.model}`})
+              RETURNING id
+            `);
+            mps.push({ id: (ins.rows[0] as { id: string }).id, ...p });
+          }
+          for (const [b, rec] of d.records.entries()) {
+            await saveJudgment(tx as unknown as Db, {
+              tenantId: cons.tenantId,
+              consultationId: cons.id,
+              subjectKind: "map_scope",
+              subjectId: `${cons.id}:${scope}:${b}`,
+              family: MAP_DEDUPE_FAMILY,
+              provenance: rec.provenance,
+              answers: rec.answers,
+              decided: {
+                pairs: rec.pairs.map(({ i, j, p }) => ({ a: proposals[i]!.label, b: proposals[j]!.label, p })),
+                mergedInto: d.groups.flatMap((g, i) => (g !== i ? [{ label: proposals[i]!.label, into: proposals[g]!.label }] : [])),
+              },
+            });
+          }
         });
-        const extra = condenseProposeOutput.parse(r.output).map_points;
-        if (extra.length) {
-          mps = [...mps, ...(await insertMapPoints(db, cons, scope, extra, r.provenance.model, mps.length + 1))];
-          topUp = extra.length;
-          uncovered = await assign(db, judge, cons, scope, uncovered, mps);
+        for (const [i, g] of d.groups.entries()) {
+          if (g !== i) console.log(`    same question: "${proposals[i]!.label}" → "${proposals[g]!.label}"`);
         }
       }
+      const uncovered = await assign(db, judge, cons, scope, pts.filter((p) => !p.map_point_id), mps);
 
       // Districts from typ + member doors; empty map points go; order by district and size.
       const memRes = await db.execute(sql`
-        SELECT map_point_id, cq, count(*) OVER (PARTITION BY map_point_id)::int AS n FROM points
+        SELECT map_point_id, cq FROM points
         WHERE consultation_id = ${cons.id} AND measure = ${scope} AND map_point_id IS NOT NULL
           AND status = 'released'
       `);
@@ -202,6 +260,8 @@ async function main() {
       const ordered = kept
         .map((m) => ({ ...m, bezirk: deriveBezirk(m.typ, doors.get(m.id)!, m.bezirk), n: doors.get(m.id)!.length }))
         .sort((a, b) => BEZIRK_ORDER.indexOf(a.bezirk) - BEZIRK_ORDER.indexOf(b.bezirk) || b.n - a.n);
+      // Every point without a map point was just judged: "none" = Einzelforderung.
+      const single = uncovered.length;
       await db.transaction(async (tx) => {
         for (const m of empty) await tx.execute(sql`DELETE FROM map_points WHERE id = ${m.id}`);
         // (consultation, scope, ord) is unique: move to temporary numbers first.
@@ -212,15 +272,15 @@ async function main() {
         await tx.execute(sql`
           INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
           VALUES (${cons.tenantId}, 'pipeline:condense', 'consultation.condense_map', 'consultation', ${cons.id},
-                  ${JSON.stringify({ scope, proposed: proposedNow, topUp, kept: kept.length, removedEmpty: empty.length, points: pts.length, uncovered: uncovered.length })})
+                  ${JSON.stringify({ scope, version: 2, proposed: proposedNow, sameQuestionMerged: mergedNow, kept: kept.length, removedEmpty: empty.length, points: pts.length, einzelforderungen: single })})
         `);
       });
       const line =
-        `${scope}: ${pts.length} points → ${kept.length} map points` +
-        `${proposedNow ? ` (proposed ${proposedNow}${topUp ? ` + top-up ${topUp}` : ""}, ${empty.length} empty removed)` : ""} · ` +
-        `uncovered ${uncovered.length} · ${((Date.now() - t0) / 1000).toFixed(0)}s`;
-      summary.push(line);
+        `${scope}: ${pts.length} points → ${kept.length} Landkarten-Punkte` +
+        `${proposedNow ? ` (proposed ${proposedNow}, ${mergedNow} same question merged, ${empty.length} empty removed)` : ""} · ` +
+        `Einzelforderungen ${single} · ${((Date.now() - t0) / 1000).toFixed(0)}s`;
       console.log(`  ${line}`);
+      if (kept.length > MAP_POINTS_MAX) throw new Error(`${scope}: ${kept.length} Landkarten-Punkte > ${MAP_POINTS_MAX}`);
     },
     Number(arg("concurrency") ?? 4),
     { label: (sc) => `measure "${sc}"`, progress: "condense" },

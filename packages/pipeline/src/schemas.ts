@@ -329,13 +329,16 @@ export const billMeasuresOutput = z
   })
   .strict();
 
-/** Condensation proposal (exp/jev): canonical map points WITHOUT member lists — Jev assigns members. */
+/** Condensation proposal (exp/jev, v2): one Landkarten-Punkt per disputed
+ *  question, WITHOUT member lists — Jev assigns members. Max = MAP_POINTS_MAX
+ *  in prompts.ts. */
 export const condenseProposeOutput = z
   .object({
     map_points: z
       .array(
         z
           .object({
+            question: z.string().min(10).max(300),
             text: z.string().min(10).max(400),
             label: z.string().min(3).max(60),
             typ: z.enum(["T", "W", "verfahren"]),
@@ -343,7 +346,7 @@ export const condenseProposeOutput = z
           })
           .strict(),
       )
-      .max(25),
+      .max(20),
   })
   .strict();
 

@@ -16,7 +16,7 @@ import { resolve } from "node:path";
 
 import { CUT_QUESTION } from "../src/extract.ts";
 import { intakeRequest } from "../src/intake.ts";
-import { mapAssignQuestion, REASONS_SCREEN } from "../src/jev-map.ts";
+import { mapAssignQuestion, REASONS_SCREEN, sameQuestion } from "../src/jev-map.ts";
 import { RELATION_LEVELS } from "../src/jev-match.ts";
 import { relationRequest } from "../src/jev-relations.ts";
 import { stanceQuestion } from "../src/jev-stance.ts";
@@ -168,10 +168,13 @@ const STRAND_A: Station[] = [
     name: "Verdichtung zu Landkarten-Punkten",
     script: "condense.ts",
     kinds: ["ki", "jev"],
-    text: "Je Maßnahme schreibt das Sprachmodell die Landkarten-Punkte — wenige, scharfe Sätze, über die man abstimmen kann (etwa einer je drei Extraktionspunkte, höchstens 25); alle Maßnahmen gleichzeitig. Dann ordnet Jev jeden Extraktionspunkt seinem Landkarten-Punkt zu; bleibt zu viel übrig, ergänzt das Sprachmodell einmal. Nichts geht verloren: Jeder Extraktionspunkt bleibt als Beleg-Schicht darunter.",
+    text: "Je Maßnahme sucht das Sprachmodell die Fragen, um die wirklich gestritten wird, und schreibt je Frage einen Satz, über den man abstimmen kann — höchstens 20; alle Maßnahmen gleichzeitig. Verschiedene Positionen zur selben Frage („Biomasse-Grenze anheben“, „senken“, „streichen“) werden ein Landkarten-Punkt; Gewicht entscheidet, was auf die Karte kommt (wie viele Organisationen etwas sagen). Jev prüft jedes Paar: Fragen zwei Punkte dasselbe? Dann ordnet Jev jeden Extraktionspunkt der Frage zu, zu der er Stellung nimmt. Was keiner Frage gehört — meist die Forderung einer einzelnen Organisation —, steht als Einzelforderung unter der Karte: nicht verloren, aber nicht zur Abstimmung.",
     note: "Im Dauerbetrieb (T2) arbeitet die Verdichtung inkrementell: Neue Punkte werden bestehenden Landkarten-Punkten zugeordnet oder als neue vorgeschlagen.",
     prompts: [{ label: "Verdichtungs-Prompt", text: CONDENSE_PROPOSE_SYSTEM }],
-    questions: [{ label: "Zu welchem Landkarten-Punkt gehört der Punkt?", text: questionsText(mapAssignQuestion([{ label: "<Landkarten-Punkt>" }])) }],
+    questions: [
+      { label: "Fragen zwei Landkarten-Punkte dasselbe?", text: questionsText({ gleiche_frage: sameQuestion("k1", "k2") }) },
+      { label: "Zu welcher Frage nimmt der Punkt Stellung?", text: questionsText(mapAssignQuestion([{ label: "<Landkarten-Punkt>", question: "<Streitfrage>" }])) },
+    ],
   },
 ];
 
@@ -209,7 +212,7 @@ const STRAND_B: Station[] = [
     kinds: ["jev"],
     text: "Für eingereichte Stellungnahmen leitet Jev ab, wie jede Organisation zu jedem Landkarten-Punkt steht — Zustimmung, Ablehnung oder nicht angesprochen —, aus ihrem eigenen Text und mit Wahrscheinlichkeit. Nicht angesprochen heißt: keine Stimme. Für eine ganze Konsultation dauert das Sekunden; überall als „abgeleitet“ gekennzeichnet.",
     note: "Im echten Verfahren ergänzt diese Stufe die Live-Beteiligung (Stellungnahmen zählen mit), sie ersetzt sie nicht.",
-    questions: [{ label: "Wie steht der Text zum Landkarten-Punkt?", text: questionsText({ haltung: stanceQuestion("<Landkarten-Punkt>") }) }],
+    questions: [{ label: "Wie steht der Text zum Landkarten-Punkt?", text: questionsText({ haltung: stanceQuestion("<Landkarten-Punkt>", "<Streitfrage>") }) }],
   },
   {
     key: "analyse",
@@ -238,9 +241,9 @@ const JOIN: Station[] = [
     name: "Diagnose je Punkt — das Scharnier",
     script: "diagnose-map.ts",
     kinds: ["det", "jev", "ki"],
-    text: "Hier treffen sich Struktur und Menschen: Jeder Landkarten-Punkt hat sein Profil je Lager, gezählt („3 von 4 Organisationen dafür“), und daraus fällt die Diagnose aus festen Schwellen: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen. Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Scheinbrücken: Jev prüft jede Brücke vor, nur Verdachtsfälle prüft das Sprachmodell; ein Fund wird als Warnung markiert, nicht als Faktum.",
+    text: "Hier treffen sich Struktur und Menschen: Jeder Landkarten-Punkt hat sein Profil je Lager, gezählt („3 von 4 Organisationen dafür“), und daraus fällt die Diagnose aus festen Schwellen: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Streit um die Ausgestaltung (Gestaltungspunkt, Lager auseinander), Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen (zu wenige Stimmen aus einem Lager). Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Scheinbrücken: Das Sprachmodell prüft jede Brücke mit genug Material — Jevs Vorprüfung ließ im ersten Lauf alle 53 Brücken durch und wird nur noch mitprotokolliert; ein Fund wird als Warnung markiert, nicht als Faktum.",
     prompts: [{ label: "Scheinbrücken-Check-Prompt", text: REASONS_CHECK_SYSTEM }],
-    questions: [{ label: "Scheinbrücken-Vorprüfung", text: questionsText({ verdacht: REASONS_SCREEN }) }],
+    questions: [{ label: "Scheinbrücken-Frage (nur protokolliert)", text: questionsText({ verdacht: REASONS_SCREEN }) }],
   },
   {
     key: "befund",
