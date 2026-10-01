@@ -48,7 +48,7 @@ async function main() {
     result: {
       clustering: { groupSizes: Record<string, number> };
       statements: StoredStatement[];
-      participantGroups: { group: number; authorType: string | null }[];
+      participantGroups: { group: number; authorType: string | null; authorOrg?: string | null }[];
     };
   };
 
@@ -78,19 +78,33 @@ async function main() {
       const key = p.authorType ?? "unbekannt";
       types.set(key, (types.get(key) ?? 0) + 1);
     }
-    const composition = [...types.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, n]) => `${k}×${n}`)
-      .join(", ");
+    // Small camps (inferred from organisations' submissions): the member
+    // organisations say more than any statistic.
+    const orgs = result.participantGroups.filter((p) => p.group === g && p.authorOrg).map((p) => p.authorOrg!);
+    const composition =
+      orgs.length > 0 && orgs.length <= 15
+        ? orgs.join("; ")
+        : [...types.entries()]
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, n]) => `${k}×${n}`)
+            .join(", ");
+    // Rank by what SEPARATES this camp from the others (agreement minus the
+    // others' mean), not by raw agreement — with small camps the smoothed
+    // top agreements are ties and the pick is noise.
     const scored = result.statements
-      .map((s) => ({ label: s.label, pg: s.perGroup.find((x) => x.group === g) }))
+      .map((s) => {
+        const pg = s.perGroup.find((x) => x.group === g);
+        const others = s.perGroup.filter((x) => x.group !== g && x.ns > 0);
+        const otherPa = others.length ? others.reduce((t, x) => t + x.pa, 0) / others.length : 0.5;
+        return { label: s.label, pg, diff: pg ? pg.pa - otherPa : 0 };
+      })
       .filter((s) => s.pg && s.pg.ns >= 2);
-    const top = [...scored].sort((a, b) => b.pg!.pa - a.pg!.pa).slice(0, 6);
-    const bottom = [...scored].sort((a, b) => a.pg!.pa - b.pg!.pa).slice(0, 4);
+    const top = [...scored].sort((a, b) => b.diff - a.diff).slice(0, 6);
+    const bottom = [...scored].sort((a, b) => a.diff - b.diff).slice(0, 4);
     lines.push(
       `Camp ${g} (${result.clustering.groupSizes[g]} members; composition: ${composition}):\n` +
-        `  agrees most:\n${top.map((s) => `    - ${s.label}`).join("\n")}\n` +
-        `  rejects most:\n${bottom.map((s) => `    - ${s.label}`).join("\n")}`,
+        `  agrees clearly MORE than the other camp(s):\n${top.map((s) => `    - ${s.label}`).join("\n")}\n` +
+        `  agrees clearly LESS than the other camp(s):\n${bottom.map((s) => `    - ${s.label}`).join("\n")}`,
     );
   }
 

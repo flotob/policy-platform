@@ -37,7 +37,7 @@ describe("planCuts", () => {
     expect(cuts.at(-1)).toBe(text.length);
     let start = 0;
     for (const c of cuts) {
-      expect(c - start).toBeLessThanOrEqual(1500);
+      expect(c - start).toBeLessThanOrEqual(c === text.length ? 1500 * 1.25 : 1500);
       if (c < text.length) expect(text.slice(c, c + 14)).toMatch(/^Abschnitt (\d*[048]|\d*[13579][26])\./);
       start = c;
     }

@@ -14,7 +14,7 @@
  *     [--out ../../../docs/landkarte]
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { createDb, sql } from "@policy/db";
@@ -82,9 +82,12 @@ function chip(p: MapPoint): string {
   const dashed = p.diag === "luecke" ? "border-style:dashed;background:transparent;" : "";
   const kern = p.diag === "kern" ? "chip-kern" : "";
   const id = `P${String(p.ord).padStart(2, "0")}`;
+  const v = (p.diag_flags as { votes?: { a: { agree: number; disagree: number }; b: { agree: number; disagree: number } } } | null)?.votes;
   const sub =
     p.diag === "kern" && p.pa !== null
-      ? `<span class="chip-sub">Kernkonflikt · ${p.pa} % : ${p.pb} %</span>`
+      ? v
+        ? `<span class="chip-sub">Kernkonflikt · ${v.a.agree}/${v.a.agree + v.a.disagree} : ${v.b.agree}/${v.b.agree + v.b.disagree} dafür</span>`
+        : `<span class="chip-sub">Kernkonflikt · ${p.pa} % : ${p.pb} %</span>`
       : "";
   return `<button class="chip ${kern}" data-id="${p.id}" style="background:${m.bg === "none" ? "transparent" : m.bg};border-color:${m.stroke};color:${m.fg};${dashed}">${id} · ${esc(p.label)}${sub}</button>`;
 }
@@ -95,14 +98,27 @@ function districtBox(bezirk: string, points: MapPoint[]): string {
   return `<div class="district"><div class="district-head"><strong>${esc(b.title)}</strong><span>${esc(b.sub)}</span></div>${points.map(chip).join("")}</div>`;
 }
 
-function lagerBars(pa: number | null, pb: number | null, campA: string, campB: string): string {
-  if (pa === null || pb === null)
-    return `<p class="muted small">Keine belastbaren Abstimmungsdaten zu diesem Punkt.</p>`;
-  const bar = (name: string, v: number, color: string) => `
+type Count = { agree: number; disagree: number; size: number };
+
+function lagerBars(
+  pa: number | null,
+  pb: number | null,
+  campA: string,
+  campB: string,
+  votes?: { a: Count; b: Count } | null,
+): string {
+  const cnt = (c?: Count) => (c ? `${c.agree} von ${c.agree + c.disagree} dafür` : "");
+  if (pa === null || pb === null) {
+    const detail = votes
+      ? ` (${esc(campA)}: ${cnt(votes.a)} · ${esc(campB)}: ${cnt(votes.b)}; das Lager hat ${votes.a.size} bzw. ${votes.b.size} Mitglieder)`
+      : "";
+    return `<p class="muted small">Keine belastbaren Abstimmungsdaten zu diesem Punkt${detail}.</p>`;
+  }
+  const bar = (name: string, v: number, color: string, c?: Count) => `
     <div class="bar-row"><span class="bar-name">${esc(name)}</span>
       <span class="bar-track"><i style="width:${v}%;background:${color}"></i><i class="floor"></i></span>
-      <span class="bar-val">${v} %</span></div>`;
-  return `<div class="bars">${bar(campA, pa, "#44639A")}${bar(campB, pb, "#B26E24")}</div>`;
+      <span class="bar-val"${c ? ` title="${v} % (geglättet)"` : ""}>${c ? cnt(c) : `${v} %`}</span></div>`;
+  return `<div class="bars">${bar(campA, pa, "#44639A", votes?.a)}${bar(campB, pb, "#B26E24", votes?.b)}</div>`;
 }
 
 function detailHtml(p: MapPoint, campA: string, campB: string): string {
@@ -134,7 +150,7 @@ function detailHtml(p: MapPoint, campA: string, campB: string): string {
       <span class="diag-badge" style="background:${m.bg === "none" ? "#F1EFE8" : m.bg};color:${m.fg}">${m.label}</span>
     </div>
     <p class="detail-text">${esc(p.text)}</p>
-    ${lagerBars(p.pa, p.pb, campA, campB)}
+    ${lagerBars(p.pa, p.pb, campA, campB, (p.diag_flags as { votes?: { a: Count; b: Count } } | null)?.votes)}
     ${reviewNote}
     ${p.befund ? `<p class="befund">${esc(p.befund)}</p>` : ""}
     ${quotes}
@@ -194,6 +210,7 @@ function renderScope(input: {
 <html lang="de">
 <head>
 <meta charset="UTF-8">
+<meta name="generator" content="render-landkarte">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Landkarte des Streits — ${esc(input.displayScope)}</title>
 <style>
@@ -262,7 +279,7 @@ function renderScope(input: {
   .diag-badge { font-size:.72rem; border-radius:9999px; padding:.15rem .6rem; }
   .detail-text { font-family:Georgia,serif; font-size:1.05rem; margin:.6rem 0 .4rem; }
   .bars { margin:.5rem 0; display:grid; gap:.3rem; }
-  .bar-row { display:grid; grid-template-columns:minmax(8rem,14rem) 1fr 3rem; gap:.5rem; align-items:center; font-size:.75rem; }
+  .bar-row { display:grid; grid-template-columns:minmax(8rem,14rem) 1fr 6.5rem; gap:.5rem; align-items:center; font-size:.75rem; }
   .bar-name { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bar-track { position:relative; height:9px; background:var(--line); border-radius:5px; overflow:hidden; }
   .bar-track i { position:absolute; inset:0 auto 0 0; border-radius:5px; }
@@ -530,6 +547,16 @@ async function main() {
   <a class="card" href="pipeline.html"><strong>So entsteht die Landkarte</strong><span>Die komplette Pipeline in den vier Phasen des Konzeptpapiers — mit allen Prompts im Original.</span></a>
 </div></body></html>`;
   writeFileSync(`${outDir}/index.html`, index);
+  // Leftovers of earlier runs (measures that no longer exist): remove the
+  // Landkarten this script generated but did not rewrite now.
+  const written = new Set(indexRows.map((r) => r.file));
+  for (const f of readdirSync(outDir)) {
+    if (!f.endsWith(".html") || f === "index.html" || written.has(f)) continue;
+    if (readFileSync(`${outDir}/${f}`, "utf-8").includes('<meta name="generator" content="render-landkarte">')) {
+      unlinkSync(`${outDir}/${f}`);
+      console.log(`  removed stale ${f}`);
+    }
+  }
   console.log(`index.html: ${indexRows.length} maps → ${outDir}`);
   process.exit(0);
 }

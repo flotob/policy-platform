@@ -10,7 +10,13 @@
  * Usage:
  *   DATABASE_URL=... tsx scripts/propose-measures-bill.ts --consultation <ref>
  *     [--document <filename>]   default: the longest 'drucksache:Gesetzentwurf'
+ *     [--force]                 ask the LLM again (default: reuse the cached cut)
+ *
+ * Cached like the extraction: the same bill, prompt, and model give the same
+ * measures across resets — iterations downstream keep a stable map structure.
  */
+
+import { createHash } from "node:crypto";
 
 import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider } from "@policy/llm";
@@ -52,14 +58,29 @@ async function main() {
   const law = lawTextOf(doc.text);
   console.log(`${cons.title}: reading ${doc.filename} — law text ${law.length.toLocaleString("en")} of ${doc.text.length.toLocaleString("en")} chars`);
 
+  const prompt = `Draft law (cover sheet and law text):\n\n---\n${law}\n---\n\nName the separately decidable measures.`;
+  const model = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
+  const callHash = createHash("sha256").update(JSON.stringify({ BILL_MEASURES_SYSTEM, prompt, model })).digest("hex");
+  const cached = process.argv.includes("--force")
+    ? undefined
+    : ((
+        await db.execute(sql`
+          SELECT payload, actor FROM audit_log WHERE action = 'consultation.propose_measures' AND subject_id = ${cons.id}
+            AND payload->>'callHash' = ${callHash} ORDER BY created_at DESC LIMIT 1`)
+      ).rows[0] as { payload: { details: unknown }; actor: string } | undefined);
   const t0 = Date.now();
-  const res = await new AgentSdkProvider().generateStructured({
-    system: BILL_MEASURES_SYSTEM,
-    prompt: `Draft law (cover sheet and law text):\n\n---\n${law}\n---\n\nName the separately decidable measures.`,
-    schema: billMeasuresJsonSchema,
-  });
-  const { measures } = billMeasuresOutput.parse(res.output);
-  console.log(`${measures.length} measures in ${((Date.now() - t0) / 1000).toFixed(0)}s:`);
+  let measures;
+  let actor: string;
+  if (cached) {
+    ({ measures } = billMeasuresOutput.parse({ measures: cached.payload.details }));
+    actor = cached.actor;
+    console.log(`${measures.length} measures (cached cut — --force to ask the LLM again):`);
+  } else {
+    const res = await new AgentSdkProvider().generateStructured({ system: BILL_MEASURES_SYSTEM, prompt, schema: billMeasuresJsonSchema, model });
+    ({ measures } = billMeasuresOutput.parse(res.output));
+    actor = `ai-editor:${res.provenance.model}`;
+    console.log(`${measures.length} measures in ${((Date.now() - t0) / 1000).toFixed(0)}s:`);
+  }
   for (const m of measures) {
     console.log(`  - ${m.name}  [§ ${m.paragraphs.join(", ")}${m.other.length ? ` · ${m.other.join("; ")}` : ""}]\n      ${m.description}`);
   }
@@ -72,9 +93,9 @@ async function main() {
 
   await db.execute(sql`
     INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
-    VALUES (${cons.tenantId}, ${`ai-editor:${res.provenance.model}`}, 'consultation.propose_measures',
+    VALUES (${cons.tenantId}, ${actor}, 'consultation.propose_measures',
             'consultation', ${cons.id},
-            ${JSON.stringify({ measures: measures.map((m) => m.name), details: measures, source: { document: doc.filename, chars: law.length } })})
+            ${JSON.stringify({ measures: measures.map((m) => m.name), details: measures, callHash, cached: !!cached, source: { document: doc.filename, chars: law.length } })})
   `);
   process.exit(0);
 }

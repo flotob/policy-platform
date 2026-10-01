@@ -47,6 +47,8 @@ export interface ExtractConfig {
 
 /** A cut is only considered in the last part of a window (from this fraction of max). */
 export const CUT_FROM = 0.55;
+/** A remainder up to this multiple of max stays one window (no tiny trailing window). */
+export const TAIL_SLACK = 1.25;
 /** Candidate breaks offered to Jev per cut. */
 export const CUT_CANDIDATES = 12;
 const CUT_CONTEXT = 450;
@@ -88,12 +90,12 @@ export async function planCuts(
   text: string,
   maxChars: number,
 ): Promise<{ cuts: number[]; answers: unknown[] }> {
-  if (text.length <= maxChars) return { cuts: [text.length], answers: [] };
+  if (text.length <= maxChars * TAIL_SLACK) return { cuts: [text.length], answers: [] };
   const breaks = breakCandidates(text);
   const cuts: number[] = [];
   const answers: unknown[] = [];
   let start = 0;
-  while (text.length - start > maxChars) {
+  while (text.length - start > maxChars * TAIL_SLACK) {
     const lo = start + Math.floor(maxChars * CUT_FROM);
     const hi = start + maxChars;
     let inRange = breaks.filter((b) => b > lo && b <= hi);

@@ -29,6 +29,7 @@ import {
   REASONS_CHECK_SYSTEM,
   befundPrompt,
   reasonsCheckPrompt,
+  type VoteCounts,
 } from "../src/prompts.ts";
 import {
   befundJsonSchema,
@@ -50,8 +51,8 @@ const flag = (name: string) => process.argv.includes(`--${name}`);
 const FORK_GAP = 15;
 const AGREE_FLOOR = 60;
 const KERN_MIN_GAP = 30;
-/** Direct votes (map-points engine): a camp profile needs at least this many voters per camp. */
-const MIN_CAMP_VOTERS = 2;
+/** Direct votes (map-points engine): a camp profile needs this many voters per camp — 2, or half of a camp smaller than 4. */
+const minCampVoters = (size: number) => Math.min(2, Math.max(1, Math.ceil(size / 2)));
 /** Jev pre-screen: below this P(diverging reasons) the LLM reasons check is skipped. */
 const REASONS_SCREEN_MIN = 0.25;
 
@@ -169,6 +170,29 @@ async function main() {
     }
   }
   const judge = direct ? new JevJudge() : null;
+  // Raw counts per map point and camp — the honest form of the numbers.
+  const countsByMap = new Map<string, VoteCounts>();
+  if (direct) {
+    const groupOf = new Map((analysis.participantGroups ?? []).map((p) => [p.participant, p.group]));
+    const sizeA = analysis.clustering.groupSizes[String(gA)] ?? 0;
+    const sizeB = analysis.clustering.groupSizes[String(gB)] ?? 0;
+    const vRes = await db.execute(sql`
+      SELECT v.map_point_id, v.participant_id, v.value FROM map_point_votes v
+      JOIN map_points m ON m.id = v.map_point_id WHERE m.consultation_id = ${consultationId}
+    `);
+    for (const v of vRes.rows as { map_point_id: string; participant_id: string; value: number }[]) {
+      const g = groupOf.get(v.participant_id);
+      if (g !== gA && g !== gB) continue;
+      const c = countsByMap.get(v.map_point_id) ?? {
+        a: { agree: 0, disagree: 0, size: sizeA },
+        b: { agree: 0, disagree: 0, size: sizeB },
+      };
+      const side = g === gA ? c.a : c.b;
+      if (v.value === 1) side.agree++;
+      else if (v.value === -1) side.disagree++;
+      countsByMap.set(v.map_point_id, c);
+    }
+  }
 
   const scopesRes = await db.execute(sql`
     SELECT DISTINCT scope FROM map_points
@@ -179,6 +203,7 @@ async function main() {
 
   const provider = new AgentSdkProvider();
 
+  const befundJobs: { scope: string; row: MapRow; members: { id: string; label: string }[] }[] = [];
   for (const scope of scopes) {
     console.log(`\n=== scope: ${scope} ===`);
 
@@ -249,7 +274,9 @@ async function main() {
         const per = profileByPoint.get(row.id) ?? [];
         const a = per.find((x) => x.group === gA);
         const b = per.find((x) => x.group === gB);
-        if (a && b && a.ns >= MIN_CAMP_VOTERS && b.ns >= MIN_CAMP_VOTERS) {
+        const sizeA = analysis.clustering.groupSizes[String(gA)] ?? 0;
+        const sizeB = analysis.clustering.groupSizes[String(gB)] ?? 0;
+        if (a && b && a.ns >= minCampVoters(sizeA) && b.ns >= minCampVoters(sizeB)) {
           pasA.push(a.pa);
           pasB.push(b.pa);
         }
@@ -305,9 +332,11 @@ async function main() {
         const qs = ((cur.rows[0] as { quotes: { lager: string; quelle: string; text: string; submission?: string }[] | null }).quotes ?? []).map(
           (q) => ({ ...q, lager: (q.submission && campOfSubmission.get(q.submission)) || "—" }),
         );
+        const votes = countsByMap.get(row.id) ?? null;
         await db.execute(sql`
           UPDATE map_points SET pa = ${c.pa}, pb = ${c.pb}, n_voted = ${c.nVoted}, diag = ${c.diag},
-            quotes = ${JSON.stringify(qs)}
+            quotes = ${JSON.stringify(qs)},
+            diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify({ votes })}::jsonb
           WHERE id = ${row.id}
         `);
         continue;
@@ -458,21 +487,26 @@ async function main() {
       );
     }
 
-    // ——— Befunde: verbalize the binding verdicts.
+    // ——— Befunde: collected here, written below in ONE pool across all
+    // scopes (small scopes no longer leave the parallelism unused).
     if (skipBefund) continue;
-    const need = freshRows.filter((r) => force || !r.befund);
-    console.log(`  befunde: ${need.length} to write`);
+    for (const row of freshRows.filter((r) => force || !r.befund)) {
+      befundJobs.push({ scope, row, members: membersByMap.get(row.id) ?? [] });
+    }
+  }
+
+  if (befundJobs.length > 0) {
+    console.log(`\nbefunde: ${befundJobs.length} to write (${concurrency} in parallel)`);
     const { ok, failed } = await runPool(
-      need,
-      async (row) => {
-        const members = membersByMap.get(row.id) ?? [];
+      befundJobs,
+      async ({ scope, row, members }) => {
         const current = await db.execute(
           sql`SELECT diag, pa, pb, diag_flags, quotes FROM map_points WHERE id = ${row.id}`,
         );
         const cur = current.rows[0] as {
           diag: string; pa: number | null; pb: number | null;
           diag_flags: Record<string, unknown> | null;
-          quotes: { quelle: string; text: string }[] | null;
+          quotes: { quelle: string; text: string; lager?: string }[] | null;
         };
         const result = await provider.generateStructured({
           system: BEFUND_SYSTEM,
@@ -485,8 +519,12 @@ async function main() {
             pb: cur.pb,
             campA,
             campB,
+            votes: cur.diag_flags?.votes as VoteCounts | undefined,
             memberLabels: members.map((m) => m.label),
-            quotes: (cur.quotes ?? []).map((q) => ({ quelle: q.quelle, text: q.text })),
+            quotes: (cur.quotes ?? []).map((q) => ({
+              quelle: q.lager && q.lager !== "—" ? `${q.quelle} (${q.lager})` : q.quelle,
+              text: q.text,
+            })),
             reasonsRationale:
               typeof cur.diag_flags?.reasons_rationale === "string"
                 ? cur.diag_flags.reasons_rationale
@@ -495,19 +533,18 @@ async function main() {
           schema: befundJsonSchema,
         });
         const parsed = befundOutput.parse(result.output);
-        await db.execute(
-          sql`UPDATE map_points SET befund = ${parsed.befund} WHERE id = ${row.id}`,
-        );
+        await db.execute(sql`UPDATE map_points SET befund = ${parsed.befund} WHERE id = ${row.id}`);
       },
       concurrency,
     );
-    console.log(`  befunde done: ${ok} ok, ${failed} failed`);
+    console.log(`befunde done: ${ok} ok, ${failed} failed`);
     await db.execute(sql`
       INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
       VALUES (${tenantId}, 'ai-editor:befund', 'map_point.befund',
               'consultation', ${consultationId},
-              ${JSON.stringify({ scope, written: ok, failed })})
+              ${JSON.stringify({ written: ok, failed })})
     `);
+    if (failed > 0) process.exit(1);
   }
   process.exit(0);
 }

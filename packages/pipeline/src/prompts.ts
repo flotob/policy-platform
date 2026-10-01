@@ -63,7 +63,7 @@ Rules:
 3. Extract factual premises and open questions even when the submission uses them only as support or in passing — they are points on the map.
 4. Strip rhetoric and tone; keep the argumentative core, neutrally phrased. A point must be understandable on its own: name what it refers to (the provision, the instrument, the actor) instead of "this" or "the regulation".
 5. label: a short editorial label (at most 80 characters). summary: one neutral sentence stating the claim. Write both in the language of the submission.
-${withQuote ? '6. quote: a short VERBATIM excerpt from the text (copy exactly, no ellipses) that best evidences the point.\n7.' : "6."} Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
+${withQuote ? '6. quote: a short VERBATIM excerpt from the text (copy exactly, no ellipses) that best evidences the point. The text comes from PDFs: repair broken word spacing and line-break hyphens while copying ("Ein e Quo- te" → "Eine Quote"), change nothing else.\n7.' : "6."} Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
 ${withQuote ? "8." : "7."} A dense section often holds 15–25 points; never pad. An empty list is fine for a section without substantive content.`;
 }
 
@@ -79,7 +79,7 @@ What the flags mean and how to repair:
 - meta / off_topic: possibly greetings, procedure, or another subject → drop if there is no substantive claim about the consultation's subject; otherwise keep or rewrite.
 
 Actions: "keep" (false alarm; points empty), "rewrite" (exactly one point), "split" (two to four points), "drop" (points empty).
-Each point: label (at most 80 characters), summary (one neutral sentence), quote (a short VERBATIM excerpt from the passage that evidences this point). Write in the language of the submission. Never add a claim the passage does not make; never soften or sharpen its direction.`;
+Each point: label (at most 80 characters), summary (one neutral sentence), quote (a short VERBATIM excerpt from the passage that evidences this point; repair broken PDF word spacing and line-break hyphens while copying, change nothing else). Write in the language of the submission. Never add a claim the passage does not make; never soften or sharpen its direction.`;
 
 export function editorPrompt(input: {
   consultation: string;
@@ -104,7 +104,7 @@ Per measure:
 - paragraphs: the section numbers (§) of the main law that make up the measure.
 - other: provisions outside the main law that belong to it (e.g. "Artikel 2: Änderung des BauGB"), else empty.
 
-Cover the substantive provisions; definitions, transitional and final provisions only as part of the measure they serve. Name 4 to 10 measures. Do not create a measure for the law as a whole — that bucket exists already.`;
+Cover the substantive provisions. Definitions, goals, transitional and final provisions are no measure of their own: list their sections under the measure whose obligations they shape (e.g. the definition of unavoidable waste heat belongs to the measures that set renewable shares for heat networks; a section may appear under several measures). Name 4 to 10 measures. Do not create a measure for the law as a whole — that bucket exists already.`;
 
 /** Above this many characters, the context around a marked section is clipped. */
 export const EXTRACT_CONTEXT_MAX = 300_000;
@@ -420,9 +420,9 @@ export function condensePrompt(
  */
 export const CONDENSE_PROPOSE_SYSTEM = `You condense the extraction-grain points of one measure of a public consultation into canonical MAP POINTS (Landkarten-Punkte).
 
-A map point is ONE argument a reader can hold in mind and a citizen can vote on: a single, neutral, declarative German sentence. The extraction points underneath are formulations, details, and repetitions of these few real arguments — the map grows by insight, not by paper. Merge aggressively: every variant, sub-aspect, and restatement of the same argument belongs to the same map point. Target 10–20 map points for a large list (fewer for a short one); never exceed 25. Fewer, sharper points beat many small ones.
+A map point is ONE argument a reader can hold in mind and a citizen can vote on: a single, neutral, declarative German sentence. The extraction points underneath are formulations, details, sub-aspects, and repetitions of these few real arguments — the map grows by insight, not by paper. Merge aggressively: every variant, sub-aspect, example, and restatement of the same argument belongs to the same map point. Aim for roughly one map point per three extraction points (a list of 30 → about 10); never more than 25. Fewer, sharper points beat many small ones.
 
-A map point is voted on as a whole: it states ONE claim — no "…, because …", no "X and Y" of two separable claims. Keep facts and value judgments in separate map points.
+A map point is voted on as a whole: it states ONE claim at the level of the argument — no justification or purpose clause ("…, weil …", "…, da …", "…, um … zu …"), no "X und Y" of two separable claims. Keep facts and value judgments in separate map points.
 
 Per map point:
 - "text": the canonical claim, German, one sentence, votable (someone can agree or disagree), neutral phrasing, no rhetoric.
@@ -430,7 +430,7 @@ Per map point:
 - "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": transition periods, hardship clauses, exemptions, staggering, procedural safeguards).
 - "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself), "ausgestaltung" (design instruments; always for typ "verfahren").
 
-Every substantive argument in the list must be represented by some map point — another step assigns each extraction point to the map point it belongs to.`;
+Cover every substantive argument, usually by a map point that bundles it with related extraction points — another step assigns each extraction point to the map point it belongs to.`;
 
 export function condenseTopUpPrompt(
   scope: string,
@@ -476,7 +476,13 @@ The verdict was computed deterministically and is BINDING. You verbalize it; you
 - "offen": no sufficient vote data or mid-range profiles — the point is neither carried nor settled; say what would firm it up.
 - "luecke": an unanswered critical question — nobody in the consultation addressed it. Recommend actively closing it before the decision.
 
-Write 2–5 German sentences, plain language a first-time reader understands, confident report tone, no hedging about the computed numbers, no jargon, no meta-talk about AI. Refer to the deciding body neutrally as "die Entscheidungsebene" or "der Gesetzgeber" for federal/EU material — never invent a concrete body (Stadtrat, Gemeinderat) the material does not name. Ground the text in the material you are given (member points, quotes); mention concrete actors or mechanisms where the material carries them. Do not invent numbers beyond the given percentages.`;
+Write 2–5 German sentences, plain language a first-time reader understands, confident report tone, no hedging about the computed numbers, no jargon, no meta-talk about AI. When counts of organisations are given, prefer them to percentages — the votes are inferred from a small number of written statements, and "3 von 4" says honestly what "75 %" overstates. Refer to the deciding body neutrally as "die Entscheidungsebene" or "der Gesetzgeber" for federal/EU material — never invent a concrete body (Stadtrat, Gemeinderat) the material does not name. Ground the text in the material you are given (member points, quotes); mention concrete actors or mechanisms where the material carries them. Do not invent numbers beyond the given percentages.`;
+
+/** Raw vote counts per camp (direct votes on Landkarten-Punkte). */
+export interface VoteCounts {
+  a: { agree: number; disagree: number; size: number };
+  b: { agree: number; disagree: number; size: number };
+}
 
 export function befundPrompt(input: {
   scope: string;
@@ -487,14 +493,21 @@ export function befundPrompt(input: {
   pb: number | null;
   campA: string;
   campB: string;
+  votes?: VoteCounts;
   memberLabels: string[];
   quotes: { quelle: string; text: string }[];
   reasonsRationale?: string;
 }): string {
+  const count = (c: { agree: number; disagree: number; size: number }) =>
+    `${c.agree} von ${c.agree + c.disagree} Organisationen, die sich dazu äußern, stimmen zu; das Lager hat ${c.size}`;
   const profile =
     input.pa !== null && input.pb !== null
-      ? `${input.campA}: ${input.pa} % Zustimmung · ${input.campB}: ${input.pb} % Zustimmung`
-      : "keine belastbaren Abstimmungsdaten";
+      ? input.votes
+        ? `${input.campA}: ${input.pa} % Zustimmung (${count(input.votes.a)}) · ${input.campB}: ${input.pb} % Zustimmung (${count(input.votes.b)})`
+        : `${input.campA}: ${input.pa} % Zustimmung · ${input.campB}: ${input.pb} % Zustimmung`
+      : input.votes
+        ? `keine belastbaren Abstimmungsdaten (${input.campA}: ${count(input.votes.a)} · ${input.campB}: ${count(input.votes.b)})`
+        : "keine belastbaren Abstimmungsdaten";
   const quotes = input.quotes
     .map((q) => `- ${q.quelle}: "${q.text}"`)
     .join("\n");
