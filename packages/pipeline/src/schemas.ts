@@ -359,10 +359,11 @@ export const befundOutput = z
   .strict();
 
 /** Scheinbruecken check on bridge points: do the reasons align? */
+/** Rationale BEFORE verdict: the verdict follows from what the material shows (a verdict written first contradicted its own rationale on WPG). */
 export const reasonsCheckOutput = z
   .object({
-    verdict: z.enum(["same_reasons", "diverging_reasons", "unclear"]),
     rationale: z.string().max(400),
+    verdict: z.enum(["same_reasons", "diverging_reasons", "unclear"]),
   })
   .strict();
 

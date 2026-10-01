@@ -61,9 +61,14 @@ const KERN_MIN_GAP = 30;
 const minCampVoters = (size: number) => Math.min(2, Math.max(1, Math.ceil(size / 2)));
 
 const sha = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex");
-/** A reasons verdict is valid for the evidence it judged: claim, members, quotes. */
+/** A reasons verdict is valid for the evidence it judged (claim, members, quotes) under the check it ran (prompt + schema). */
 const reasonsFingerprint = (text: string, memberLabels: string[], quotes: { text: string }[] | null) =>
-  sha({ text, members: [...memberLabels].sort(), quotes: (quotes ?? []).map((q) => q.text) });
+  sha({
+    text,
+    members: [...memberLabels].sort(),
+    quotes: (quotes ?? []).map((q) => q.text),
+    check: { system: REASONS_CHECK_SYSTEM, schema: reasonsCheckJsonSchema },
+  });
 const DOORS: Record<
   string,
   { bezirk: string; label: string; text: string }

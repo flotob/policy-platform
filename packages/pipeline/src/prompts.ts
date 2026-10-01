@@ -567,12 +567,12 @@ export function befundPrompt(input: {
 /** Scheinbrücken check: do both camps back a bridge for the same reasons? */
 export const REASONS_CHECK_SYSTEM = `You check ONE bridge point of a consultation map for the Scheinbrücke pattern (Brücke der Ergebnisse): both camps agree with the claim — but for diverging, ultimately incompatible reasons (e.g. both want transition periods: one side so the obligation arrives cleanly, the other so it never arrives).
 
-From the underlying material (member points, quotes), judge:
-- "same_reasons": the visible reasons point in the same direction; the bridge carries.
-- "diverging_reasons": the material shows clearly conflicting purposes behind the agreement.
+First write the rationale: one German sentence on what the underlying material (member points, quotes) shows about WHY each side agrees. Then give the verdict that follows from that rationale:
+- "same_reasons": the visible reasons point in the same direction, or differ only in detail or emphasis; the bridge carries.
+- "diverging_reasons": the material shows clearly conflicting purposes behind the agreement — what one side wants from it, the other side rejects.
 - "unclear": the material does not show the reasons; no verdict possible.
 
-Be conservative: "diverging_reasons" only when the material actually shows it. Give a one-sentence German rationale.`;
+Be conservative: "diverging_reasons" only when the material actually shows incompatible purposes. The verdict must match the rationale.`;
 
 export function reasonsCheckPrompt(input: {
   text: string;
