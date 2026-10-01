@@ -1,0 +1,83 @@
+/* Organisationen + Laufzettel (org-*). Uses the app tokens; camps stay monochrome. */
+
+.page-head .org-h1 { max-width: 30ch; font-size: 2.1875rem; }
+.org-type { margin: 0 0 0.35rem; }
+.org-k { font-family: var(--sans); font-size: 0.8125rem; color: var(--muted); }
+.org-explain { margin: 0; }
+.org-explain p:last-child { margin-bottom: 0; }
+.org-foot { max-width: 68ch; margin-top: 2rem; }
+
+/* List page: closest / most distant */
+.org-nears { display: grid; gap: 0.15rem; }
+.org-near { display: block; }
+
+/* Agreement ranking */
+.org-agree-group h3 { margin: 1.25rem 0 0.4rem; font-size: 0.9375rem; }
+.org-agree { list-style: none; margin: 0; padding: 0; max-width: calc(68ch + 240px); }
+.org-agree li {
+  display: grid;
+  grid-template-columns: minmax(9rem, 14rem) 140px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.875rem;
+}
+.org-agree li:first-child { border-top: 0; }
+.org-agree a { color: var(--ink); }
+.org-agree-n { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.org-bar { display: block; height: 8px; border-radius: 2px; background: var(--open-soft); overflow: hidden; }
+.org-bar i { display: block; height: 100%; background: var(--ink-2); }
+
+.org-more { margin-top: 0.75rem; }
+.org-more > summary { list-style: none; }
+.org-more > summary::-webkit-details-marker { display: none; }
+.org-more[open] > summary { margin-bottom: 0.5rem; }
+
+/* Laufzettel: index of measures */
+.org-index { margin: 1.25rem 0 0.5rem; max-width: calc(68ch + 240px); }
+.org-index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  columns: 2;
+  column-gap: 2rem;
+  font-size: 0.875rem;
+}
+.org-index li { break-inside: avoid; padding: 0.15rem 0; font-variant-numeric: tabular-nums; }
+
+/* Laufzettel: one group per measure, one compact row per argument */
+.org-group { margin-top: 1.75rem; scroll-margin-top: 1rem; }
+.org-group-head { font-family: var(--serif); font-size: 1.125rem; font-weight: 600; margin: 0 0 0.25rem; }
+.org-group-head a { color: var(--ink); }
+.org-group .row.org-arg { padding: 0.55rem 0; }
+.org-group .row.org-arg:first-of-type { border-top: 1px solid var(--rule-strong); }
+.org-arg-label { font-family: var(--serif); font-size: 1rem; font-weight: 600; line-height: 1.4; margin: 0 0 0.15rem; }
+.org-arg-fate { margin: 0; }
+.org-arg-more > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.org-arg-more > summary:hover { color: var(--ink); }
+.org-arg-more[open] > summary { margin-bottom: 0.4rem; }
+.org-arg-summary { font-family: var(--serif); font-size: 0.95rem; line-height: 1.55; margin: 0.3rem 0; color: var(--ink); }
+.org-arg-reason { color: var(--ink-2); margin: 0.4rem 0 0; }
+.org-arg-reason ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
+.org-landing { display: flex; gap: 0.4rem; align-items: baseline; }
+.org-landing .lk-mark { position: relative; top: 0.05em; }
+
+@media (max-width: 760px) {
+  .page-head .org-h1 { font-size: 1.75rem; }
+  .org-agree li { grid-template-columns: minmax(0, 1fr) 90px; row-gap: 0.15rem; }
+  .org-agree-n { grid-column: 1 / -1; font-size: 0.8125rem; }
+  .org-index ul { columns: 1; }
+}
+
+@media print {
+  .org-arg-more > summary { list-style: none; }
+  .org-index { display: none; }
+}

@@ -1,0 +1,228 @@
+/* Wo stehen Sie? (vote-*) — one question at a time, then the result.
+   Colours stay with their meanings: diagnoses own the colours, camps are
+   monochrome (a = ink, b = hatched grey), the visitor's own answer is ink. */
+
+.vote { max-width: calc(68ch + 240px); }
+.vote-h1:focus, .vote-statement:focus { outline: none; }
+.vote-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.vote-hint { margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--muted); max-width: 60ch; }
+
+/* Start: choose the Teilentscheidung */
+.vote-start { max-width: 46rem; }
+.vote-measures { border: 0; margin: 0; padding: 0; min-width: 0; }
+.vote-measures legend { padding: 0; font-family: var(--serif); font-size: 1.25rem; font-weight: 600; }
+.vote-measures .vote-hint { margin-bottom: 0.75rem; }
+.vote-measure {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.7rem;
+  align-items: baseline;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  margin-top: 0.35rem;
+  cursor: pointer;
+  background: var(--sheet);
+}
+.vote-measure:hover { background: var(--open-soft); }
+.vote-measure.is-on { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+.vote-measure:has(input:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
+.vote-measure input { margin: 0; accent-color: var(--ink); width: 1rem; height: 1rem; align-self: center; }
+.vote-measure-name { font-size: 0.9375rem; }
+.vote-measure.is-on .vote-measure-name { font-weight: 600; }
+.vote-measure-n { font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vote-measure-desc {
+  grid-column: 2 / -1;
+  margin-top: 0.35rem;
+  font-family: var(--serif);
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.vote-start-go { margin-top: 1.25rem; }
+.vote-go { font-size: 1rem; padding: 0.65rem 1.25rem; }
+
+/* Progress */
+.vote-crumbs { margin-bottom: 1rem; }
+.vote-progress { max-width: 46rem; display: grid; gap: 0.4rem; margin-bottom: 1rem; }
+.vote-progress-text { font-size: 0.875rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vote-ticks { list-style: none; margin: 0; padding: 0; display: flex; gap: 3px; align-items: center; }
+.vote-ticks li { flex: 1 1 0; height: 4px; border-radius: 1px; background: var(--rule); }
+.vote-ticks li.is-done { background: var(--ink); }
+.vote-ticks li.is-skip { background: var(--rule-strong); }
+.vote-ticks li.is-now { height: 8px; background: var(--ink-2); }
+
+/* The card */
+.vote-card {
+  max-width: 46rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.5rem 1.75rem 1.5rem;
+  background: var(--sheet);
+}
+.vote-question { margin: 0 0 0.5rem; font-size: 0.9375rem; color: var(--muted); line-height: 1.45; }
+.vote-statement {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 1.5625rem;
+  line-height: 1.35;
+  margin: 0 0 0.9rem;
+}
+.vote-typ { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; margin: 0; font-size: 0.875rem; color: var(--ink-2); }
+.vote-fact {
+  margin: 0.6rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--evidence);
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+
+/* Answer buttons: equal weight, no colour bias */
+.vote-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+.vote-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 3rem;
+  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.vote-btn:hover { background: var(--open-soft); }
+.vote-btn[aria-pressed="true"] { background: var(--ink); color: #fff; }
+.vote-btn-skip { border-color: var(--rule-strong); color: var(--ink-2); font-weight: 400; }
+
+/* The visitor's marks: filled = stimmt zu, struck ring = lehnt ab (as in the camp voices) */
+.vote-ico { display: inline-block; width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; flex: none; position: relative; }
+.vote-ico-agree { background: currentColor; }
+.vote-ico-disagree { border: 2px solid currentColor; }
+.vote-ico-disagree::after {
+  content: "";
+  position: absolute;
+  left: 50%; top: -1px; bottom: -1px;
+  border-left: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+/* Reveal: how the camps answered */
+.vote-reveal { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px dashed var(--rule-strong); animation: vote-in 0.18s ease-out; }
+@keyframes vote-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.vote-yours { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.75rem; font-size: 1rem; }
+.vote-reveal-head { margin: 0; font-size: 0.875rem; color: var(--muted); }
+.vote-voices { margin: 0.4rem 0 0.6rem; }
+.vote-who { margin: 0 0 0.6rem; font-size: 0.875rem; line-height: 1.5; color: var(--ink-2); }
+.vote-who strong { color: var(--ink); font-weight: 500; }
+.vote-diag { margin: 0; font-size: 0.875rem; line-height: 1.5; color: var(--ink-2); }
+.vote-diag .lk-diag { margin-right: 0.5rem; }
+.vote-reveal-go { display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.vote-next { font-size: 1rem; padding: 0.6rem 1.5rem; min-height: 2.75rem; }
+
+/* Under the card */
+.vote-foot {
+  max-width: 46rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem 1.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+}
+.vote-foot-nav { display: flex; gap: 0.25rem 1.25rem; flex-wrap: wrap; }
+.vote-link {
+  border: 0;
+  background: none;
+  padding: 0.35rem 0;
+  color: var(--evidence);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.vote-keys { color: var(--muted); }
+.vote kbd {
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 0.3em;
+  background: var(--open-soft);
+  color: var(--ink);
+}
+@media (hover: none) { .vote-keys { display: none; } }
+
+/* Result */
+.vote-meter { display: inline-flex; flex-wrap: wrap; gap: 2px; vertical-align: middle; }
+.vote-meter i { width: 8px; height: 8px; border: 1px solid var(--rule-strong); border-radius: 1px; box-sizing: border-box; }
+.vote-meter i.is-same { background: var(--ink); border-color: var(--ink); }
+.vote-meter-b i.is-same { background: repeating-linear-gradient(135deg, var(--camp-b) 0 2px, #6f7881 2px 3.5px); border-color: #6f7881; }
+.vote-campdot { display: inline-flex; width: 11px; justify-content: center; flex: none; }
+.vote-campscore { display: grid; gap: 0.2rem; margin-bottom: 0.6rem; }
+.vote-campscore-name { display: flex; gap: 0.4rem; align-items: center; color: var(--ink); font-weight: 500; }
+.vote-mine { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--ink); font-weight: 500; }
+.vote-diff-typ { margin: 0.35rem 0 0; }
+.vote-kinds { margin: -0.4rem 0 1rem; padding-left: 1.2rem; font-family: var(--serif); font-size: 1rem; line-height: 1.6; max-width: 68ch; }
+.vote-legend { list-style: none; margin: 0 0 0.25rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.8125rem; color: var(--ink-2); }
+.vote-legend li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.vote-orgs { list-style: none; margin: 0; padding: 0; }
+.vote-orgs li {
+  display: grid;
+  grid-template-columns: 14px minmax(9rem, 13rem) minmax(0, auto) 1fr;
+  column-gap: 0.75rem;
+  align-items: center;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.9375rem;
+}
+.vote-orgs li:first-child { border-top: 0; }
+.vote-orgs li.is-silent { color: var(--muted); }
+.vote-org-name a { color: var(--ink); text-decoration: none; }
+.vote-org-name a:hover { text-decoration: underline; }
+.vote-org-count { font-size: 0.8125rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.is-silent .vote-org-count { color: var(--muted); white-space: normal; }
+.vote-note {
+  max-width: 68ch;
+  margin: 2rem 0 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.875rem;
+  color: var(--ink-2);
+}
+.vote-result-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 0; }
+.vote-result-actions .btn { padding: 0.55rem 1.1rem; font-size: 0.9375rem; }
+
+@media (max-width: 640px) {
+  .vote-card { padding: 1.1rem 1rem 1.2rem; border-radius: 4px; }
+  .vote-statement { font-size: 1.25rem; }
+  .vote-actions { grid-template-columns: 1fr 1fr; }
+  .vote-btn-skip { grid-column: 1 / -1; min-height: 2.6rem; }
+  .vote-measure { grid-template-columns: auto minmax(0, 1fr); }
+  .vote-measure-n { grid-column: 2; }
+  .vote-orgs li { grid-template-columns: 14px minmax(0, 1fr); row-gap: 0.15rem; }
+  .vote-org-count, .vote-orgs .vote-meter { grid-column: 2; }
+}
+
+/* On a phone the sheet's minimum height would otherwise stretch the navigation strip above a short card. */
+@media (max-width: 760px) {
+  .sheet:has(.vote) { align-content: start; }
+}

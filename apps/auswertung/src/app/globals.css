@@ -117,7 +117,8 @@ h3 { font-family: var(--sans); font-size: 1rem; font-weight: 600; margin: 1.5rem
   .margin { border-left: 0; border-top: 1px dashed var(--rule); padding: 0.5rem 0 0; }
 }
 @media (max-width: 760px) {
-  .sheet { grid-template-columns: 1fr; margin: 0; border: 0; border-radius: 0; }
+  .sheet { grid-template-columns: minmax(0, 1fr); align-content: start; margin: 0; border: 0; border-radius: 0; }
+  .path { min-width: 0; }
   .path { border-right: 0; border-bottom: 1px solid var(--rule); padding: 0.75rem 1rem; }
   .path-title { margin-bottom: 0.5rem; }
   .path ul { display: flex; gap: 0.25rem; overflow-x: auto; white-space: nowrap; padding-bottom: 0.25rem; }

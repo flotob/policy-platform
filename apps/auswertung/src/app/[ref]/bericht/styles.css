@@ -1,0 +1,139 @@
+/* Bericht zum Drucken (rep-*): one document, calm and typographic.
+   Screen: a single reading column inside the sheet. Print: A4, 11pt serif,
+   no navigation, every main section on a new page, links read as text. */
+
+.rep-doc { max-width: 48rem; }
+
+/* Title block */
+.rep-head { padding-bottom: 1.5rem; border-bottom: 1px solid var(--rule); }
+.rep-kicker-title { margin: 0 0 0.4rem; font-size: 0.875rem; color: var(--muted); }
+.rep-head h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 2.1875rem;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0 0 1rem;
+}
+.rep-meta { display: flex; flex-wrap: wrap; gap: 0.5rem 2.25rem; margin: 0 0 1.25rem; font-size: 0.875rem; }
+.rep-meta dt { color: var(--muted); font-size: 0.75rem; }
+.rep-meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+.rep-motto { font-family: var(--serif); font-size: 1.25rem; line-height: 1.5; color: var(--ink); margin: 0 0 1.25rem; max-width: 40ch; }
+.rep-method p {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  background: var(--open-soft);
+  border-radius: 4px;
+  font-family: var(--serif);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.rep-tools { margin: 1.25rem 0; }
+.rep-toc-title { margin: 0 0 0.3rem; font-size: 0.8125rem; color: var(--muted); }
+.rep-toc ol { margin: 0; padding-left: 1.4rem; font-family: var(--serif); font-size: 1rem; line-height: 1.75; }
+.rep-toc a { color: var(--ink); }
+
+/* Sections */
+.rep-section { margin-top: 3rem; }
+.rep-section > h2 { margin-top: 0; }
+.rep-num { font-family: var(--sans); font-weight: 500; color: var(--muted); margin-right: 0.2rem; font-variant-numeric: tabular-nums; }
+.rep-lead { font-family: var(--serif); font-size: 1.0625rem; line-height: 1.65; color: var(--ink-2); }
+.rep-lead p { margin: 0 0 0.9rem; }
+.rep-sub { font-family: var(--serif); font-size: 1.25rem; font-weight: 600; margin: 2.5rem 0 0.5rem; }
+.rep-empty { font-family: var(--serif); color: var(--muted); }
+
+/* Measure groups and point entries */
+.rep-measure {
+  font-family: var(--serif);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 2rem 0 0;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.rep-measure a { color: var(--ink); text-decoration: none; }
+.rep-measure a:hover { text-decoration: underline; }
+.rep-entry { padding: 0.85rem 0; border-top: 1px solid var(--rule); }
+.rep-measure + .rep-entry { border-top: 0; }
+.rep-kicker { margin: 0 0 0.2rem; }
+.rep-q { margin: 0 0 0.15rem; font-size: 0.8125rem; color: var(--muted); }
+.rep-stmt { margin: 0; font-family: var(--serif); font-size: 1.0625rem; font-weight: 600; line-height: 1.4; }
+.rep-stmt a { color: var(--ink); text-decoration: none; }
+.rep-stmt a:hover { text-decoration: underline; }
+.rep-counts { margin: 0.3rem 0 0; font-size: 0.8125rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rep-note { margin: 0.15rem 0 0; font-size: 0.8125rem; color: var(--muted); }
+.rep-befund { margin: 0.45rem 0 0; font-family: var(--serif); font-size: 1rem; line-height: 1.6; color: var(--ink-2); }
+
+/* Summary and recommendation */
+.rep-verdicts { list-style: none; margin: 0; padding: 0; font-family: var(--serif); font-size: 0.9875rem; line-height: 1.55; }
+.rep-verdicts li { margin: 0 0 0.45rem; }
+.rep-verdicts a { color: var(--ink); }
+.rep-where { font-family: var(--sans); font-size: 0.8125rem; color: var(--muted); }
+.rep-rec {
+  margin: 0 0 1.25rem;
+  padding-left: 1rem;
+  border-left: 3px solid var(--ink);
+  font-family: var(--serif);
+  font-size: 1.125rem;
+  line-height: 1.6;
+}
+.rep-recs { margin: 0; padding-left: 1.4rem; font-family: var(--serif); font-size: 1rem; line-height: 1.55; }
+.rep-recs > li { margin: 0 0 1.1rem; }
+.rep-recs > li > p { margin: 0 0 0.35rem; }
+.rep-recs ul { margin: 0; padding-left: 1.1rem; }
+.rep-recs ul li { margin: 0 0 0.35rem; }
+.rep-recs ul a { color: var(--ink); }
+
+/* Measure overview */
+.rep-mentry { padding-bottom: 0.5rem; }
+.rep-desc { margin: 0.45rem 0 0; font-family: var(--serif); font-size: 0.9375rem; line-height: 1.55; color: var(--ink-2); }
+.rep-verdict { margin: 0.45rem 0 0; font-family: var(--serif); font-size: 1rem; line-height: 1.6; }
+.rep-verdict .lk-diag { font-size: 1rem; font-family: var(--serif); font-weight: 600; }
+
+@media (max-width: 760px) {
+  .rep-head h1 { font-size: 1.75rem; }
+  .rep-motto { font-size: 1.125rem; }
+  .rep-meta { gap: 0.5rem 1.5rem; }
+}
+
+@page {
+  size: A4;
+  margin: 18mm 18mm 20mm;
+  @bottom-right {
+    content: counter(page);
+    font-family: sans-serif;
+    font-size: 8pt;
+    color: #6c747e;
+  }
+}
+
+@media print {
+  .rep-doc { max-width: none; font-size: 11pt; color: #000; }
+  .rep-head { border-bottom: 0; padding-bottom: 0; }
+  .rep-head h1 { font-size: 24pt; }
+  .rep-kicker-title, .rep-meta { font-size: 9.5pt; }
+  .rep-meta dt { font-size: 8.5pt; }
+  .rep-motto { font-size: 14pt; max-width: none; }
+  .rep-method p { background: none; border: 1px solid var(--rule); font-size: 10pt; }
+  .rep-tools { display: none; }
+  .rep-toc { margin-top: 1.5rem; }
+  .rep-toc ol { font-size: 11pt; }
+
+  .rep-section { break-before: page; margin-top: 0; }
+  .rep-section > h2 { font-size: 18pt; }
+  /* Long entries may break inside the Befund, never between a statement and its counts. */
+  .rep-doc h2, .rep-doc h3, .rep-kicker, .rep-q, .rep-stmt, .rep-counts, .rep-note { break-after: avoid; }
+  .rep-mentry, .rep-recs > li > p, .rep-recs ul li, .rep-verdicts li, .rep-stmt, .rep-counts { break-inside: avoid; }
+  .rep-doc p { orphans: 3; widows: 3; }
+
+  .rep-lead, .rep-stmt, .rep-befund, .rep-rec, .rep-recs, .rep-verdicts, .rep-verdict, .rep-verdict .lk-diag { font-size: 11pt; }
+  .rep-desc { font-size: 10pt; }
+  .rep-q, .rep-counts, .rep-note, .rep-where, .rep-kicker .lk-diag { font-size: 9pt; }
+  .rep-verdicts .lk-diag { font-size: 10pt; }
+  .rep-measure { font-size: 13pt; margin-top: 7mm; }
+  .rep-sub { font-size: 14pt; }
+  .rep-entry { padding: 3mm 0; }
+  .rep-befund { line-height: 1.45; color: #222; }
+}

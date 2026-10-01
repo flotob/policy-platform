@@ -1,0 +1,42 @@
+/* Gutachten-Agenda (rep-*): the study list — one block per measure, the
+   evidence for each question in the margin. Print: one clean list on A4. */
+
+.rep-ag-stand { margin: 0.75rem 0 0; }
+.rep-ag-tools { margin: -0.75rem 0 1.5rem; }
+.rep-ag-q { margin: 0 0 0.2rem; }
+
+.rep-ag-toc { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.2rem; font-size: 0.875rem; }
+.rep-ag-toc a { color: var(--ink); }
+
+.rep-ag-kinds { list-style: none; margin: 0.2rem 0 0; padding: 0; display: grid; gap: 0.1rem; font-variant-numeric: tabular-nums; }
+
+.rep-ag-group h2 a { color: var(--ink); text-decoration: none; }
+.rep-ag-group h2 a:hover { text-decoration: underline; }
+.rep-ag-meta { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; align-items: baseline; margin: -0.25rem 0 0.5rem; font-size: 0.8125rem; }
+
+@media print {
+  .rep-agenda { font-size: 10pt; }
+  .rep-ag-tools, .rep-agenda .crumbs { display: none; }
+  .rep-agenda .page-head { margin-bottom: 1rem; }
+  .rep-agenda .page-head h1 { font-size: 22pt; max-width: none; }
+  .rep-agenda .page-head .lead { font-size: 11pt; max-width: none; }
+  .rep-agenda h2 { font-size: 14pt; margin-top: 1.5rem; break-after: avoid; }
+  .rep-agenda .rep-ag-meta { break-after: avoid; }
+  .rep-agenda .prose { font-size: 10.5pt; max-width: none; }
+  .rep-agenda .row { grid-template-columns: minmax(0, 1fr) 46mm; column-gap: 6mm; padding: 2.5mm 0; }
+  .rep-agenda .margin { border-left: 2px solid var(--rule); border-top: 0; padding: 0 0 0 3mm; font-size: 8.5pt; }
+  .rep-agenda .row-title { font-size: 11pt; }
+  .rep-agenda .row-text { font-size: 10pt; line-height: 1.45; }
+  .rep-agenda .lk-dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
+@page {
+  size: A4;
+  margin: 16mm 16mm 18mm;
+  @bottom-right {
+    content: counter(page);
+    font-family: sans-serif;
+    font-size: 8pt;
+    color: #6c747e;
+  }
+}

@@ -159,7 +159,7 @@ export function Verdichtung(props: Props) {
       g.font = `400 12px ${css.getPropertyValue("--sans")}`;
       g.textAlign = "left";
       g.fillText("Stellungnahmen", 4, H - 8);
-      if (elapsed > T.flow) g.fillText("Teilentscheidungen und ihre Streitfragen", mx0 + 2, H - 8);
+      if (elapsed > T.flow) g.fillText(W < 640 ? "Teilentscheidungen" : "Teilentscheidungen und ihre Streitfragen", mx0 + 2, H - 8);
 
       setStage(elapsed < T.docs ? 0 : elapsed < T.flow ? 1 : elapsed < T.camps ? 2 : 3);
     },
