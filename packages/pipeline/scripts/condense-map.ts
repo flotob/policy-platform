@@ -15,11 +15,14 @@
  *
  * Usage:
  *   DATABASE_URL=... tsx scripts/condense-map.ts --consultation <ref>
- *     [--scope <measure name>] [--batch 25]
+ *     [--scope <measure name>] [--batch 25] [--sweep jev]
+ *
+ * --sweep jev (exp/jev): leftovers are assigned by a calibrated choice per
+ * point instead of index-keyed LLM batches; judgments are persisted.
  */
 
 import { createDb, sql } from "@policy/db";
-import { AgentSdkProvider } from "@policy/llm";
+import { AgentSdkProvider, JevJudge, choice } from "@policy/llm";
 
 import {
   CONDENSE_ASSIGN_SYSTEM,
@@ -28,6 +31,8 @@ import {
   condensePrompt,
 } from "../src/prompts.ts";
 import { deriveBezirk } from "../src/jev-grammar.ts";
+import { saveJudgment } from "../src/jev-stage.ts";
+import { runPool } from "../src/pool.ts";
 import {
   condenseAssignJsonSchema,
   condenseAssignOutput,
@@ -88,6 +93,7 @@ async function main() {
   }
 
   const provider = new AgentSdkProvider();
+  const jevSweep = arg("sweep") === "jev" ? new JevJudge() : null;
 
   for (const scope of scopes) {
     console.log(`\n=== scope: ${scope} ===`);
@@ -196,10 +202,49 @@ async function main() {
       console.log(`  sweep: nothing left`);
       continue;
     }
-    console.log(`  sweep: ${leftovers.length} unassigned`);
+    console.log(`  sweep: ${leftovers.length} unassigned${jevSweep ? " (jev)" : ""}`);
     let swept = 0;
     let offMap = 0;
-    for (let offset = 0; offset < leftovers.length; offset += batchSize) {
+    if (jevSweep) {
+      // exp/jev: one calibrated choice per leftover, answers keyed by name.
+      const criteria: Record<string, string> = {};
+      const options: Record<string, { label: string; text: string }> = {};
+      mapPoints.forEach((m, i) => {
+        options[`k${i + 1}`] = { label: m.label, text: m.text };
+        criteria[`k${i + 1}`] = `\`point\` expresses, supports, details, or restates the canonical point "${m.label}" (\`map_points.k${i + 1}\`).`;
+      });
+      criteria.none = "`point` fits none of the canonical map points.";
+      await runPool(
+        leftovers,
+        async (point) => {
+          const { answers, provenance } = await jevSweep.judge(
+            { measure: scope, point: { label: point.label, summary: point.summary }, map_points: options },
+            { map_point: choice("Which canonical map point does `point` belong to?", criteria) },
+          );
+          const pick = answers.map_point.choice;
+          if (pick !== "none") {
+            await db.execute(sql`
+              UPDATE points SET map_point_id = ${mapPoints[Number(pick.slice(1)) - 1]!.id} WHERE id = ${point.id}
+            `);
+            swept++;
+          } else {
+            offMap++;
+          }
+          await saveJudgment(db, {
+            tenantId,
+            consultationId,
+            subjectKind: "point",
+            subjectId: point.id,
+            family: "map-sweep.v1",
+            provenance,
+            answers,
+            decided: { mapPoint: pick },
+          });
+        },
+        8,
+      );
+    }
+    for (let offset = 0; !jevSweep && offset < leftovers.length; offset += batchSize) {
       const batch = leftovers.slice(offset, offset + batchSize);
       try {
         const result = await provider.generateStructured({

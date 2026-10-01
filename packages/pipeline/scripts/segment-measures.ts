@@ -12,7 +12,7 @@
  *
  * Usage:
  *   DATABASE_URL=... tsx scripts/segment-measures.ts --consultation <ref>
- *     [--batch 25]
+ *     [--batch 25] [--propose-only]
  */
 
 import { createDb, sql } from "@policy/db";
@@ -90,6 +90,8 @@ async function main() {
   }
   console.log(`sub-measures (${measures.length}):`);
   for (const m of measures) console.log(`  - ${m}`);
+  // exp/jev: assignment by calibrated choice (jev-classify) instead of index-keyed batches.
+  if (process.argv.includes("--propose-only")) process.exit(0);
 
   const todoRes = await db.execute(sql`
     SELECT id, label, summary FROM points

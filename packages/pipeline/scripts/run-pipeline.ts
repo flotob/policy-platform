@@ -7,6 +7,17 @@
  * Canonical order:
  *   decompose → ai-review points → generate-statements → ai-review
  *   statements → infer-stances → analyze → name-camps → cluster-themes
+ *   → classify-cq → segment-measures → condense-map → diagnose-map →
+ *   render-landkarte
+ *
+ * --jev (exp/jev): every JUDGMENT stage runs as calibrated System One
+ * questions (TYPESAFE_API_KEY); generation (decomposition, statements, camp
+ * names, measure/theme/map-point proposals, Befunde) stays with the LLM:
+ *   decompose --matcher jev → jev-review points → generate-statements →
+ *   jev-review statements → jev-stances → analyze → name-camps →
+ *   cluster-themes --propose-only → segment-measures --propose-only →
+ *   jev-classify → jev-grammar → condense-map --sweep jev → diagnose-map →
+ *   jev-quotes spans → jev-quotes landkarte --apply → render-landkarte
  *
  * Usage:
  *   DATABASE_URL=... tsx scripts/run-pipeline.ts --consultation <ref>
@@ -14,6 +25,7 @@
  *     [--concurrency 5]     infer-stances pool width
  *     [--from <stage>]      resume from this stage (skip earlier ones)
  *     [--only <a,b,...>]    run exactly these stages
+ *     [--jev]               judgment stages via Jev (see above)
  *     [--list]              print stage names and exit
  */
 
@@ -39,16 +51,37 @@ interface Stage {
   args: string[];
 }
 
-function stages(consultation: string, limit: string, concurrency: string): Stage[] {
+function stages(consultation: string, limit: string, concurrency: string, jev: boolean): Stage[] {
   const c = ["--consultation", consultation];
   const p = (s: string) => path.join(pipelineDir, "scripts", s);
+  const analyze = { name: "analyze", cwd: platformDir, script: path.join(platformDir, "scripts", "analyze.ts"), args: c };
+  if (jev) {
+    return [
+      { name: "decompose", cwd: pipelineDir, script: p("decompose.ts"), args: [...c, "--limit", limit, "--matcher", "jev"] },
+      { name: "review-points", cwd: pipelineDir, script: p("jev-review.ts"), args: [...c, "--what", "points"] },
+      { name: "statements", cwd: pipelineDir, script: p("generate-statements.ts"), args: [...c, "--limit", limit] },
+      { name: "review-statements", cwd: pipelineDir, script: p("jev-review.ts"), args: [...c, "--what", "statements"] },
+      { name: "infer-stances", cwd: pipelineDir, script: p("jev-stances.ts"), args: [...c, "--limit", limit] },
+      analyze,
+      { name: "name-camps", cwd: pipelineDir, script: p("name-camps.ts"), args: c },
+      { name: "propose-themes", cwd: pipelineDir, script: p("cluster-themes.ts"), args: [...c, "--propose-only"] },
+      { name: "propose-measures", cwd: pipelineDir, script: p("segment-measures.ts"), args: [...c, "--propose-only"] },
+      { name: "classify", cwd: pipelineDir, script: p("jev-classify.ts"), args: c },
+      { name: "grammar", cwd: pipelineDir, script: p("jev-grammar.ts"), args: c },
+      { name: "condense-map", cwd: pipelineDir, script: p("condense-map.ts"), args: [...c, "--sweep", "jev"] },
+      { name: "diagnose-map", cwd: pipelineDir, script: p("diagnose-map.ts"), args: [...c, "--concurrency", concurrency] },
+      { name: "quote-spans", cwd: pipelineDir, script: p("jev-quotes.ts"), args: [...c, "--what", "spans"] },
+      { name: "map-quotes", cwd: pipelineDir, script: p("jev-quotes.ts"), args: [...c, "--what", "landkarte", "--apply"] },
+      { name: "render-landkarte", cwd: pipelineDir, script: p("render-landkarte.ts"), args: c },
+    ];
+  }
   return [
     { name: "decompose", cwd: pipelineDir, script: p("decompose.ts"), args: [...c, "--limit", limit] },
     { name: "review-points", cwd: pipelineDir, script: p("ai-review.ts"), args: [...c, "--what", "points"] },
     { name: "statements", cwd: pipelineDir, script: p("generate-statements.ts"), args: [...c, "--limit", limit] },
     { name: "review-statements", cwd: pipelineDir, script: p("ai-review.ts"), args: [...c, "--what", "statements"] },
     { name: "infer-stances", cwd: pipelineDir, script: p("infer-stances.ts"), args: [...c, "--limit", limit, "--concurrency", concurrency] },
-    { name: "analyze", cwd: platformDir, script: path.join(platformDir, "scripts", "analyze.ts"), args: c },
+    analyze,
     { name: "name-camps", cwd: pipelineDir, script: p("name-camps.ts"), args: c },
     { name: "cluster-themes", cwd: pipelineDir, script: p("cluster-themes.ts"), args: c },
     { name: "classify-cq", cwd: pipelineDir, script: p("classify-cq.ts"), args: c },
@@ -63,7 +96,9 @@ function main() {
   const consultation = arg("consultation");
   const limit = arg("limit") ?? "50";
   const concurrency = arg("concurrency") ?? "5";
-  const all = stages(consultation ?? "<ref>", limit, concurrency);
+  const jev = has("jev");
+  if (jev && !has("list") && !process.env.TYPESAFE_API_KEY) throw new Error("--jev needs TYPESAFE_API_KEY");
+  const all = stages(consultation ?? "<ref>", limit, concurrency, jev);
 
   if (has("list")) {
     for (const s of all) console.log(s.name);
@@ -103,7 +138,7 @@ function main() {
     if (res.status !== 0) {
       console.error(
         `\n✗ ${stage.name} failed after ${mins} min. All stages are idempotent — ` +
-          `resume with:\n  tsx scripts/run-pipeline.ts --consultation ${consultation} --from ${stage.name}`,
+          `resume with:\n  tsx scripts/run-pipeline.ts --consultation ${consultation} --from ${stage.name}${jev ? " --jev" : ""}`,
       );
       process.exit(1);
     }

@@ -75,8 +75,19 @@ async function main() {
     ORDER BY created_at
   `);
   const pts = pRes.rows as unknown as Row[];
-  const measures = [...new Set(pts.map((p) => p.measure).filter((m): m is string => !!m && m !== GENERAL))].sort();
-  const themes = [...new Set(pts.map((p) => p.theme).filter((t): t is string => !!t))].sort();
+  const proposed = async (action: string, key: string): Promise<string[]> => {
+    const r = await db.execute(sql`
+      SELECT payload FROM audit_log WHERE action = ${action} AND subject_id = ${cons.id}
+      ORDER BY created_at DESC LIMIT 1
+    `);
+    return ((r.rows[0] as { payload: Record<string, string[]> } | undefined)?.payload?.[key] ?? []).filter(Boolean);
+  };
+  // Assigned values first; on a fresh consultation the audited proposals
+  // (segment-measures / cluster-themes --propose-only) define the options.
+  let measures = [...new Set(pts.map((p) => p.measure).filter((m): m is string => !!m && m !== GENERAL))].sort();
+  if (measures.length === 0) measures = await proposed("consultation.propose_measures", "measures");
+  let themes = [...new Set(pts.map((p) => p.theme).filter((t): t is string => !!t))].sort();
+  if (themes.length === 0) themes = await proposed("consultation.propose_themes", "themes");
   const mpRes = await db.execute(sql`
     SELECT id, scope, label, text FROM map_points
     WHERE consultation_id = ${cons.id} AND typ <> 'luecke' ORDER BY scope, ord
@@ -90,7 +101,7 @@ async function main() {
   const measuresAssigned = pts.some((p) => p.measure !== null);
   const themesAssigned = pts.some((p) => p.theme !== null);
   const mapAssigned = pts.some((p) => p.map_point_id !== null);
-  if (measures.length === 0) throw new Error("no measures yet — run segment-measures (propose) first");
+  if (measures.length === 0) throw new Error("no measures yet — run segment-measures --propose-only first");
   console.log(
     `${pts.length} points · ${measures.length} measures · ${themes.length} themes · ` +
       `${mpRes.rows.length} map points · writes: ${overwrite ? "OVERWRITE" : `doors ${doorsExist ? "no" : "fill"}, measure ${measuresAssigned ? "no" : "fill"}, theme ${themesAssigned ? "no" : "fill"}, map ${mapAssigned ? "no" : "fill"}`}`,

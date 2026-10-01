@@ -3,7 +3,7 @@
  * names from a sample of point labels, then assign every point to one theme
  * (batched). Stored in points.theme; NULL/unassigned renders as "Weitere".
  *
- * Usage: DATABASE_URL=... tsx scripts/cluster-themes.ts --consultation <ref>
+ * Usage: DATABASE_URL=... tsx scripts/cluster-themes.ts --consultation <ref> [--propose-only]
  */
 
 import { createDb, sql } from "@policy/db";
@@ -54,6 +54,18 @@ async function main() {
   });
   const { themes } = themesOutput.parse(proposed.output);
   console.log(`themes: ${themes.join(" · ")}`);
+  const consRes = await db.execute(sql`
+    SELECT id, tenant_id FROM consultations WHERE id::text = ${consultation} OR source_ref = ${consultation}
+    ORDER BY created_at DESC LIMIT 1
+  `);
+  const consRow = consRes.rows[0] as { id: string; tenant_id: string };
+  await db.execute(sql`
+    INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+    VALUES (${consRow.tenant_id}, ${'ai-editor:' + proposed.provenance.model}, 'consultation.propose_themes',
+            'consultation', ${consRow.id}, ${JSON.stringify({ themes })})
+  `);
+  // exp/jev: assignment by calibrated choice (jev-classify) instead of index-keyed batches.
+  if (process.argv.includes("--propose-only")) process.exit(0);
 
   // Pass 2: assign every point.
   const themeList = themes.map((t, i) => `${i}. ${t}`).join("\n");
