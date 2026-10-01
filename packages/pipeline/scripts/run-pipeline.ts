@@ -42,11 +42,15 @@
  * plus audit entries pipeline.run_start / pipeline.run_end. In --jev mode
  * check-run --quiet runs after every stage; a violated invariant stops the
  * run right there. Ctrl-C stops the running stage and records the run as
- * interrupted (every stage resumes cleanly).
+ * interrupted (every stage resumes cleanly; a second Ctrl-C kills at once).
+ * Resume hints keep this invocation's boundaries (--until, --only,
+ * options). With PIPELINE_SNAPSHOT_CONTAINER=<postgres container>, a
+ * failed or interrupted run keeps a pg_dump of its database in the folder.
  */
 
 import { execSync, spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { appendFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -111,18 +115,40 @@ function stages(consultation: string, limit: string, concurrency: string, jev: b
   ];
 }
 
+interface ChildResult {
+  code: number | null;
+  signal: string | null;
+  error?: string;
+}
+
 interface StageRecord {
   name: string;
+  argv: string[];
   startedAt: string;
   endedAt?: string;
   mins?: number;
   exit?: number | null;
-  check?: "ok" | "failed" | "skipped";
+  signal?: string | null;
+  check?: { status: "ok" | "failed" | "interrupted"; startedAt: string; endedAt?: string; exit?: number | null; signal?: string | null };
 }
 
 function stamp(): string {
   return new Date().toISOString().slice(11, 19);
 }
+
+/** Last line of defence: no secret value or credential-bearing URL reaches console or disk. */
+function makeSanitizer(): (line: string) => string {
+  const secrets = ["TYPESAFE_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"]
+    .map((k) => process.env[k])
+    .filter((v): v is string => !!v && v.length >= 8);
+  return (line) => {
+    let out = line.replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^:/\s@]+:)[^@\s]+@/gi, "$1***@");
+    for (const v of secrets) out = out.split(v).join("***");
+    return out;
+  };
+}
+
+const quote = (a: string) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a));
 
 async function main() {
   const consultation = arg("consultation");
@@ -138,6 +164,12 @@ async function main() {
   }
   if (!consultation) throw new Error("--consultation required");
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
+  let dbUrl: URL;
+  try {
+    dbUrl = new URL(process.env.DATABASE_URL);
+  } catch {
+    throw new Error("DATABASE_URL is not a valid URL (value not shown)");
+  }
 
   let selected = all;
   const only = arg("only");
@@ -159,129 +191,275 @@ async function main() {
     selected = selected.slice(0, idx + 1);
   }
 
-  // ——— Run folder, identity, and log ————————————————————————————————————
+  // ——— Run folder (unique), log, manifest ———————————————————————————————
   const startedAt = new Date();
-  const runId = `${consultation}-${startedAt.toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
-  const runDir = path.join(pipelineDir, ".eval", "runs", runId);
-  mkdirSync(runDir, { recursive: true });
+  const runId = `${consultation}-${startedAt.toISOString().slice(0, 19).replace(/[:T]/g, "-")}-${randomBytes(3).toString("hex")}`;
+  const runsDir = path.join(pipelineDir, ".eval", "runs");
+  mkdirSync(runsDir, { recursive: true });
+  const runDir = path.join(runsDir, runId);
+  mkdirSync(runDir); // exclusive: a second run never shares a folder
   const logFile = path.join(runDir, "run.log");
+  const sanitize = makeSanitizer();
+  let lastOutput = Date.now();
   const log = (line: string, tag = "run") => {
-    const out = `${stamp()} [${tag}] ${line}`;
+    const out = sanitize(`${stamp()} [${tag}] ${line}`);
     console.log(out);
     appendFileSync(logFile, out + "\n");
   };
   const git = (cmd: string) => {
     try {
-      return execSync(`git -C ${JSON.stringify(platformDir)} ${cmd}`, { encoding: "utf-8" }).trim();
+      return execSync(`git -C ${JSON.stringify(platformDir)} ${cmd}`, { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     } catch {
       return null;
     }
   };
-  const dbUrl = new URL(process.env.DATABASE_URL);
+  const dirty = (git("status --porcelain") ?? "") !== "";
   const run = {
     runId,
+    argv: process.argv.slice(2),
     consultation,
     database: `${dbUrl.hostname}:${dbUrl.port}${dbUrl.pathname}`,
-    code: { commit: git("rev-parse HEAD"), branch: git("rev-parse --abbrev-ref HEAD"), uncommittedChanges: (git("status --porcelain") ?? "") !== "" },
+    code: { commit: git("rev-parse HEAD"), branch: git("rev-parse --abbrev-ref HEAD"), uncommittedChanges: dirty },
     models: { llm: process.env.LLM_MODEL ?? "claude-sonnet-5-5", jev: process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest", jevConcurrency: Number(process.env.JEV_CONCURRENCY ?? 16) },
     options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
     node: process.version,
     startedAt: startedAt.toISOString(),
     endedAt: null as string | null,
     status: "running" as "running" | "done" | "failed" | "interrupted",
+    error: null as string | null,
+    auditErrors: [] as string[],
     stages: [] as StageRecord[],
   };
-  const save = () => writeFileSync(path.join(runDir, "run.json"), JSON.stringify(run, null, 2));
+  // Atomic: an interruption during a write never leaves broken JSON.
+  const save = () => {
+    const tmp = path.join(runDir, "run.json.tmp");
+    writeFileSync(tmp, JSON.stringify(run, null, 2));
+    renameSync(tmp, path.join(runDir, "run.json"));
+  };
   save();
+  // The exact source of a dirty run is kept with it.
+  if (dirty) {
+    try {
+      writeFileSync(path.join(runDir, "uncommitted.diff"), execSync(`git -C ${JSON.stringify(platformDir)} diff HEAD`, { encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 }));
+    } catch {
+      /* best effort */
+    }
+  }
 
-  // Audit entries mark the run in the database next to everything it wrote.
-  const db = createDb(process.env.DATABASE_URL);
-  const cons = (await db.execute(sql`
-    SELECT id, tenant_id FROM consultations WHERE id::text = ${consultation} OR source_ref = ${consultation}
-    ORDER BY created_at DESC LIMIT 1`)).rows[0] as { id: string; tenant_id: string } | undefined;
-  if (!cons) throw new Error(`consultation ${consultation} not found`);
-  const audit = async (action: string) =>
-    db.execute(sql`
-      INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
-      VALUES (${cons.tenant_id}, 'pipeline:orchestrator', ${action}, 'consultation', ${cons.id}, ${JSON.stringify(run)})`);
-  await audit("pipeline.run_start");
-
-  log(`run ${runId} · ${selected.map((s) => s.name).join(" → ")}`);
-  log(`log: ${logFile}`);
-  log(`code ${run.code.commit?.slice(0, 7)} (${run.code.branch})${run.code.uncommittedChanges ? " WITH UNCOMMITTED CHANGES" : ""} · llm ${run.models.llm} · jev ${run.models.jev} · db ${run.database}`);
-
-  // ——— Stages ———————————————————————————————————————————————————————————
+  // ——— Cancellation ————————————————————————————————————————————————————
+  let cancelled = false;
   let child: ReturnType<typeof spawn> | null = null;
-  let interrupted = false;
-  process.on("SIGINT", () => {
-    interrupted = true;
-    log("interrupt received — stopping the running stage (resume with --from)");
-    child?.kill("SIGINT");
-  });
-
-  const runChild = (script: string, args: string[], cwd: string, tag: string): Promise<number | null> =>
-    new Promise((resolve) => {
-      child = spawn(tsx, [script, ...args], { cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
-      for (const stream of [child.stdout!, child.stderr!]) {
-        createInterface({ input: stream }).on("line", (line) => log(line, tag));
+  const killGroup = (sig: NodeJS.Signals) => {
+    if (!child?.pid) return;
+    try {
+      process.kill(-child.pid, sig); // the whole process group: tsx + node + its children
+    } catch {
+      try {
+        child.kill(sig);
+      } catch {
+        /* already gone */
       }
-      child.on("close", (code) => {
+    }
+  };
+  let escalation: NodeJS.Timeout | null = null;
+  const onSignal = () => {
+    if (cancelled) {
+      log("second interrupt — killing the running stage now");
+      killGroup("SIGKILL");
+      return;
+    }
+    cancelled = true;
+    log("interrupt received — stopping the running stage (Ctrl-C again to kill at once)");
+    killGroup("SIGINT");
+    escalation = setTimeout(() => {
+      log("stage still running 20 s after interrupt — terminating");
+      killGroup("SIGTERM");
+      escalation = setTimeout(() => killGroup("SIGKILL"), 10_000);
+    }, 20_000);
+  };
+  // Stages run in their own process group: every way of stopping the
+  // orchestrator must reach them, or they would run on orphaned.
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  process.on("SIGHUP", onSignal);
+
+  const runChild = (script: string, args: string[], cwd: string, tag: string): Promise<ChildResult> =>
+    new Promise((resolve) => {
+      let settled = false;
+      const done = (r: ChildResult) => {
+        if (settled) return;
+        settled = true;
         child = null;
-        resolve(code);
-      });
+        resolve(r);
+      };
+      try {
+        child = spawn(tsx, [script, ...args], { cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      } catch (err) {
+        done({ code: null, signal: null, error: err instanceof Error ? err.message : String(err) });
+        return;
+      }
+      lastOutput = Date.now();
+      for (const stream of [child.stdout!, child.stderr!]) {
+        createInterface({ input: stream }).on("line", (line) => {
+          lastOutput = Date.now();
+          log(line, tag);
+        });
+      }
+      child.on("error", (err) => done({ code: null, signal: null, error: err.message }));
+      child.on("close", (code, signal) => done({ code, signal }));
     });
 
-  const resumeHint = (stage: string) =>
-    `tsx scripts/run-pipeline.ts --consultation ${consultation} --from ${stage}${jev ? " --jev" : ""}` +
-    `${arg("submissions") ? ` --submissions ${arg("submissions")}` : ""}${arg("render-out") ? ` --render-out ${arg("render-out")}` : ""}`;
+  // ——— Audit (best effort, bounded — a dead DB must not hang the run) ————
+  const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+    Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(`timed out after ${ms} ms`)), ms))]);
+  const db = createDb(process.env.DATABASE_URL);
+  let cons: { id: string; tenant_id: string } | undefined;
+  const audit = async (action: string) => {
+    if (!cons) return;
+    try {
+      await withTimeout(
+        db.execute(sql`
+          INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+          VALUES (${cons.tenant_id}, 'pipeline:orchestrator', ${action}, 'consultation', ${cons.id}, ${JSON.stringify(run)})`),
+        10_000,
+      );
+    } catch (err) {
+      const msg = `${action}: ${err instanceof Error ? err.message : err}`;
+      run.auditErrors.push(sanitize(msg));
+      log(`audit entry failed (run continues) — ${msg}`);
+    }
+  };
 
-  const finish = async (status: typeof run.status, code: number) => {
+  // Resume instructions keep every boundary of THIS invocation (--until,
+  // --only, options) and restart at the given stage.
+  const resumeHint = (stage: string) => {
+    const keep: string[] = [];
+    const argv = process.argv.slice(2);
+    for (let i = 0; i < argv.length; i++) {
+      if (argv[i] === "--from" || argv[i] === "--only") {
+        i++;
+        continue;
+      }
+      keep.push(argv[i]!);
+    }
+    const rest = selected.slice(selected.findIndex((s) => s.name === stage)).map((s) => s.name);
+    const scope = only ? ["--only", rest.join(",")] : ["--from", stage];
+    return `tsx scripts/run-pipeline.ts ${[...keep, ...scope].map(quote).join(" ")}`;
+  };
+
+  const heartbeat = setInterval(() => {
+    const current = run.stages.at(-1);
+    if (!child || !current) return;
+    const quiet = Math.round((Date.now() - lastOutput) / 1000);
+    if (quiet >= 60) {
+      log(`♥ ${current.name} running ${((Date.now() - Date.parse(current.startedAt)) / 60_000).toFixed(1)} min, no output for ${quiet} s`);
+    }
+  }, 60_000);
+
+  // Evidence before a retry overwrites it (judgments are upserted per
+  // subject): with PIPELINE_SNAPSHOT_CONTAINER set, a failed or interrupted
+  // run dumps its database into the run folder.
+  const snapshot = () => {
+    const container = process.env.PIPELINE_SNAPSHOT_CONTAINER;
+    if (!container) return;
+    const file = path.join(runDir, "db-snapshot.dump");
+    try {
+      execSync(
+        `docker exec ${JSON.stringify(container)} pg_dump -Fc -U ${JSON.stringify(decodeURIComponent(dbUrl.username || "policy"))} ${JSON.stringify(dbUrl.pathname.slice(1))} > ${JSON.stringify(file)}`,
+        { stdio: ["ignore", "ignore", "pipe"], timeout: 180_000, shell: "/bin/sh" },
+      );
+      log(`database snapshot kept: ${file}`);
+    } catch (err) {
+      log(`database snapshot failed — ${err instanceof Error ? err.message.split("\n")[0] : err}`);
+    }
+  };
+
+  const finish = async (status: typeof run.status, code: number, error?: string) => {
+    clearInterval(heartbeat);
+    if (escalation) clearTimeout(escalation);
     run.status = status;
+    run.error = error ? sanitize(error) : null;
     run.endedAt = new Date().toISOString();
     save();
+    if (error) log(`ERROR ${error}`);
+    if (status !== "done") snapshot();
     await audit("pipeline.run_end");
+    save();
     log(`run ${status} after ${((Date.now() - startedAt.getTime()) / 60_000).toFixed(1)} min · ${path.join(runDir, "run.json")}`);
     process.exit(code);
   };
 
-  for (const stage of selected) {
-    log(`━━━ ${stage.name} ━━━`);
-    const rec: StageRecord = { name: stage.name, startedAt: new Date().toISOString() };
-    run.stages.push(rec);
-    save();
-    const t0 = Date.now();
-    const code = await runChild(stage.script, stage.args, stage.cwd, stage.name);
-    rec.endedAt = new Date().toISOString();
-    rec.mins = Number(((Date.now() - t0) / 60_000).toFixed(2));
-    rec.exit = code;
-    save();
-    if (interrupted) {
-      log(`✗ ${stage.name} interrupted after ${rec.mins} min — resume with:\n  ${resumeHint(stage.name)}`);
-      await finish("interrupted", 130);
-    }
-    if (code !== 0) {
-      log(`✗ ${stage.name} failed after ${rec.mins} min (exit ${code}). All stages are idempotent — resume with:\n  ${resumeHint(stage.name)}`);
-      await finish("failed", 1);
-    }
-    log(`✓ ${stage.name} [${rec.mins} min]`);
-    // Invariants after every stage: a broken state stops the run here, not
-    // 30 minutes later.
-    if (jev && stage.name !== "check") {
-      const c = await runChild(path.join(pipelineDir, "scripts", "check-run.ts"), ["--consultation", consultation, "--quiet"], pipelineDir, `check:${stage.name}`);
-      rec.check = c === 0 ? "ok" : "failed";
+  try {
+    cons = (await withTimeout(
+      db.execute(sql`
+        SELECT id, tenant_id FROM consultations WHERE id::text = ${consultation} OR source_ref = ${consultation}
+        ORDER BY created_at DESC LIMIT 1`),
+      15_000,
+    )).rows[0] as { id: string; tenant_id: string } | undefined;
+    if (!cons) throw new Error(`consultation ${consultation} not found`);
+    await audit("pipeline.run_start");
+
+    log(`run ${runId} · ${selected.map((s) => s.name).join(" → ")}`);
+    log(`log: ${logFile}`);
+    log(`code ${run.code.commit?.slice(0, 7)} (${run.code.branch})${dirty ? " WITH UNCOMMITTED CHANGES (diff kept in the run folder)" : ""} · llm ${run.models.llm} · jev ${run.models.jev} · db ${run.database}`);
+
+    for (const stage of selected) {
+      if (cancelled) return await finish("interrupted", 130, `interrupted before ${stage.name}`);
+      log(`━━━ ${stage.name} ━━━`);
+      const rec: StageRecord = { name: stage.name, argv: [stage.script, ...stage.args], startedAt: new Date().toISOString() };
+      run.stages.push(rec);
       save();
-      if (c !== 0) {
-        log(`✗ invariant check failed after ${stage.name} — stopped. Inspect, fix, then resume with:\n  ${resumeHint(selected[selected.indexOf(stage) + 1]?.name ?? stage.name)}`);
-        await finish("failed", 1);
+      const t0 = Date.now();
+      const r = await runChild(stage.script, stage.args, stage.cwd, stage.name);
+      rec.endedAt = new Date().toISOString();
+      rec.mins = Number(((Date.now() - t0) / 60_000).toFixed(2));
+      rec.exit = r.code;
+      rec.signal = r.signal;
+      save();
+      if (cancelled) {
+        log(`✗ ${stage.name} interrupted after ${rec.mins} min — resume with:\n  ${resumeHint(stage.name)}`);
+        return await finish("interrupted", 130);
+      }
+      if (r.error || r.code !== 0) {
+        log(
+          `✗ ${stage.name} failed after ${rec.mins} min (${r.error ? `launch error: ${r.error}` : r.signal ? `signal ${r.signal}` : `exit ${r.code}`}). ` +
+            `All stages are idempotent — resume with:\n  ${resumeHint(stage.name)}`,
+        );
+        return await finish("failed", 1);
+      }
+      log(`✓ ${stage.name} [${rec.mins} min]`);
+      // Invariants after every stage: a broken state stops the run right here.
+      if (jev && stage.name !== "check") {
+        rec.check = { status: "ok", startedAt: new Date().toISOString() };
+        const c = await runChild(path.join(pipelineDir, "scripts", "check-run.ts"), ["--consultation", consultation, "--quiet"], pipelineDir, `check:${stage.name}`);
+        rec.check.endedAt = new Date().toISOString();
+        rec.check.exit = c.code;
+        rec.check.signal = c.signal;
+        if (cancelled) {
+          rec.check.status = "interrupted";
+          save();
+          log(`✗ interrupted during the check after ${stage.name} — resume (re-runs ${stage.name}, then its check) with:\n  ${resumeHint(stage.name)}`);
+          return await finish("interrupted", 130);
+        }
+        if (c.error || c.code !== 0) {
+          rec.check.status = "failed";
+          save();
+          // Point back to the producing stage: its check must pass before anything later runs.
+          log(`✗ invariant check failed after ${stage.name} — stopped. Inspect and fix, then re-run ${stage.name} and its check with:\n  ${resumeHint(stage.name)}`);
+          return await finish("failed", 1);
+        }
+        save();
       }
     }
+    log(`all stages done [${((Date.now() - startedAt.getTime()) / 60_000).toFixed(1)} min]`);
+    for (const r of run.stages) log(`  ${r.name.padEnd(18)} ${r.mins} min${r.check ? ` · check ${r.check.status}` : ""}`);
+    await finish("done", 0);
+  } catch (err) {
+    await finish("failed", 1, `orchestrator error: ${err instanceof Error ? err.message : String(err)}`);
   }
-  log(`all stages done [${((Date.now() - startedAt.getTime()) / 60_000).toFixed(1)} min]`);
-  for (const r of run.stages) log(`  ${r.name.padEnd(18)} ${r.mins} min${r.check ? ` · check ${r.check}` : ""}`);
-  await finish("done", 0);
 }
 
 main().catch((err) => {
-  console.error(err);
+  console.error(err instanceof Error ? err.message : err);
   process.exit(1);
 });
