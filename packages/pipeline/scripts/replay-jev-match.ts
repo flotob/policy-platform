@@ -114,6 +114,8 @@ async function main() {
   const latencies: number[] = [];
   let tokens = 0;
   const disagreements: unknown[] = [];
+  /** Every judged item, compact — for threshold tuning without re-running. */
+  const all: { llm: string; score: number; pSame: number; choice: string; samePoint: boolean | null }[] = [];
   const labelById = new Map<string, string>();
   for (const it of items) for (const p of it.existing) labelById.set(p.id, p.label);
 
@@ -124,6 +126,16 @@ async function main() {
     tokens += v.provenance.inputTokens;
     bands[v.band]++;
     if (v.band === "review") reviewByStored[it.decision.outcome]++;
+    all.push({
+      llm: it.decision.outcome,
+      score: Number(v.bestScore.toFixed(3)),
+      pSame: Number(v.bestSameProbability.toFixed(3)),
+      choice: v.choicePick === "none" ? "none" : v.choicePick === it.decision.matched_point ? "llm_point" : "other",
+      samePoint:
+        it.decision.outcome === "matched"
+          ? v.shortlistIds.includes(it.decision.matched_point!)
+          : null,
+    });
     const choiceOutcome = v.choicePick === "none" ? "new" : "matched";
     if (choiceOutcome === it.decision.outcome) choiceAgree++;
     if (v.outcome === it.decision.outcome) {
@@ -155,7 +167,7 @@ async function main() {
   console.log(`\n\njudged ${judged}/${items.length} (${failed} failed) in ${(wallMs / 1000).toFixed(1)}s wall, concurrency ${concurrency}`);
   console.log(`latency per request: p50 ${quantile(latencies, 0.5)}ms · p95 ${quantile(latencies, 0.95)}ms`);
   console.log(`tokens: ${tokens.toLocaleString("en")} input ≈ $${(tokens * USD_PER_TOKEN).toFixed(4)}`);
-  console.log(`\nmatched/new agreement with LLM baseline (score policy): ${agree}/${judged} = ${pct(agree, judged)}`);
+  console.log(`\nmatched/new agreement with LLM baseline (P(same) policy): ${agree}/${judged} = ${pct(agree, judged)}`);
   console.log(`matched/new agreement (choice question alone):         ${choiceAgree}/${judged} = ${pct(choiceAgree, judged)}`);
   console.log(`same point when both merged: ${samePoint}/${bothMatched} = ${pct(samePoint, bothMatched)}`);
   console.log(`bands: merge ${bands.merge} · review ${bands.review} (LLM said matched ${reviewByStored.matched}, new ${reviewByStored.new}) · new ${bands.new}`);
@@ -179,6 +191,7 @@ async function main() {
         latencyMs: { p50: quantile(latencies, 0.5), p95: quantile(latencies, 0.95) },
         tokens,
         disagreements,
+        all,
       },
       null,
       2,

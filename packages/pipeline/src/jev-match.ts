@@ -4,11 +4,17 @@
  * Code builds a lexical shortlist of existing map points; Jev answers one
  * graded question per (candidate, shortlisted point) pair plus one choice over
  * the whole shortlist. The merge policy lives here, in code — "when in doubt,
- * new" is a threshold, not a prompt sentence:
+ * new" is a threshold on the calibrated P(same argument) of the best pair,
+ * not a prompt sentence:
  *
- *   best pair score >= MERGE_AT      → matched (same argument)
- *   REVIEW_FROM <= best < MERGE_AT    → new, flagged as possible duplicate
- *   best < REVIEW_FROM               → new
+ *   P(same) >= MERGE_AT              → matched (more likely same than not)
+ *   REVIEW_FROM <= P(same) < MERGE_AT → new, flagged as possible duplicate
+ *   P(same) < REVIEW_FROM            → new
+ *
+ * Thresholds from the WPG replay (2026-10-01, 694 decisions vs the recorded
+ * LLM baseline): P(same) separates cleanly — <0.2: 474 new / 11 merged;
+ * >=0.5: 119 merged / 9 new; the 0.2–0.5 band (~13 %) is the real grey zone
+ * and goes to the editors instead of being decided by either model.
  *
  * The levels restate the established MATCH_SYSTEM definition of "the same
  * point", so Jev and the LLM path judge the same thing.
@@ -16,8 +22,8 @@
 
 import { choice, score, type JevJudge, type JudgeProvenance } from "@policy/llm";
 
-export const MERGE_AT = 1.5;
-export const REVIEW_FROM = 0.5;
+export const MERGE_AT = 0.5;
+export const REVIEW_FROM = 0.2;
 export const DEFAULT_SHORTLIST = 15;
 
 export interface MatchablePoint {
@@ -88,13 +94,17 @@ const RELATION_LEVELS = [
 
 export type MatchBand = "merge" | "review" | "new";
 
+export function matchBand(pSame: number): MatchBand {
+  return pSame >= MERGE_AT ? "merge" : pSame >= REVIEW_FROM ? "review" : "new";
+}
+
 export interface JevMatchVerdict {
   outcome: "matched" | "new";
   matchedPointId: string | null;
   band: MatchBand;
-  /** Highest expected relation score over the shortlist (0..2). */
+  /** Expected relation score (0..2) of the best pair. */
   bestScore: number;
-  /** P(level "same argument") for the best pair. */
+  /** Highest P(level "same argument") over the shortlist — the policy input. */
   bestSameProbability: number;
   /** The shortlist choice question's pick (point id or "none"), as a second signal. */
   choicePick: string;
@@ -148,23 +158,24 @@ export async function jevMatch(
 
   let bestIdx = -1;
   let bestScore = -1;
-  let bestSame = 0;
+  let bestSame = -1;
   keys.forEach((key, i) => {
     const a = answers[`rel_${key}`] as { score: number; probabilities: Record<string, number> };
-    if (a.score > bestScore) {
+    const pSame = a.probabilities["2"] ?? 0;
+    if (pSame > bestSame) {
+      bestSame = pSame;
       bestScore = a.score;
       bestIdx = i;
-      bestSame = a.probabilities["2"] ?? 0;
     }
   });
   const pick = answers.pick as { choice: string; confidence: number };
 
-  const band: MatchBand =
-    bestScore >= MERGE_AT ? "merge" : bestScore >= REVIEW_FROM ? "review" : "new";
+  const band = matchBand(bestSame);
   const matched = band === "merge";
   return {
     outcome: matched ? "matched" : "new",
-    matchedPointId: matched ? shortlisted[bestIdx]!.id : null,
+    /** For "review", the most likely duplicate — what the editors compare against. */
+    matchedPointId: band === "new" ? null : shortlisted[bestIdx]!.id,
     band,
     bestScore,
     bestSameProbability: bestSame,

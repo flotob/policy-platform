@@ -21,7 +21,7 @@ import {
   auditLog,
   type Db,
 } from "@policy/db";
-import type { LlmProvider } from "@policy/llm";
+import type { JevJudge, LlmProvider } from "@policy/llm";
 
 import {
   BATCH_MATCH_SYSTEM,
@@ -31,6 +31,7 @@ import {
   MATCH_SYSTEM,
   matchPrompt,
 } from "./prompts.ts";
+import { jevMatch, shortlist, type JevMatchVerdict } from "./jev-match.ts";
 import {
   batchMatchOutput,
   batchMatchJsonSchema,
@@ -96,6 +97,14 @@ export interface RunOptions {
    * invalid index) fall back to the per-candidate call.
    */
   batchMatch?: boolean;
+  /**
+   * Jev experiment (exp/jev): "known or new?" as a calibrated System One
+   * judgment over a lexical shortlist — all candidates of a chunk in
+   * parallel. Review-band verdicts (possible duplicate) become new points
+   * with provenance.review = "possible_duplicate". Falls back to the LLM
+   * matcher per candidate if a Jev call fails.
+   */
+  jev?: JevJudge;
 }
 
 export async function runForSubmission(
@@ -111,6 +120,12 @@ export async function runForSubmission(
     .where(eq(submissions.id, submissionId));
   if (!submission) throw new Error(`submission ${submissionId} not found`);
   if (!submission.text) throw new Error(`submission ${submissionId} has no text`);
+
+  const consultationTitle = options.jev
+    ? ((
+        await db.execute(sql`SELECT title FROM consultations WHERE id = ${submission.consultationId}`)
+      ).rows[0] as { title: string } | undefined)?.title ?? ""
+    : "";
 
   const chunks = chunkText(submission.text);
   let method = "";
@@ -189,6 +204,31 @@ export async function runForSubmission(
       }
     }
 
+    // Jev matcher: candidates share one snapshot and never see each other, so
+    // all verdicts of the chunk can be judged concurrently.
+    const jevVerdicts = new Map<number, JevMatchVerdict>();
+    if (options.jev && existing.length > 0) {
+      const judge = options.jev;
+      await Promise.all(
+        parsed.points.map(async (c, ci) => {
+          try {
+            const v = await jevMatch(
+              judge,
+              { consultationTitle },
+              { label: c.label, summary: c.summary },
+              shortlist({ label: c.label, summary: c.summary }, existing),
+            );
+            if (v) jevVerdicts.set(ci, v);
+          } catch (err) {
+            console.log(
+              `  jev match failed for "${c.label}" (${err instanceof Error ? err.message : err}), ` +
+                `falling back to LLM`,
+            );
+          }
+        }),
+      );
+    }
+
     for (let ci = 0; ci < parsed.points.length; ci++) {
       const candidate = parsed.points[ci]!;
 
@@ -196,9 +236,29 @@ export async function runForSubmission(
     let matchedPointId: string | null = null;
     let confidence: number | null = null;
     let matchProvenance: unknown = null;
+    let review: string | undefined;
 
+    const judged = jevVerdicts.get(ci);
     const batched = batchVerdicts.get(ci);
-    if (batched) {
+    if (judged) {
+      outcome = judged.outcome;
+      matchedPointId = judged.outcome === "matched" ? judged.matchedPointId : null;
+      confidence =
+        judged.outcome === "matched" ? judged.bestSameProbability : 1 - judged.bestSameProbability;
+      matchProvenance = {
+        ...judged.provenance,
+        matcher: "jev",
+        band: judged.band,
+        pSame: judged.bestSameProbability,
+        bestScore: judged.bestScore,
+        choicePick: judged.choicePick,
+        shortlist: judged.shortlistIds.length,
+      };
+      if (judged.band === "review") {
+        review = "possible_duplicate";
+        matchProvenance = { ...(matchProvenance as object), reviewCandidate: judged.matchedPointId };
+      }
+    } else if (batched) {
       outcome = batched.outcome;
       matchedPointId = batched.matchedPointId;
       confidence = batched.confidence;
@@ -282,6 +342,7 @@ export async function runForSubmission(
           match: matchProvenance,
           chunk: chunks.length > 1 ? { index: chunkIndex, of: chunks.length } : undefined,
           truncated: false,
+          review,
         },
       });
     }

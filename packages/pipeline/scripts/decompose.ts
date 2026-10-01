@@ -6,13 +6,15 @@
  *     --consultation <source_ref|uuid> [--limit 2] [--model claude-sonnet-5-5]
  *     [--batch-match]   O1: one match call per chunk (validate via
  *                       replay-batch-match.ts before making this the default)
+ *     [--matcher jev]   exp/jev: calibrated Jev matcher (TYPESAFE_API_KEY);
+ *                       validated by replay-jev-match.ts
  *
  * Uses the Agent SDK provider (local Claude Code auth). Processes only
  * submissions without prior match decisions; sequential, politely paced.
  */
 
 import { createDb, eq, sql, submissions } from "@policy/db";
-import { AgentSdkProvider } from "@policy/llm";
+import { AgentSdkProvider, JevJudge } from "@policy/llm";
 
 import { runForSubmission } from "../src/pipeline.ts";
 
@@ -34,6 +36,7 @@ async function main() {
   // the point_sources guard keep reruns duplicate-free.
   const retruncated = process.argv.includes("--retruncated");
   const batchMatch = process.argv.includes("--batch-match");
+  const jev = arg("matcher") === "jev" ? new JevJudge() : undefined;
 
   const db = createDb(url);
   const rows = await db.execute(sql`
@@ -55,7 +58,7 @@ async function main() {
     console.log(`→ ${row.author_org ?? row.id} (${row.chars} chars)…`);
     const started = Date.now();
     try {
-      const result = await runForSubmission(db, provider, row.id, model, { batchMatch });
+      const result = await runForSubmission(db, provider, row.id, model, { batchMatch, jev });
       console.log(
         `  ${result.candidates} candidates → ${result.created} new points, ` +
           `${result.matched} matched${result.chunks > 1 ? ` (${result.chunks} chunks)` : ""} ` +
