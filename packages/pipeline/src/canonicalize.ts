@@ -39,7 +39,7 @@ import { jevMatch, shortlist, textSimilarity, type JevMatchVerdict } from "./jev
 import { EVIDENCE_MIN, evidenceRequest } from "./jev-quotes.ts";
 import { runPool } from "./pool.ts";
 import { MATCH_SYSTEM, matchPrompt } from "./prompts.ts";
-import type { RefinedCandidate } from "./refine.ts";
+import { REFINE_POLICY, type RefinedCandidate } from "./refine.ts";
 import { displayQuote, locateQuote, sentences } from "./quote-span.ts";
 import { matchJsonSchema, matchOutput } from "./schemas.ts";
 
@@ -127,13 +127,19 @@ export async function canonicalize(
     const ex = exRes.rows[0] as
       | {
           id: string;
-          refined: { candidates: RefinedCandidate[] } | null;
+          refined: { policy?: string; candidates: RefinedCandidate[] } | null;
           provenance: Record<string, unknown>;
           canonicalized_at: string | null;
         }
       | undefined;
     if (!ex) throw new Error(`window ${w.index + 1}/${w.count} of submission ${w.submissionId} not extracted yet — run the extract phase`);
     if (!ex.refined) throw new Error(`window ${w.index + 1}/${w.count} of submission ${w.submissionId} not refined yet — run the extract phase`);
+    if (ex.refined.policy !== REFINE_POLICY) {
+      throw new Error(
+        `window ${w.index + 1}/${w.count} of submission ${w.submissionId} was refined under ${ex.refined.policy}, ` +
+          `the pipeline expects ${REFINE_POLICY} — run the extract phase (and reset first if it was canonicalized)`,
+      );
+    }
     if (ex.canonicalized_at) {
       stats.skipped++;
       continue;
@@ -170,8 +176,11 @@ export async function canonicalize(
       candidates,
       async (c, i) => {
         const point = { label: c.label, summary: c.summary };
-        // Rejected candidates are recorded (audit trail) but never matched.
-        const live = c.status !== "rejected";
+        // Only released candidates enter the public map by matching: a
+        // rejected one is recorded only, a held-back one (unresolved personal
+        // data) stays its own draft point — its quote must not reach a
+        // released point through a match.
+        const live = c.status === "released";
         const [match, quote] = await Promise.all([
           live && existing.length > 0
             ? withRetry(() => jevMatch(judge, { consultationTitle: consultation.title }, point, shortlist(point, existing)))
@@ -343,11 +352,14 @@ export async function resolvePossibleDuplicates(
   concurrency: number,
   log: (line: string) => void = console.log,
 ): Promise<{ checked: number; merged: number; failed: number }> {
+  // Pending = no second opinion yet — whatever happened to the two points
+  // since (an earlier merge may have moved either; roots are resolved when
+  // the verdict is applied). The judgment uses the original texts.
   const res = await db.execute(sql`
     SELECT p.id, p.label, p.summary, q.id AS q_id, q.label AS q_label, q.summary AS q_summary, md.id AS md_id
     FROM match_decisions md
-    JOIN points p ON p.id = (md.provenance->>'createdPoint')::uuid AND p.status IN ('draft','released')
-    JOIN points q ON q.id = (md.provenance->'match'->>'reviewCandidate')::uuid AND q.status IN ('draft','released')
+    JOIN points p ON p.id = (md.provenance->>'createdPoint')::uuid
+    JOIN points q ON q.id = (md.provenance->'match'->>'reviewCandidate')::uuid
     WHERE md.consultation_id = ${consultation.id} AND md.provenance->>'review' = 'possible_duplicate'
       AND md.provenance->>'second_opinion' IS NULL AND p.id <> q.id
     ORDER BY md.created_at, md.id
@@ -372,12 +384,13 @@ export async function resolvePossibleDuplicates(
 
   // 2. Merges applied one after another, in decision order, each against the
   // CURRENT live root of both points (an earlier merge may have moved either).
-  const root = async (id: string): Promise<string> => {
+  const root = async (id: string): Promise<{ id: string; status: string }> => {
     for (let cur = id, hops = 0; hops < 50; hops++) {
       const r = (await db.execute(sql`SELECT status, merged_into FROM points WHERE id = ${cur}`)).rows[0] as
         | { status: string; merged_into: string | null }
         | undefined;
-      if (!r || r.status !== "merged" || !r.merged_into) return cur;
+      if (!r) return { id: cur, status: "missing" };
+      if (r.status !== "merged" || !r.merged_into) return { id: cur, status: r.status };
       cur = r.merged_into;
     }
     throw new Error(`merge chain from ${id} does not end`);
@@ -387,10 +400,18 @@ export async function resolvePossibleDuplicates(
     const v = verdicts.get(c.md_id);
     if (!v) continue; // failed judgment: stays pending for the next run
     await db.transaction(async (tx) => {
+      let applied = "no merge (different)";
       if (v.same) {
-        const from = await root(c.id);
-        const into = await root(c.q_id);
-        if (from !== into) {
+        const rf = await root(c.id);
+        const ri = await root(c.q_id);
+        const from = rf.id;
+        const into = ri.id;
+        // Only two RELEASED points merge — never into or out of a held-back,
+        // rejected, or missing one.
+        if (from === into) applied = "already merged";
+        else if (rf.status !== "released" || ri.status !== "released") applied = `skipped (${rf.status} → ${ri.status})`;
+        if (from !== into && rf.status === "released" && ri.status === "released") {
+          applied = "merged";
           // Sources the target does not have yet move over; exact duplicates stay behind.
           await tx.execute(sql`
             UPDATE point_sources ps SET point_id = ${into}
@@ -410,7 +431,7 @@ export async function resolvePossibleDuplicates(
       }
       await tx.execute(sql`
         UPDATE match_decisions SET provenance = provenance || ${JSON.stringify({
-          second_opinion: { same: v.same, confidence: v.confidence, model: v.model },
+          second_opinion: { same: v.same, confidence: v.confidence, model: v.model, applied },
         })}::jsonb WHERE id = ${c.md_id}
       `);
     });

@@ -55,7 +55,11 @@ async function main() {
       COALESCE((SELECT string_agg(ps.quote, ' ') FROM point_sources ps WHERE ps.point_id = p.id), '') AS quotes
     FROM points p
     WHERE p.consultation_id = ${cons.id} AND p.status IN ('draft','released') AND p.created_by <> 'import:questionnaire'
-      AND ${overwrite ? sql`true` : sql`p.measure IS NULL`}
+      AND ${overwrite
+        ? sql`true`
+        : sql`(p.measure IS NULL OR EXISTS (
+            SELECT 1 FROM judgments j WHERE j.subject_kind = 'point' AND j.subject_id = p.id::text
+              AND j.family = ${MEASURE_FAMILY} AND (j.decided->>'pendingSecondOpinion')::boolean))`}
     ORDER BY p.created_at
   `);
   const pts = pRes.rows as { id: string; label: string; summary: string | null; quotes: string }[];

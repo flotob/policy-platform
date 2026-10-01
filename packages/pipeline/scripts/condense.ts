@@ -75,18 +75,22 @@ async function assign(
       );
       const a = answers.map_point as { choice: string; confidence: number };
       const mp = a.choice === "none" ? null : mps[Number(a.choice.slice(1)) - 1]!;
-      if (mp) await db.execute(sql`UPDATE points SET map_point_id = ${mp.id} WHERE id = ${p.id}`);
-      else uncovered.push(p);
-      await saveJudgment(db, {
-        tenantId: cons.tenantId,
-        consultationId: cons.id,
-        subjectKind: "point",
-        subjectId: p.id,
-        family: MAP_ASSIGN_FAMILY,
-        provenance,
-        answers,
-        decided: { mapPoint: mp?.id ?? null, confidence: a.confidence },
+      // Assignment and its judgment commit together — a half-written result
+      // would look done on resume.
+      await db.transaction(async (tx) => {
+        if (mp) await tx.execute(sql`UPDATE points SET map_point_id = ${mp.id} WHERE id = ${p.id}`);
+        await saveJudgment(tx as unknown as Db, {
+          tenantId: cons.tenantId,
+          consultationId: cons.id,
+          subjectKind: "point",
+          subjectId: p.id,
+          family: MAP_ASSIGN_FAMILY,
+          provenance,
+          answers,
+          decided: { mapPoint: mp?.id ?? null, confidence: a.confidence },
+        });
       });
+      if (!mp) uncovered.push(p);
     },
     8,
   );

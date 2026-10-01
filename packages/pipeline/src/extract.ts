@@ -248,14 +248,22 @@ export async function extractWindows(
   const res = windows.length
     ? await db.execute(sql`
         SELECT submission_id, window_index, call_hash,
-          (refined IS NOT NULL AND refined->>'policy' = ${REFINE_POLICY}) AS refined FROM extractions
+          (refined IS NOT NULL AND refined->>'policy' = ${REFINE_POLICY}) AS refined,
+          (canonicalized_at IS NOT NULL) AS canonicalized FROM extractions
         WHERE call_hash IN (${sql.join(windows.map((w) => sql`${w.hash}`), sql`, `)})`)
     : { rows: [] };
+  const rows = res.rows as { submission_id: string; window_index: number; call_hash: string; refined: boolean; canonicalized: boolean }[];
+  // A window already on the map that was refined under another policy must
+  // not be re-refined in place: its points were built from the old payload.
+  const stale = rows.filter((r) => r.canonicalized && !r.refined);
+  if (stale.length) {
+    throw new Error(
+      `${stale.length} canonicalized windows were refined under an older policy than ${REFINE_POLICY} — ` +
+        `reset the consultation (reset-consultation.ts --refine) before extracting again`,
+    );
+  }
   const state = new Map(
-    (res.rows as { submission_id: string; window_index: number; call_hash: string; refined: boolean }[]).map((r) => [
-      key({ submissionId: r.submission_id, index: r.window_index, hash: r.call_hash }),
-      r.refined,
-    ]),
+    rows.map((r) => [key({ submissionId: r.submission_id, index: r.window_index, hash: r.call_hash }), r.refined]),
   );
   const todo = windows
     .filter((w) => state.get(key(w)) !== true)

@@ -21,6 +21,8 @@
  *     [--scope <name>] [--concurrency 4] [--force] [--skip-befund]
  */
 
+import { createHash } from "node:crypto";
+
 import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider, JevJudge } from "@policy/llm";
 
@@ -54,6 +56,11 @@ const AGREE_FLOOR = 60;
 const KERN_MIN_GAP = 30;
 /** Direct votes (map-points engine): a camp profile needs this many voters per camp — 2, or half of a camp smaller than 4. */
 const minCampVoters = (size: number) => Math.min(2, Math.max(1, Math.ceil(size / 2)));
+
+const sha = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex");
+/** A reasons verdict is valid for the evidence it judged: claim, members, quotes. */
+const reasonsFingerprint = (text: string, memberLabels: string[], quotes: { text: string }[] | null) =>
+  sha({ text, members: [...memberLabels].sort(), quotes: (quotes ?? []).map((q) => q.text) });
 const DOORS: Record<
   string,
   { bezirk: string; label: string; text: string }
@@ -194,6 +201,7 @@ async function main() {
   const provider = new AgentSdkProvider();
 
   const befundJobs: { scope: string; row: MapRow; members: { id: string; label: string }[] }[] = [];
+  const numericBridge = new Set<string>();
   const reasonsPending = new Set<string>();
   for (const scope of scopes) {
     console.log(`\n=== scope: ${scope} ===`);
@@ -229,12 +237,12 @@ async function main() {
 
     // ——— Deterministic profiles + diagnoses.
     const rowsRes = await db.execute(sql`
-      SELECT id, ord, typ, bezirk, text, label, diag, befund, diag_flags
+      SELECT id, ord, typ, bezirk, text, label, diag, befund, diag_flags, quotes
       FROM map_points
       WHERE consultation_id = ${consultationId} AND scope = ${scope}
       ORDER BY ord
     `);
-    const rows = rowsRes.rows as unknown as MapRow[];
+    const rows = rowsRes.rows as unknown as (MapRow & { quotes: { text: string }[] | null })[];
 
     const membersRes = await db.execute(sql`
       SELECT id, label, map_point_id FROM points
@@ -298,9 +306,14 @@ async function main() {
           diag = row.typ === "T" ? "klaerbar" : row.typ === "W" ? "wert" : "offen";
         }
       }
-      // A bridge that the reasons check found to be a false bridge stays a
-      // warning on reruns (the check itself is not repeated).
-      if (diag === "bruecke" && row.diag_flags?.reasons === "diverging_reasons") diag = "warnung";
+      // The numbers make a bridge; a CURRENT false-bridge verdict (same
+      // evidence, no --force) keeps it a warning. A stale or forced one is
+      // re-checked below.
+      if (diag === "bruecke") {
+        numericBridge.add(row.id);
+        const fp = reasonsFingerprint(row.text, members.map((m) => m.label), row.quotes);
+        if (!force && row.diag_flags?.reasons === "diverging_reasons" && row.diag_flags?.reasons_for === fp) diag = "warnung";
+      }
       computed.set(row.id, { pa, pb, nVoted, diag, gap });
     }
 
@@ -391,12 +404,14 @@ async function main() {
       quotes: { lager: string; quelle: string; text: string }[] | null;
     })[];
 
+    const fpOf = (r: (typeof freshRows)[number]) =>
+      reasonsFingerprint(r.text, (membersByMap.get(r.id) ?? []).map((m) => m.label), r.quotes);
     const bridges = freshRows.filter((r) => {
       const members = membersByMap.get(r.id) ?? [];
-      const alreadyChecked = r.diag_flags && "reasons" in r.diag_flags && !force;
+      const current = r.diag_flags?.reasons !== undefined && r.diag_flags?.reasons_for === fpOf(r);
       return (
-        r.diag === "bruecke" &&
-        !alreadyChecked &&
+        numericBridge.has(r.id) &&
+        (force || !current) &&
         (members.length >= 3 || (r.quotes?.length ?? 0) >= 2)
       );
     });
@@ -431,7 +446,15 @@ async function main() {
           });
           if (p >= REASONS_SCREEN_MIN) flagged.push(row);
           else {
-            const flags = { reasons: "same_reasons", reasons_screen: Number(p.toFixed(3)) };
+            // Replace the whole verdict (obsolete keys → null), keep unrelated flags.
+            const flags = {
+              reasons: "same_reasons",
+              reasons_screen: Number(p.toFixed(3)),
+              reasons_rationale: null,
+              scheinbruecke: null,
+              needs_review: null,
+              reasons_for: fpOf(row),
+            };
             await db.execute(sql`
               UPDATE map_points SET diag_flags = COALESCE(diag_flags, '{}'::jsonb) || ${JSON.stringify(flags)}::jsonb
               WHERE id = ${row.id}`);
@@ -463,6 +486,9 @@ async function main() {
           const flags: Record<string, unknown> = {
             reasons: parsed.verdict,
             reasons_rationale: parsed.rationale,
+            scheinbruecke: null,
+            needs_review: null,
+            reasons_for: fpOf(row),
           };
           // Merge, never replace: diag_flags also carries the vote counts.
           if (parsed.verdict === "diverging_reasons") {
@@ -520,43 +546,36 @@ async function main() {
           diag_flags: Record<string, unknown> | null;
           quotes: { quelle: string; text: string; lager?: string }[] | null;
         };
-        // A Befund is valid for the inputs it was written from; when the
-        // diagnosis, numbers, reasons, or camps change, it is rewritten.
-        const fingerprint = JSON.stringify({
+        const prompt = befundPrompt({
+          scope,
           text: row.text,
+          typ: row.typ,
           diag: cur.diag,
           pa: cur.pa,
           pb: cur.pb,
-          votes: cur.diag_flags?.votes ?? null,
-          reasons: cur.diag_flags?.reasons ?? null,
-          camps: [campA, campB],
+          campA,
+          campB,
+          votes: cur.diag_flags?.votes as VoteCounts | undefined,
+          memberLabels: members.map((m) => m.label).sort(),
+          quotes: (cur.quotes ?? []).map((q) => ({
+            quelle: q.lager && q.lager !== "—" ? `${q.quelle} (${q.lager})` : q.quelle,
+            text: q.text,
+          })),
+          reasonsRationale:
+            typeof cur.diag_flags?.reasons_rationale === "string"
+              ? cur.diag_flags.reasons_rationale
+              : undefined,
         });
+        // A Befund is valid for exactly the prompt it was written from: any
+        // change of claim, numbers, evidence, reasons, or camps rewrites it.
+        const fingerprint = sha({ system: BEFUND_SYSTEM, prompt });
         if (!force && row.befund && cur.diag_flags?.befund_for === fingerprint) {
           befundsUnchanged++;
           return;
         }
         const result = await provider.generateStructured({
           system: BEFUND_SYSTEM,
-          prompt: befundPrompt({
-            scope,
-            text: row.text,
-            typ: row.typ,
-            diag: cur.diag,
-            pa: cur.pa,
-            pb: cur.pb,
-            campA,
-            campB,
-            votes: cur.diag_flags?.votes as VoteCounts | undefined,
-            memberLabels: members.map((m) => m.label),
-            quotes: (cur.quotes ?? []).map((q) => ({
-              quelle: q.lager && q.lager !== "—" ? `${q.quelle} (${q.lager})` : q.quelle,
-              text: q.text,
-            })),
-            reasonsRationale:
-              typeof cur.diag_flags?.reasons_rationale === "string"
-                ? cur.diag_flags.reasons_rationale
-                : undefined,
-          }),
+          prompt,
           schema: befundJsonSchema,
         });
         const parsed = befundOutput.parse(result.output);
