@@ -52,6 +52,11 @@ export function trigrams(text: string): Set<string> {
   return out;
 }
 
+/** Trigram Dice similarity of two texts (0..1) — the shared lexical shortlist metric. */
+export function textSimilarity(a: string, b: string): number {
+  return dice(trigrams(a), trigrams(b));
+}
+
 function dice(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   let shared = 0;

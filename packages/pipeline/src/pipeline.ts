@@ -32,6 +32,7 @@ import {
   matchPrompt,
 } from "./prompts.ts";
 import { jevMatch, shortlist, type JevMatchVerdict } from "./jev-match.ts";
+import { locateQuote } from "./quote-span.ts";
 import {
   batchMatchOutput,
   batchMatchJsonSchema,
@@ -316,14 +317,14 @@ export async function runForSubmission(
           AND quote = ${candidate.quote} LIMIT 1
       `);
       if (dupSource.rows.length === 0) {
-        const spanStart = submission.text.indexOf(candidate.quote);
+        const span = locateQuote(submission.text, candidate.quote);
         await db.insert(pointSources).values({
           tenantId: submission.tenantId,
           pointId,
           submissionId: submission.id,
           quote: candidate.quote,
-          spanStart: spanStart >= 0 ? spanStart : null,
-          spanEnd: spanStart >= 0 ? spanStart + candidate.quote.length : null,
+          spanStart: span?.start ?? null,
+          spanEnd: span?.end ?? null,
         });
       }
 
