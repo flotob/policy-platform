@@ -261,6 +261,37 @@ export const condenseAssignOutput = z
   })
   .strict();
 
+/**
+ * Extraction (exp/jev, two-phase decomposition): the LLM only WRITES the
+ * points — label and summary (and, in the "llm" quote variant, a verbatim
+ * quote). Everything that is a judgment over a closed set (kind, slot, door,
+ * release) is decided by Jev at canonicalization; relations come from a Jev
+ * stage across submissions.
+ */
+export const extractedPoint = z
+  .object({
+    /** Short editorial label in the submission's language (<= 80 chars). */
+    label: z.string().min(3).max(120),
+    /** One neutral sentence stating the claim. */
+    summary: z.string().min(10).max(500),
+  })
+  .strict();
+
+export const extractedPointWithQuote = z
+  .object({
+    label: z.string().min(3).max(120),
+    summary: z.string().min(10).max(500),
+    /** Verbatim supporting excerpt from the window. */
+    quote: z.string().min(5).max(600),
+  })
+  .strict();
+
+export const extractionOutput = z.object({ points: z.array(extractedPoint).max(30) }).strict();
+export const extractionOutputWithQuote = z
+  .object({ points: z.array(extractedPointWithQuote).max(30) })
+  .strict();
+export type ExtractedPoint = z.infer<typeof extractedPoint> & { quote?: string };
+
 /** Befund: verbalize the computed verdict (binding) for one map point. */
 export const befundOutput = z
   .object({
@@ -309,3 +340,5 @@ export const condenseJsonSchema = toProviderSchema(condenseOutput);
 export const condenseAssignJsonSchema = toProviderSchema(condenseAssignOutput);
 export const befundJsonSchema = toProviderSchema(befundOutput);
 export const reasonsCheckJsonSchema = toProviderSchema(reasonsCheckOutput);
+export const extractionJsonSchema = toProviderSchema(extractionOutput);
+export const extractionWithQuoteJsonSchema = toProviderSchema(extractionOutputWithQuote);

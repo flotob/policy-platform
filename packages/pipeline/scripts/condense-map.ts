@@ -15,7 +15,7 @@
  *
  * Usage:
  *   DATABASE_URL=... tsx scripts/condense-map.ts --consultation <ref>
- *     [--scope <measure name>] [--batch 25] [--sweep jev]
+ *     [--scope <measure name>] [--batch 25] [--sweep jev] [--concurrency 4]
  *
  * --sweep jev (exp/jev): leftovers are assigned by a calibrated choice per
  * point instead of index-keyed LLM batches; judgments are persisted.
@@ -95,7 +95,8 @@ async function main() {
   const provider = new AgentSdkProvider();
   const jevSweep = arg("sweep") === "jev" ? new JevJudge() : null;
 
-  for (const scope of scopes) {
+  // Measures are independent: their proposal calls run in parallel.
+  await runPool(scopes, async (scope) => {
     console.log(`\n=== scope: ${scope} ===`);
     try {
     const pointsRes = await db.execute(sql`
@@ -109,8 +110,8 @@ async function main() {
     `);
     const points = pointsRes.rows as unknown as ExtractionPoint[];
     if (points.length < 4) {
-      console.log(`  only ${points.length} points — skipped`);
-      continue;
+      console.log(`  [${scope}] only ${points.length} points — skipped`);
+      return;
     }
 
     const existingRes = await db.execute(sql`
@@ -181,7 +182,7 @@ async function main() {
         `  proposed ${mapPoints.length} map points, covered ${seen.size}/${points.length} extraction points`,
       );
     } else {
-      console.log(`  ${mapPoints.length} map points exist — sweep only`);
+      console.log(`  [${scope}] ${mapPoints.length} map points exist — sweep only`);
     }
 
     // Pass 2: sweep — assign leftovers to the existing canonical points.
@@ -199,10 +200,10 @@ async function main() {
       id: string; label: string; summary: string | null;
     }[];
     if (leftovers.length === 0) {
-      console.log(`  sweep: nothing left`);
-      continue;
+      console.log(`  [${scope}] sweep: nothing left`);
+      return;
     }
-    console.log(`  sweep: ${leftovers.length} unassigned${jevSweep ? " (jev)" : ""}`);
+    console.log(`  [${scope}] sweep: ${leftovers.length} unassigned${jevSweep ? " (jev)" : ""}`);
     let swept = 0;
     let offMap = 0;
     if (jevSweep) {
@@ -273,14 +274,14 @@ async function main() {
                   ${JSON.stringify({ scope, batchStart: offset, batchSize: batch.length })})
         `);
       } catch (err) {
-        console.log(`  sweep batch at ${offset} FAILED: ${err instanceof Error ? err.message : err}`);
+        console.log(`  [${scope}] sweep batch at ${offset} FAILED: ${err instanceof Error ? err.message : err}`);
       }
     }
-    console.log(`  sweep done: ${swept} assigned, ${offMap} off-map`);
+    console.log(`  [${scope}] sweep done: ${swept} assigned, ${offMap} off-map`);
     } catch (err) {
-      console.log(`  scope FAILED: ${err instanceof Error ? err.message : err}`);
+      console.log(`  [${scope}] scope FAILED: ${err instanceof Error ? err.message : err}`);
     }
-  }
+  }, Number(arg("concurrency") ?? 4));
 
   // Coverage summary.
   const summary = await db.execute(sql`

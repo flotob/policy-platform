@@ -34,7 +34,7 @@ import {
   type ClassifyContext,
   type ClassifyDecision,
 } from "../src/jev-classify.ts";
-import { agreementReport, judgeAll, resolveConsultation, saveJudgment, statsLine } from "../src/jev-stage.ts";
+import { agreementReport, judgeAll, resolveConsultation, sinceReset, saveJudgment, statsLine } from "../src/jev-stage.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -77,7 +77,8 @@ async function main() {
   const pts = pRes.rows as unknown as Row[];
   const proposed = async (action: string, key: string): Promise<string[]> => {
     const r = await db.execute(sql`
-      SELECT payload FROM audit_log WHERE action = ${action} AND subject_id = ${cons.id}
+      SELECT payload FROM audit_log a WHERE action = ${action} AND subject_id = ${cons.id}
+        AND a.created_at > ${sinceReset(cons.id)}
       ORDER BY created_at DESC LIMIT 1
     `);
     return ((r.rows[0] as { payload: Record<string, string[]> } | undefined)?.payload?.[key] ?? []).filter(Boolean);

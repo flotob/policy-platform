@@ -38,6 +38,40 @@ Rules:
 9. Prefer 3–15 points for a typical association submission; never pad.
 10. relations: argumentative links BETWEEN the candidates you extracted, by array index. kind "supports" = from is a premise for to (especially P1–P4 points supporting a conclusion point). The five critical-question kinds mark attacks, same vocabulary as the doors. Only emit relations the text actually argues; an empty array is fine.`;
 
+/**
+ * Extraction (exp/jev two-phase decomposition): the LLM writes the points of
+ * ONE text window; it no longer labels them — kind, slot, door, and release
+ * are Jev judgments at canonicalization, relations a Jev stage across
+ * submissions. The grammar stays in the prompt because it defines what
+ * counts as a point.
+ */
+export function extractSystem(withQuote: boolean): string {
+  return `You extract the distinct argumentative points from one window of a consultation submission, for a public argument map.
+
+What counts as a point — in the debate about a proposed measure, contributions are:
+- claims about the present situation, about what the measure will cause, about whether that effect serves a goal, and about whether the goal is worth its price;
+- support for or rejection of the measure or one of its provisions;
+- objections: the claimed effect will not occur; a milder or cheaper means would reach the goal; the measure harms another goal (costs, side effects); it cannot be implemented as proposed; the value is not worth what it sacrifices;
+- shaping proposals ("if we do it, then like this"): transition periods, hardship clauses, exemptions, staggering, concrete changes to a provision;
+- open questions the submission raises that nobody answers (missing evidence, an unexamined alternative).
+
+Rules:
+1. Extract every DISTINCT point of the window; merge repetitions within it.
+2. One point = one claim. Premises are points of their own: a factual claim that supports a demand or a judgment — figures, the current state, an observed development, an expected effect — is extracted SEPARATELY from the demand or judgment it supports (e.g. "the building sector has repeatedly missed its climate targets" and "emissions must fall immediately" are two points). Keep facts and value judgments apart: a point is either something evidence could settle or a judgment no study can settle, not both.
+3. Extract factual premises and open questions even when the submission uses them only as support or in passing — they are points on the map.
+4. Strip rhetoric and tone; keep the argumentative core, neutrally phrased.
+5. label: a short editorial label (at most 80 characters). summary: one neutral sentence stating the claim. Write both in the language of the submission.
+${withQuote ? '6. quote: a short VERBATIM excerpt from the window (copy exactly, no ellipses) that best evidences the point.\n7.' : "6."} Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
+${withQuote ? "8." : "7."} A dense window often holds 15–25 points; never pad. An empty list is fine for a window without substantive content.`;
+}
+
+export function extractPrompt(windowText: string, window: { index: number; count: number }): string {
+  return (
+    `Submission window ${window.index + 1} of ${window.count}:\n\n---\n${windowText}\n---\n\n` +
+    `Extract the distinct points per the rules.`
+  );
+}
+
 /** Measure segmentation (one chain per measure; the AI determines the cut). */
 export const MEASURES_PROPOSE_SYSTEM = `You segment a public consultation's argument map into its separately decidable SUB-MEASURES.
 

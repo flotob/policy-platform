@@ -32,7 +32,7 @@ import {
   type StanceDecision,
   type StanceProbs,
 } from "../src/jev-stance.ts";
-import { judgeAll, resolveConsultation, saveJudgment, statsLine } from "../src/jev-stage.ts";
+import { judgeAll, resolveConsultation, sinceReset, saveJudgment, statsLine } from "../src/jev-stage.ts";
 import type { JudgeProvenance } from "@policy/llm";
 
 function arg(name: string): string | undefined {
@@ -79,7 +79,8 @@ async function main() {
   const subRes = await db.execute(sql`
     SELECT s.id, s.source_ref, s.author_org, s.author_type, s.language, s.text,
       EXISTS (SELECT 1 FROM audit_log a WHERE a.action = 'participant.infer_stances'
-              AND a.subject_kind = 'submission' AND a.subject_id = s.id::text) AS inferred_before
+              AND a.subject_kind = 'submission' AND a.subject_id = s.id::text
+              AND a.created_at > ${sinceReset(cons.id)}) AS inferred_before
     FROM submissions s
     WHERE s.consultation_id = ${cons.id} AND s.text IS NOT NULL
     ORDER BY length(s.text) DESC

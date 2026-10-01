@@ -108,7 +108,7 @@ async function main() {
   const consultation = arg("consultation");
   if (!consultation) throw new Error("--consultation required");
   const onlyScope = arg("scope");
-  const concurrency = Number(arg("concurrency") ?? 4);
+  const concurrency = Number(arg("concurrency") ?? 6);
   const force = flag("force");
   const skipBefund = flag("skip-befund");
 

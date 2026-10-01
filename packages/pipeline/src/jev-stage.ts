@@ -88,6 +88,15 @@ export async function saveJudgment(
   `);
 }
 
+/**
+ * Audit entries older than the consultation's last reset (reset-consultation
+ * .ts) belong to a discarded run — resume markers must compare against this.
+ */
+export function sinceReset(consultationId: string) {
+  return sql`COALESCE((SELECT max(r.created_at) FROM audit_log r
+    WHERE r.action = 'consultation.reset' AND r.subject_id = ${consultationId}::text), '-infinity'::timestamptz)`;
+}
+
 export async function resolveConsultation(
   db: Db,
   ref: string,

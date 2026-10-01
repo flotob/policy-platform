@@ -5,14 +5,17 @@
  * Usage:
  *   DATABASE_URL=... pnpm --filter @policy/pipeline statements -- \
  *     --consultation <source_ref|uuid> [--limit 20] [--model claude-sonnet-5-5]
+ *     [--concurrency 5]
  *
- * Uses the Agent SDK provider (local Claude Code auth); sequential with
- * per-point fault tolerance — reruns are cheap, done points are skipped.
+ * Uses the Agent SDK provider (local Claude Code auth); points are
+ * independent, so they run `concurrency` at a time with per-point fault
+ * tolerance — reruns are cheap, done points are skipped.
  */
 
 import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider } from "@policy/llm";
 
+import { runPool } from "../src/pool.ts";
 import { generateStatementsForPoint } from "../src/statements.ts";
 
 function arg(name: string): string | undefined {
@@ -43,20 +46,16 @@ async function main() {
   console.log(`${rows.rows.length} released points without statements`);
 
   const provider = new AgentSdkProvider();
-  let ok = 0;
-  let failed = 0;
-  for (const row of rows.rows as { id: string; label: string }[]) {
-    console.log(`→ ${row.label.slice(0, 80)}…`);
-    const started = Date.now();
-    try {
+  const concurrency = Number(arg("concurrency") ?? 5);
+  const { ok, failed } = await runPool(
+    rows.rows as { id: string; label: string }[],
+    async (row) => {
+      const started = Date.now();
       await generateStatementsForPoint(db, provider, row.id, model);
-      ok++;
-      console.log(`  de+en drafted [${Math.round((Date.now() - started) / 1000)}s]`);
-    } catch (err) {
-      failed++;
-      console.log(`  FAILED: ${err instanceof Error ? err.message : err}`);
-    }
-  }
+      console.log(`  ${row.label.slice(0, 70)} — de+en drafted [${Math.round((Date.now() - started) / 1000)}s]`);
+    },
+    concurrency,
+  );
   console.log(`done: ${ok} points drafted, ${failed} failed`);
   process.exit(0);
 }

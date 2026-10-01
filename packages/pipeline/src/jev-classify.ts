@@ -43,6 +43,21 @@ export interface ClassifyContext {
   mapPoints: { id: string; label: string; text: string }[];
 }
 
+/** Role and doors — intrinsic to the point, askable before any structure exists. */
+export function roleQuestions() {
+  return {
+    role: choice("What role does `point` play in the debate about the proposed measure?", ROLES),
+    door_objection: choice(
+      "Assume `point` is an objection. Through which critical question does it attack the measure?",
+      DOORS,
+    ),
+    door_instrument: choice(
+      "Assume `point` is a shaping proposal. Which critical question does it primarily answer — which concern does it cushion?",
+      DOORS,
+    ),
+  };
+}
+
 export function classifyQuestions(ctx: ClassifyContext) {
   const measureCriteria: Record<string, string> = {};
   ctx.measures.forEach((m, i) => {
@@ -58,15 +73,7 @@ export function classifyQuestions(ctx: ClassifyContext) {
   themeCriteria.none = "None of the themes fits the point's topic.";
 
   const questions: Record<string, ReturnType<typeof choice>> = {
-    role: choice("What role does `point` play in the debate about the proposed measure?", ROLES),
-    door_objection: choice(
-      "Assume `point` is an objection. Through which critical question does it attack the measure?",
-      DOORS,
-    ),
-    door_instrument: choice(
-      "Assume `point` is a shaping proposal. Which critical question does it primarily answer — which concern does it cushion?",
-      DOORS,
-    ),
+    ...roleQuestions(),
     measure: choice("Which sub-decision of the proposal does `point` concern?", measureCriteria),
     theme: choice("Which theme does `point` belong to, by topic (not by its position on it)?", themeCriteria),
   };

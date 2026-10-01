@@ -80,12 +80,25 @@ async function main() {
   const valueOf = new Map<string, Map<string, AnswerValue>>();
   const votable: string[] = [];
   const judge = useJev ? new JevJudge() : null;
+  // Jev: one request per question, all questions in parallel.
+  const jevDecisions = new Map<string, ReturnType<typeof decideQuestion>>();
+  if (judge) {
+    const asked = [...labelCounts.entries()].filter(([, c]) => [...c.values()].reduce((s, n) => s + n, 0) >= 20);
+    await Promise.all(
+      Array.from({ length: Math.min(8, asked.length) }, async (_, lane) => {
+        for (let i = lane; i < asked.length; i += 8) {
+          const [q, counts] = asked[i]!;
+          const { mapping } = await mapQuestion(judge, q, [...counts.keys()]);
+          jevDecisions.set(q, decideQuestion(counts, mapping));
+        }
+      }),
+    );
+  }
   for (const [q, counts] of labelCounts) {
     const total = [...counts.values()].reduce((s, n) => s + n, 0);
     if (total < 20) continue;
     if (judge) {
-      const { mapping } = await mapQuestion(judge, q, [...counts.keys()]);
-      const d = decideQuestion(counts, mapping);
+      const d = jevDecisions.get(q)!;
       if (d.votable) {
         votable.push(q);
         valueOf.set(q, d.values);

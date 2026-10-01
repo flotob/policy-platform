@@ -28,6 +28,7 @@ import { chunkText } from "../src/pipeline.ts";
 import { runPool } from "../src/pool.ts";
 import { STANCE_SYSTEM, stancePrompt } from "../src/prompts.ts";
 import { stanceJsonSchema, stanceOutput } from "../src/schemas.ts";
+import { sinceReset } from "../src/jev-stage.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -73,6 +74,7 @@ async function main() {
         SELECT 1 FROM audit_log a
         WHERE a.action = 'participant.infer_stances'
           AND a.subject_kind = 'submission' AND a.subject_id = s.id::text
+          AND a.created_at > ${sinceReset(consultationId)}
       )
     ORDER BY length(s.text) DESC
     LIMIT ${limit}
