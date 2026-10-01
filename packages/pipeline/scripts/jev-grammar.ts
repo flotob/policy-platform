@@ -6,8 +6,9 @@
  *   map points: fact/value for T/W canonical points → typ; district derived
  *               in code from the members' critical questions (evidence.v1)
  *
- * Writes raw judgments always. Canonical columns: empty slots are filled;
- * existing kind/slot/typ/bezirk are only replaced with --overwrite (then
+ * Writes raw judgments always. Canonical columns: slots are filled only on a
+ * consultation where no point has a slot yet (otherwise an empty slot is a
+ * decision); kind/slot/typ/bezirk are replaced only with --overwrite (then
  * re-run diagnose-map + analyze, since diagnoses depend on them).
  * Without --overwrite this is a comparison run against the LLM labels.
  *
@@ -75,6 +76,7 @@ async function main() {
     console.log(
       `grammar: ${pts.length} fact/value points (${pts.filter((p) => p.grammar_claim).length} grammar claims get the slot tests; objections only fact/value)`,
     );
+    const slotsAssigned = pts.some((p) => p.slot !== null);
     const decided = new Map<string, GrammarDecision | (ReturnType<typeof decideEvidence> & { slot: null; demand: false })>();
     let filled = 0;
     let replaced = 0;
@@ -106,7 +108,7 @@ async function main() {
             await db.execute(sql`UPDATE points SET kind = ${d.kind} WHERE id = ${p.id}`);
             replaced++;
           }
-        } else if (p.slot === null && d.slot) {
+        } else if (!slotsAssigned && d.slot) {
           await db.execute(sql`UPDATE points SET slot = ${d.slot} WHERE id = ${p.id}`);
           filled++;
         } else if (overwrite && (p.kind !== d.kind || (d.slot && p.slot !== d.slot))) {
