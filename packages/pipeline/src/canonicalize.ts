@@ -6,15 +6,19 @@
  *  - known or new? — Jev P(same) over a lexical shortlist of everything
  *    already on the map (windows stay strictly ordered: a window's snapshot
  *    contains every earlier window, never its own siblings);
- *  - intake — one Jev request per NEW point decides release, role, door,
- *    fact/value and slot (asked speculatively for every candidate in
- *    parallel with the match; answers for matched candidates are dropped);
+ *  - the candidates are the REFINED ones (refine.ts): their Jev intake
+ *    judgment (release, role, door, fact/value, slot) and any automatic
+ *    repair already happened right after extraction, in parallel;
  *  - quote — "llm": the extracted quote is located in the text; "jev": Jev
  *    rates the window's sentences closest to the claim and the best one
  *    becomes the verbatim quote, with its span.
  * All Jev calls of a window run concurrently; the window's writes commit in
  * one transaction together with its canonicalized_at mark, so a crash never
  * leaves a half-applied window and a rerun resumes exactly.
+ *
+ * Afterwards, possible duplicates (Jev P(same) between 0.2 and 0.5) get a
+ * second opinion from the LLM; confirmed duplicates are merged (sources move
+ * to the earlier point, the later one is marked merged).
  */
 
 import {
@@ -28,15 +32,17 @@ import {
   sql,
   type Db,
 } from "@policy/db";
-import type { JevJudge, JudgeProvenance } from "@policy/llm";
+import type { JevJudge, JudgeProvenance, LlmProvider } from "@policy/llm";
 
 import type { PlannedWindow, QuoteMode } from "./extract.ts";
-import { decideIntake, INTAKE_FAMILY, intakeRequest, type IntakeDecision } from "./intake.ts";
+import { INTAKE_FAMILY } from "./intake.ts";
 import { jevMatch, shortlist, textSimilarity, type JevMatchVerdict } from "./jev-match.ts";
 import { EVIDENCE_MIN, evidenceRequest } from "./jev-quotes.ts";
 import { runPool } from "./pool.ts";
+import { MATCH_SYSTEM, matchPrompt } from "./prompts.ts";
+import type { RefinedCandidate } from "./refine.ts";
 import { displayQuote, locateQuote, sentences } from "./quote-span.ts";
-import type { ExtractedPoint } from "./schemas.ts";
+import { matchJsonSchema, matchOutput } from "./schemas.ts";
 
 export const QUOTE_PICK_FAMILY = "quote-pick.v1";
 /** Window sentences offered to Jev per point (lexical shortlist). */
@@ -68,9 +74,8 @@ interface QuotePick {
 }
 
 interface Judged {
-  candidate: ExtractedPoint;
+  candidate: RefinedCandidate;
   match: JevMatchVerdict | null;
-  intake: { decision: IntakeDecision; answers: unknown; provenance: JudgeProvenance };
   quote: QuotePick;
 }
 
@@ -117,13 +122,19 @@ export async function canonicalize(
 
   for (const w of windows) {
     const exRes = await db.execute(sql`
-      SELECT id, output, provenance, canonicalized_at FROM extractions
+      SELECT id, refined, provenance, canonicalized_at FROM extractions
       WHERE submission_id = ${w.submissionId} AND window_index = ${w.index} AND call_hash = ${w.hash}
     `);
     const ex = exRes.rows[0] as
-      | { id: string; output: { points: ExtractedPoint[] }; provenance: Record<string, unknown>; canonicalized_at: string | null }
+      | {
+          id: string;
+          refined: { candidates: RefinedCandidate[] } | null;
+          provenance: Record<string, unknown>;
+          canonicalized_at: string | null;
+        }
       | undefined;
     if (!ex) throw new Error(`window ${w.index + 1}/${w.count} of submission ${w.submissionId} not extracted yet — run the extract phase`);
+    if (!ex.refined) throw new Error(`window ${w.index + 1}/${w.count} of submission ${w.submissionId} not refined yet — run the extract phase`);
     if (ex.canonicalized_at) {
       stats.skipped++;
       continue;
@@ -153,28 +164,24 @@ export async function canonicalize(
       )
       .orderBy(points.createdAt);
 
-    const candidates = ex.output.points;
+    const candidates = ex.refined.candidates;
     const judged: Judged[] = new Array(candidates.length);
     const pool = await runPool(
       candidates,
       async (c, i) => {
         const point = { label: c.label, summary: c.summary };
-        const [match, intake, quote] = await Promise.all([
-          existing.length > 0
+        // Rejected candidates are recorded (audit trail) but never matched.
+        const live = c.status !== "rejected";
+        const [match, quote] = await Promise.all([
+          live && existing.length > 0
             ? withRetry(() => jevMatch(judge, { consultationTitle: consultation.title }, point, shortlist(point, existing)))
             : Promise.resolve(null),
-          withRetry(async () => {
-            const req = intakeRequest(consultation.title, point);
-            const { answers, provenance } = await judge.judge(req.state, req.questions);
-            return { decision: decideIntake(answers as Record<string, unknown>), answers, provenance };
-          }),
           quotes === "llm"
             ? Promise.resolve(locatedQuote(text, c.quote ?? ""))
             : withRetry(() => pickQuote(judge, `${c.label}. ${c.summary}`, c.summary, windowSentences)),
         ]);
-        stats.jevTokens +=
-          (match?.provenance.inputTokens ?? 0) + intake.provenance.inputTokens + (quote.provenance?.inputTokens ?? 0);
-        judged[i] = { candidate: c, match, intake, quote };
+        stats.jevTokens += (match?.provenance.inputTokens ?? 0) + (quote.provenance?.inputTokens ?? 0);
+        judged[i] = { candidate: c, match, quote };
       },
       10,
     );
@@ -189,7 +196,8 @@ export async function canonicalize(
     await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
       for (const j of judged) {
-        const { candidate, match, intake, quote } = j;
+        const { candidate, match, quote } = j;
+        const intake = candidate.intake;
         let pointId: string;
         let review: string | undefined;
         if (match?.outcome === "matched" && match.matchedPointId) {
@@ -201,6 +209,7 @@ export async function canonicalize(
             stats.possibleDuplicates++;
           }
           const d = intake.decision;
+          const status = candidate.status;
           const [inserted] = await tx
             .insert(points)
             .values({
@@ -212,22 +221,33 @@ export async function canonicalize(
               summary: candidate.summary,
               cq: d.cq,
               answersCq: d.answersCq,
-              status: d.status,
+              status,
               createdBy: method,
             })
             .returning({ id: points.id });
           pointId = inserted!.id;
           counts.created++;
-          if (d.status === "released") stats.released++;
-          else if (d.status === "rejected") stats.rejected++;
+          if (status === "released") stats.released++;
+          else if (status === "rejected") stats.rejected++;
           else stats.review++;
-          await saveJudgmentTx(txDb, consultation, "point", pointId, INTAKE_FAMILY, intake.provenance, intake.answers, d);
+          await saveJudgmentTx(
+            txDb,
+            consultation,
+            "point",
+            pointId,
+            INTAKE_FAMILY,
+            { model: intake.model, requestId: intake.requestId },
+            intake.answers,
+            { ...d, status, origin: candidate.origin },
+          );
           const flags = [...d.flags, ...(review ? [review] : []), ...(quote.flag ? [quote.flag] : [])];
+          const action =
+            status === "released" ? "point.release" : status === "rejected" ? "point.reject" : "point.needs_review";
           await tx.execute(sql`
-            INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, reason)
-            VALUES (${consultation.tenantId}, ${`jev:${intake.provenance.model}`},
-                    ${`point.${d.verdict === "review" ? "needs_review" : d.verdict}`},
-                    'point', ${pointId}, ${flags.join(", ") || null})
+            INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, reason, payload)
+            VALUES (${consultation.tenantId}, ${`jev:${intake.model}`}, ${action},
+                    'point', ${pointId}, ${flags.join(", ") || null},
+                    ${JSON.stringify({ origin: candidate.origin })})
           `);
         }
 
@@ -269,7 +289,7 @@ export async function canonicalize(
               ? match.bestSameProbability
               : 1 - match.bestSameProbability
             : null,
-          method: match ? method : "auto:first-points",
+          method: match ? method : candidate.status === "rejected" ? "refine:rejected" : "auto:first-points",
           provenance: {
             decomposition: ex.provenance,
             match: match
@@ -286,6 +306,7 @@ export async function canonicalize(
               : null,
             chunk: w.count > 1 ? { index: w.index, of: w.count } : undefined,
             extraction: ex.id,
+            createdPoint: match?.outcome === "matched" ? undefined : pointId,
             review,
           },
         });
@@ -308,6 +329,69 @@ export async function canonicalize(
   }
   stats.wallMs = Date.now() - started;
   return stats;
+}
+
+/**
+ * Second opinion on possible duplicates: every new point that Jev placed in
+ * the review band (P(same) 0.2–0.5) is put to the LLM matcher against its
+ * closest existing point. Confirmed duplicates merge into the earlier point.
+ */
+export async function resolvePossibleDuplicates(
+  db: Db,
+  provider: LlmProvider,
+  consultation: { id: string; tenantId: string },
+  concurrency: number,
+  log: (line: string) => void = console.log,
+): Promise<{ checked: number; merged: number }> {
+  const res = await db.execute(sql`
+    SELECT p.id, p.label, p.summary, q.id AS q_id, q.label AS q_label, q.summary AS q_summary, md.id AS md_id
+    FROM match_decisions md
+    JOIN points p ON p.id = (md.provenance->>'createdPoint')::uuid AND p.status IN ('draft','released')
+    JOIN points q ON q.id = (md.provenance->'match'->>'reviewCandidate')::uuid AND q.status IN ('draft','released')
+    WHERE md.consultation_id = ${consultation.id} AND md.provenance->>'review' = 'possible_duplicate'
+      AND md.provenance->>'second_opinion' IS NULL AND p.id <> q.id
+  `);
+  const cases = res.rows as { id: string; label: string; summary: string | null; q_id: string; q_label: string; q_summary: string | null; md_id: string }[];
+  let merged = 0;
+  await runPool(
+    cases,
+    async (c) => {
+      const r = await provider.generateStructured({
+        system: MATCH_SYSTEM,
+        prompt: matchPrompt({ label: c.label, summary: c.summary ?? "" }, [{ label: c.q_label, summary: c.q_summary }]),
+        schema: matchJsonSchema,
+      });
+      const d = matchOutput.parse(r.output);
+      const same = d.decision === "matched" && d.matched_index === 0;
+      await db.transaction(async (tx) => {
+        if (same) {
+          // Move sources that the earlier point does not have yet; the rest go with the merged point.
+          await tx.execute(sql`
+            UPDATE point_sources ps SET point_id = ${c.q_id}
+            WHERE ps.point_id = ${c.id} AND NOT EXISTS (
+              SELECT 1 FROM point_sources o WHERE o.point_id = ${c.q_id} AND o.submission_id = ps.submission_id
+                AND o.quote IS NOT DISTINCT FROM ps.quote)
+          `);
+          await tx.execute(sql`UPDATE points SET status = 'merged', merged_into = ${c.q_id} WHERE id = ${c.id}`);
+          await tx.execute(sql`UPDATE points SET merged_into = ${c.q_id} WHERE merged_into = ${c.id}`);
+          await tx.execute(sql`
+            INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+            VALUES (${consultation.tenantId}, ${`ai-editor:${r.provenance.model}`}, 'point.merge', 'point', ${c.id},
+                    ${JSON.stringify({ into: c.q_id, confidence: d.confidence, reason: "possible_duplicate second opinion" })})
+          `);
+          merged++;
+        }
+        await tx.execute(sql`
+          UPDATE match_decisions SET provenance = provenance || ${JSON.stringify({
+            second_opinion: { same, confidence: d.confidence, model: r.provenance.model },
+          })}::jsonb WHERE id = ${c.md_id}
+        `);
+      });
+    },
+    concurrency,
+  );
+  log(`possible duplicates: ${cases.length} checked by the LLM, ${merged} merged`);
+  return { checked: cases.length, merged };
 }
 
 function locatedQuote(text: string, quote: string): QuotePick {
@@ -366,7 +450,7 @@ async function saveJudgmentTx(
   subjectKind: string,
   subjectId: string,
   family: string,
-  provenance: JudgeProvenance,
+  provenance: { model: string; requestId?: string | null },
   answers: unknown,
   decided: unknown,
 ): Promise<void> {

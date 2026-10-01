@@ -18,7 +18,7 @@ import { resolve } from "node:path";
 import { createDb, sql } from "@policy/db";
 import { JevJudge } from "@policy/llm";
 
-import { planWindows, type ExtractConfig, type QuoteMode } from "../src/extract.ts";
+import { planWindows, windowPlan, type ExtractConfig, type QuoteMode } from "../src/extract.ts";
 import { jevMatch, MERGE_AT, shortlist } from "../src/jev-match.ts";
 import { resolveConsultation } from "../src/jev-stage.ts";
 import { runPool } from "../src/pool.ts";
@@ -38,10 +38,10 @@ async function main() {
   const ref = arg("consultation");
   const only = arg("submissions")?.split(",").map((s) => s.trim());
   if (!ref || !only) throw new Error("--consultation and --submissions required");
-  const quotes = (arg("quotes") ?? "jev") as QuoteMode;
+  const quotes = (arg("quotes") ?? "llm") as QuoteMode;
   const cfg: ExtractConfig = {
     model: arg("model") ?? process.env.LLM_MODEL ?? "claude-sonnet-5-5",
-    window: Number(arg("window") ?? 20_000),
+    window: Number(arg("window") ?? 15_000),
     quotes,
   };
   const db = createDb(url);
@@ -57,7 +57,8 @@ async function main() {
 
   const report: unknown[] = [];
   for (const s of subs) {
-    const windows = planWindows({ id: s.id, tenantId: cons.tenantId, consultationId: cons.id, text: s.text }, cfg);
+    const cuts = await windowPlan(db, judge, s, cfg.window);
+    const windows = planWindows({ id: s.id, tenantId: cons.tenantId, consultationId: cons.id, text: s.text }, cfg, cuts);
     const fresh: (ExtractedPoint & { id: string })[] = [];
     for (const w of windows) {
       const r = await db.execute(sql`SELECT output, provenance FROM extractions WHERE submission_id = ${s.id} AND window_index = ${w.index} AND call_hash = ${w.hash}`);

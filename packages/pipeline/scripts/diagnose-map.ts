@@ -22,7 +22,7 @@
  */
 
 import { createDb, sql } from "@policy/db";
-import { AgentSdkProvider } from "@policy/llm";
+import { AgentSdkProvider, JevJudge, noul } from "@policy/llm";
 
 import {
   BEFUND_SYSTEM,
@@ -37,6 +37,7 @@ import {
   reasonsCheckOutput,
 } from "../src/schemas.ts";
 import { runPool } from "../src/pool.ts";
+import { saveJudgment } from "../src/jev-stage.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -49,6 +50,18 @@ const flag = (name: string) => process.argv.includes(`--${name}`);
 const FORK_GAP = 15;
 const AGREE_FLOOR = 60;
 const KERN_MIN_GAP = 30;
+/** Direct votes (map-points engine): a camp profile needs at least this many voters per camp. */
+const MIN_CAMP_VOTERS = 2;
+/** Jev pre-screen: below this P(diverging reasons) the LLM reasons check is skipped. */
+const REASONS_SCREEN_MIN = 0.25;
+
+const REASONS_SCREEN = noul(
+  "Do the points in `members` and the quotes in `quotes` back the claim in `claim` for DIVERGING reasons that cannot both be satisfied — e.g. one side wants a transition period so that the obligation arrives cleanly, the other so that it never arrives?",
+  {
+    true: "The supporters agree with the claim but want different, ultimately incompatible things from it; the agreement would break at the first design question.",
+    false: "The supporters agree for the same or compatible reasons, or the material shows no sign of diverging motives.",
+  },
+);
 
 const DOORS: Record<
   string,
@@ -82,6 +95,8 @@ const DOORS: Record<
 };
 
 interface Analysis {
+  engine?: string;
+  participantGroups?: { participant: string; group: number }[];
   clustering: { groupSizes: Record<string, number> };
   statements: {
     pointId: string;
@@ -140,6 +155,20 @@ async function main() {
   const profileByPoint = new Map(
     analysis.statements.map((s) => [s.pointId, s.perGroup]),
   );
+  // map-points engine (exp/jev): camps were computed from direct votes on the
+  // Landkarten-Punkte — profiles are read per map point, not averaged up.
+  const direct = analysis.engine === "map-points";
+  const campOfSubmission = new Map<string, string>();
+  if (direct) {
+    const partRes = await db.execute(sql`SELECT id, source_ref FROM participants WHERE consultation_id = ${consultationId}`);
+    const subOf = new Map((partRes.rows as { id: string; source_ref: string }[]).map((p) => [p.id, p.source_ref.replace(/^inferred:/, "")]));
+    for (const pg of analysis.participantGroups ?? []) {
+      const sub = subOf.get(pg.participant);
+      const name = analysis.campNames?.[String(pg.group)]?.name ?? `Lager ${pg.group}`;
+      if (sub) campOfSubmission.set(sub, name);
+    }
+  }
+  const judge = direct ? new JevJudge() : null;
 
   const scopesRes = await db.execute(sql`
     SELECT DISTINCT scope FROM map_points
@@ -215,23 +244,35 @@ async function main() {
       const members = membersByMap.get(row.id) ?? [];
       const pasA: number[] = [];
       const pasB: number[] = [];
-      for (const m of members) {
-        const per = profileByPoint.get(m.id);
-        if (!per) continue;
-        const a = per.find((x) => x.group === gA && x.ns > 0);
-        const b = per.find((x) => x.group === gB && x.ns > 0);
-        if (!a || !b) continue;
-        pasA.push(a.pa);
-        pasB.push(b.pa);
+      let nVoted: number;
+      if (direct) {
+        const per = profileByPoint.get(row.id) ?? [];
+        const a = per.find((x) => x.group === gA);
+        const b = per.find((x) => x.group === gB);
+        if (a && b && a.ns >= MIN_CAMP_VOTERS && b.ns >= MIN_CAMP_VOTERS) {
+          pasA.push(a.pa);
+          pasB.push(b.pa);
+        }
+        nVoted = per.reduce((s2, x) => s2 + x.ns, 0);
+      } else {
+        for (const m of members) {
+          const per = profileByPoint.get(m.id);
+          if (!per) continue;
+          const a = per.find((x) => x.group === gA && x.ns > 0);
+          const b = per.find((x) => x.group === gB && x.ns > 0);
+          if (!a || !b) continue;
+          pasA.push(a.pa);
+          pasB.push(b.pa);
+        }
+        nVoted = pasA.length;
       }
-      const nVoted = pasA.length;
       let pa: number | null = null;
       let pb: number | null = null;
       let diag = "offen";
       let gap = 0;
-      if (nVoted > 0) {
-        pa = Math.round((pasA.reduce((s, x) => s + x, 0) / nVoted) * 100);
-        pb = Math.round((pasB.reduce((s, x) => s + x, 0) / nVoted) * 100);
+      if (pasA.length > 0) {
+        pa = Math.round((pasA.reduce((s, x) => s + x, 0) / pasA.length) * 100);
+        pb = Math.round((pasB.reduce((s, x) => s + x, 0) / pasB.length) * 100);
         gap = Math.abs(pa - pb);
         const min = Math.min(pa, pb);
         if (min >= AGREE_FLOOR) diag = "bruecke";
@@ -255,8 +296,22 @@ async function main() {
     if (kernId) computed.get(kernId)!.diag = "kern";
 
     // Quotes: up to 3 crisp originals from the members' point_sources.
+    // map-points engine: the quotes belong to the map-quotes stage (Jev
+    // evidence ranking); here they only get their camp.
     for (const row of rows) {
       const c = computed.get(row.id)!;
+      if (direct) {
+        const cur = await db.execute(sql`SELECT quotes FROM map_points WHERE id = ${row.id}`);
+        const qs = ((cur.rows[0] as { quotes: { lager: string; quelle: string; text: string; submission?: string }[] | null }).quotes ?? []).map(
+          (q) => ({ ...q, lager: (q.submission && campOfSubmission.get(q.submission)) || "—" }),
+        );
+        await db.execute(sql`
+          UPDATE map_points SET pa = ${c.pa}, pb = ${c.pb}, n_voted = ${c.nVoted}, diag = ${c.diag},
+            quotes = ${JSON.stringify(qs)}
+          WHERE id = ${row.id}
+        `);
+        continue;
+      }
       const quotesRes = await db.execute(sql`
         SELECT ps.quote, s.author_org FROM point_sources ps
         JOIN points p ON p.id = ps.point_id
@@ -322,10 +377,50 @@ async function main() {
         (members.length >= 3 || (r.quotes?.length ?? 0) >= 2)
       );
     });
-    if (bridges.length > 0) {
-      console.log(`  reasons check on ${bridges.length} bridges`);
+    // Jev pre-screen (map-points engine): only bridges with a sign of
+    // diverging reasons go to the LLM check.
+    let toCheck = bridges;
+    if (judge && bridges.length > 0) {
+      const flagged: typeof bridges = [];
       await runPool(
         bridges,
+        async (row) => {
+          const members = membersByMap.get(row.id) ?? [];
+          const { answers, provenance } = await judge.judge(
+            {
+              claim: row.text,
+              members: members.slice(0, 30).map((m) => m.label),
+              quotes: (row.quotes ?? []).map((q) => `${q.quelle}: ${q.text}`),
+            },
+            { diverging: REASONS_SCREEN },
+          );
+          const p = (answers.diverging as { noul: number }).noul;
+          await saveJudgment(db, {
+            tenantId,
+            consultationId,
+            subjectKind: "map_point",
+            subjectId: row.id,
+            family: "reasons-screen.v1",
+            provenance,
+            answers,
+            decided: { diverging: p, toLlm: p >= REASONS_SCREEN_MIN },
+          });
+          if (p >= REASONS_SCREEN_MIN) flagged.push(row);
+          else {
+            const flags = { reasons: "same_reasons", reasons_screen: Number(p.toFixed(3)) };
+            await db.execute(sql`UPDATE map_points SET diag_flags = ${JSON.stringify(flags)} WHERE id = ${row.id}`);
+            row.diag_flags = flags;
+          }
+        },
+        8,
+      );
+      console.log(`  reasons pre-screen (Jev): ${bridges.length} bridges → ${flagged.length} to the LLM check`);
+      toCheck = flagged;
+    }
+    if (toCheck.length > 0) {
+      console.log(`  reasons check on ${toCheck.length} bridges`);
+      await runPool(
+        toCheck,
         async (row) => {
           const members = membersByMap.get(row.id) ?? [];
           const result = await provider.generateStructured({

@@ -118,7 +118,7 @@ function detailHtml(p: MapPoint, campA: string, campB: string): string {
   const quotes = (p.quotes ?? [])
     .map(
       (q) =>
-        `<blockquote><p>„${esc(q.text)}“</p><footer>${esc(q.quelle)}</footer></blockquote>`,
+        `<blockquote><p>„${esc(q.text)}“</p><footer>${esc(q.quelle)}${q.lager && q.lager !== "—" ? ` · <span class="lager">${esc(q.lager)}</span>` : ""}</footer></blockquote>`,
     )
     .join("");
   const members =
@@ -419,6 +419,7 @@ async function main() {
     ORDER BY created_at DESC LIMIT 1
   `);
   const analysis = (runRes.rows[0]?.result ?? null) as {
+    engine?: string;
     clustering: { groupSizes: Record<string, number> };
     campNames?: Record<string, { name: string }>;
   } | null;
@@ -430,14 +431,25 @@ async function main() {
   const campA = analysis.campNames?.[String(top2[0]!.g)]?.name ?? `Lager ${top2[0]!.g}`;
   const campB = analysis.campNames?.[String(top2[1]!.g)]?.name ?? `Lager ${top2[1]!.g}`;
 
-  const statsRes = await db.execute(sql`
-    SELECT
-      (SELECT count(*) FROM participants pa WHERE pa.consultation_id = ${consultationId})::int AS participants,
-      (SELECT count(*) FROM votes v JOIN participants pa ON pa.id = v.participant_id
-        WHERE pa.consultation_id = ${consultationId})::int AS votes,
-      (SELECT count(*) FROM votes v JOIN participants pa ON pa.id = v.participant_id
-        WHERE pa.consultation_id = ${consultationId} AND v.method = 'inferred')::int AS inferred
-  `);
+  // map-points engine (exp/jev): the votes are on the Landkarten-Punkte themselves.
+  const statsRes =
+    analysis.engine === "map-points"
+      ? await db.execute(sql`
+          SELECT
+            (SELECT count(*) FROM participants pa WHERE pa.consultation_id = ${consultationId})::int AS participants,
+            (SELECT count(*) FROM map_point_votes v JOIN participants pa ON pa.id = v.participant_id
+              WHERE pa.consultation_id = ${consultationId})::int AS votes,
+            (SELECT count(*) FROM map_point_votes v JOIN participants pa ON pa.id = v.participant_id
+              WHERE pa.consultation_id = ${consultationId} AND v.method = 'inferred')::int AS inferred
+        `)
+      : await db.execute(sql`
+          SELECT
+            (SELECT count(*) FROM participants pa WHERE pa.consultation_id = ${consultationId})::int AS participants,
+            (SELECT count(*) FROM votes v JOIN participants pa ON pa.id = v.participant_id
+              WHERE pa.consultation_id = ${consultationId})::int AS votes,
+            (SELECT count(*) FROM votes v JOIN participants pa ON pa.id = v.participant_id
+              WHERE pa.consultation_id = ${consultationId} AND v.method = 'inferred')::int AS inferred
+        `);
   const st = statsRes.rows[0] as { participants: number; votes: number; inferred: number };
   const inferredNote =
     st.inferred > 0

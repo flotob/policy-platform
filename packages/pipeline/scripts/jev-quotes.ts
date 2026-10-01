@@ -7,10 +7,11 @@
  *                     2. Jev: for quotes that are paraphrases, pick the
  *                        verbatim source passage; with --apply the passage
  *                        replaces the paraphrase (+ span).
- *   --what landkarte  candidate quotes are widened to their full sentence
- *                     (code), Jev ranks them per map point; with
+ *   --what landkarte  Jev ranks the members' quotes per map point; with
  *                     --apply the best (>= "clearly supports", one per
- *                     organisation, max 3) replace map_points.quotes.
+ *                     organisation, max 3) replace map_points.quotes (with
+ *                     their submission, so diagnose-map can add the camp).
+ *                     --widen extends quotes to full source sentences.
  *
  * Usage:
  *   DATABASE_URL=... TYPESAFE_API_KEY=... tsx scripts/jev-quotes.ts \
@@ -132,18 +133,22 @@ async function main() {
       SELECT p.map_point_id, ps.quote, ps.span_start, ps.span_end, ps.submission_id, s.author_org
       FROM point_sources ps JOIN points p ON p.id = ps.point_id JOIN submissions s ON s.id = ps.submission_id
       WHERE p.consultation_id = ${cons.id} AND p.map_point_id IS NOT NULL AND ps.quote IS NOT NULL
+        AND p.status IN ('draft','released')
     `);
-    type Cand = { text: string; org: string };
+    type Cand = { text: string; org: string; submission: string };
     const cands = new Map<string, Cand[]>();
+    // --widen: extend to the full enclosing sentence(s) of the source text —
+    // only sensible on clean text; PDF text brings its debris along.
+    const widen = process.argv.includes("--widen");
     for (const r of srcRes.rows as { map_point_id: string; quote: string; span_start: number | null; span_end: number | null; submission_id: string; author_org: string | null }[]) {
       const src = subText.get(r.submission_id);
       const text =
-        src && r.span_start !== null && r.span_end !== null
+        widen && src && r.span_start !== null && r.span_end !== null
           ? enclosingSentences(src, r.span_start, r.span_end)
           : displayQuote(r.quote);
-      if (text.length < 25) continue;
+      if (text.length < 25 || text.length > 400) continue;
       const list = cands.get(r.map_point_id) ?? [];
-      if (!list.some((c) => c.text === text)) list.push({ text, org: r.author_org ?? "Stellungnahme" });
+      if (!list.some((c) => c.text === text)) list.push({ text, org: r.author_org ?? "Stellungnahme", submission: r.submission_id });
       cands.set(r.map_point_id, list);
     }
     const shortlistFor = (m: { id: string; text: string }) =>
@@ -168,11 +173,11 @@ async function main() {
           .map((c, i) => ({ ...c, score: (answers[`q${i + 1}`] as { score: number }).score }))
           .sort((a, b) => b.score - a.score);
         const seen = new Set<string>();
-        const picked: { lager: string; quelle: string; text: string }[] = [];
+        const picked: { lager: string; quelle: string; text: string; submission: string }[] = [];
         for (const c of scored) {
           if (c.score < EVIDENCE_MIN || seen.has(c.org)) continue;
           seen.add(c.org);
-          picked.push({ lager: "—", quelle: c.org, text: c.text });
+          picked.push({ lager: "—", quelle: c.org, text: c.text, submission: c.submission });
           if (picked.length >= 3) break;
         }
         await saveJudgment(db, {

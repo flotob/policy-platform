@@ -31,3 +31,20 @@ export async function runPool<T>(
   await Promise.all(lanes);
   return { ok, failed };
 }
+
+/** Caps concurrent calls to one resource (e.g. LLM calls) across pools. */
+export class Semaphore {
+  private queue: (() => void)[] = [];
+  constructor(private free: number) {}
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.free > 0) this.free--;
+    else await new Promise<void>((resolve) => this.queue.push(resolve));
+    try {
+      return await fn();
+    } finally {
+      const next = this.queue.shift();
+      if (next) next();
+      else this.free++;
+    }
+  }
+}

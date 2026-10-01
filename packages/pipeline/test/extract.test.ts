@@ -1,35 +1,46 @@
 import { describe, expect, it } from "vitest";
 
-import { windowSpans } from "../src/extract.ts";
+import { breakCandidates, planCuts } from "../src/extract.ts";
 import { decideIntake } from "../src/intake.ts";
 
-describe("windowSpans", () => {
-  it("keeps a short text whole", () => {
-    const t = "Ein kurzer Absatz, der lang genug ist, um als Fenster zu zählen und nicht verworfen zu werden.";
-    expect(windowSpans(t, 1000)).toEqual([{ start: 0, end: t.length }]);
+describe("breakCandidates", () => {
+  it("offers breaks after sentence ends, at blank lines, and before headings — not mid-sentence", () => {
+    const t = "Erster Satz endet hier.\nzweiter Teil des Satzes\nläuft weiter\n§ 29 Quoten\nText.\n\nNeuer Absatz";
+    const at = breakCandidates(t).map((b) => t.slice(b, b + 12));
+    expect(at).toContain("zweiter Teil");
+    expect(at).toContain("§ 29 Quoten\n");
+    expect(at).not.toContain("läuft weiter");
+  });
+});
+
+describe("planCuts", () => {
+  const para = (n: number) => `Abschnitt ${n}. ` + "Die Wärmeplanung braucht verlässliche Daten und Personal. ".repeat(5) + "\n";
+  const text = Array.from({ length: 30 }, (_, i) => para(i)).join("");
+  // Fake judge: a new topic begins only before sections divisible by 4.
+  const judge = {
+    judge: async (state: { cuts: Record<string, { after: string }> }) => {
+      const answers: Record<string, { noul: number }> = {};
+      for (const [k, v] of Object.entries(state.cuts)) {
+        const n = Number(/^Abschnitt (\d+)/.exec(v.after)?.[1] ?? -1);
+        answers[k] = { noul: n % 4 === 0 ? 0.9 : 0.1 };
+      }
+      return { answers, provenance: {} };
+    },
+  };
+
+  it("keeps a short text whole", async () => {
+    expect((await planCuts(judge as never, "kurz", 100)).cuts).toEqual([4]);
   });
 
-  it("cuts at paragraph boundaries, never above the limit, as exact slices", () => {
-    const para = (n: number) => `Absatz ${n}: ` + "Wärmeplanung braucht verlässliche Daten. ".repeat(6);
-    const text = Array.from({ length: 12 }, (_, i) => para(i)).join("\n\n");
-    const spans = windowSpans(text, 700);
-    expect(spans.length).toBeGreaterThan(1);
-    for (const s of spans) {
-      expect(s.end - s.start).toBeLessThanOrEqual(700);
-      const slice = text.slice(s.start, s.end);
-      expect(slice.startsWith("Absatz")).toBe(true);
+  it("cuts where the judge sees a new topic, never above the limit", async () => {
+    const { cuts } = await planCuts(judge as never, text, 1500);
+    expect(cuts.at(-1)).toBe(text.length);
+    let start = 0;
+    for (const c of cuts) {
+      expect(c - start).toBeLessThanOrEqual(1500);
+      if (c < text.length) expect(text.slice(c, c + 14)).toMatch(/^Abschnitt (\d*[048]|\d*[13579][26])\./);
+      start = c;
     }
-    // Every paragraph lands in exactly one window.
-    for (let i = 0; i < 12; i++) {
-      expect(spans.filter((s) => text.slice(s.start, s.end).includes(`Absatz ${i}:`)).length).toBe(1);
-    }
-  });
-
-  it("splits an oversized paragraph at whitespace", () => {
-    const text = "Wort ".repeat(500).trim();
-    const spans = windowSpans(text, 600);
-    for (const s of spans) expect(s.end - s.start).toBeLessThanOrEqual(600);
-    expect(spans.at(-1)!.end).toBe(text.length);
   });
 });
 
@@ -65,5 +76,20 @@ describe("decideIntake", () => {
   it("flags an uncertain role and a demand filed as a claim", () => {
     const d = decideIntake({ ...base, role: c("claim", 0.4), demand: n(0.7) });
     expect(d.flags).toEqual(expect.arrayContaining(["role_uncertain", "demand_as_claim"]));
+  });
+});
+
+describe("measureBySection", () => {
+  const measures = [
+    { name: "Quoten", description: "", paragraphs: [2, 29], other: [] },
+    { name: "Neue Netze", description: "", paragraphs: [30], other: [] },
+  ];
+  it("assigns by the bill's own sections, ignoring other laws", async () => {
+    const { measureBySection } = await import("../src/measures.ts");
+    expect(measureBySection("§ 29 Abs. 7 Satz 4 streichen", measures)).toBe("Quoten");
+    expect(measureBySection("Verweis auf § 71 GEG anpassen", measures)).toBeNull();
+    expect(measureBySection("§§ 29 und 30 zusammenführen", measures)).toBeNull();
+    expect(measureBySection("Die Quote ist zu ehrgeizig", measures)).toBeNull();
+    expect(measureBySection("§ 29 WPG und § 71 GEG abstimmen", measures)).toBe("Quoten");
   });
 });

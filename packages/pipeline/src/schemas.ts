@@ -286,11 +286,66 @@ export const extractedPointWithQuote = z
   })
   .strict();
 
-export const extractionOutput = z.object({ points: z.array(extractedPoint).max(30) }).strict();
+export const extractionOutput = z.object({ points: z.array(extractedPoint).max(40) }).strict();
 export const extractionOutputWithQuote = z
-  .object({ points: z.array(extractedPointWithQuote).max(30) })
+  .object({ points: z.array(extractedPointWithQuote).max(40) })
   .strict();
 export type ExtractedPoint = z.infer<typeof extractedPoint> & { quote?: string };
+
+/** Automatic editor (exp/jev refine): repair a point Jev flagged. */
+export const editorOutput = z
+  .object({
+    action: z.enum(["keep", "rewrite", "split", "drop"]),
+    points: z.array(extractedPointWithQuote).max(4),
+    reason: z.string().max(400),
+  })
+  .strict();
+
+/** Second opinion on a point's measure (exp/jev). */
+export const measurePickOutput = z
+  .object({ choice: z.string().regex(/^(m\d{1,2}|whole|beyond)$/), reason: z.string().max(300) })
+  .strict();
+
+/** Measures read from the bill (exp/jev): what is actually being decided. */
+export const billMeasuresOutput = z
+  .object({
+    measures: z
+      .array(
+        z
+          .object({
+            /** Short German name, e.g. "Pflicht zur Wärmeplanung". */
+            name: z.string().min(3).max(80),
+            /** 1–2 sentences: what the measure decides. */
+            description: z.string().min(10).max(500),
+            /** Section numbers (§) of the main law this measure covers. */
+            paragraphs: z.array(z.number().int().min(1).max(999)).max(60),
+            /** Other provisions (e.g. "Artikel 2: BauGB-Änderungen"). */
+            other: z.array(z.string().max(120)).max(10),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(12),
+  })
+  .strict();
+
+/** Condensation proposal (exp/jev): canonical map points WITHOUT member lists — Jev assigns members. */
+export const condenseProposeOutput = z
+  .object({
+    map_points: z
+      .array(
+        z
+          .object({
+            text: z.string().min(10).max(400),
+            label: z.string().min(3).max(60),
+            typ: z.enum(["T", "W", "verfahren"]),
+            bezirk: z.enum(["wirkung", "machbarkeit", "kosten", "alternativen", "wert", "ausgestaltung"]),
+          })
+          .strict(),
+      )
+      .max(25),
+  })
+  .strict();
 
 /** Befund: verbalize the computed verdict (binding) for one map point. */
 export const befundOutput = z
@@ -342,3 +397,7 @@ export const befundJsonSchema = toProviderSchema(befundOutput);
 export const reasonsCheckJsonSchema = toProviderSchema(reasonsCheckOutput);
 export const extractionJsonSchema = toProviderSchema(extractionOutput);
 export const extractionWithQuoteJsonSchema = toProviderSchema(extractionOutputWithQuote);
+export const editorJsonSchema = toProviderSchema(editorOutput);
+export const billMeasuresJsonSchema = toProviderSchema(billMeasuresOutput);
+export const measurePickJsonSchema = toProviderSchema(measurePickOutput);
+export const condenseProposeJsonSchema = toProviderSchema(condenseProposeOutput);

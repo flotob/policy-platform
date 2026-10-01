@@ -46,7 +46,7 @@ Rules:
  * counts as a point.
  */
 export function extractSystem(withQuote: boolean): string {
-  return `You extract the distinct argumentative points from one window of a consultation submission, for a public argument map.
+  return `You extract the distinct argumentative points from a consultation submission, for a public argument map.
 
 What counts as a point — in the debate about a proposed measure, contributions are:
 - claims about the present situation, about what the measure will cause, about whether that effect serves a goal, and about whether the goal is worth its price;
@@ -55,20 +55,78 @@ What counts as a point — in the debate about a proposed measure, contributions
 - shaping proposals ("if we do it, then like this"): transition periods, hardship clauses, exemptions, staggering, concrete changes to a provision;
 - open questions the submission raises that nobody answers (missing evidence, an unexamined alternative).
 
+Long submissions are shown IN FULL for context with one section marked between ⟦SECTION START⟧ and ⟦SECTION END⟧. Extract only the points made in the marked section — use the rest to understand what the section refers to. An argument that begins inside the section belongs to it even if it runs past the end marker; one that began before the start marker belongs to the previous section — skip it. Without markers, the whole text is yours.
+
 Rules:
-1. Extract every DISTINCT point of the window; merge repetitions within it.
+1. Extract every DISTINCT point; merge repetitions.
 2. One point = one claim. Premises are points of their own: a factual claim that supports a demand or a judgment — figures, the current state, an observed development, an expected effect — is extracted SEPARATELY from the demand or judgment it supports (e.g. "the building sector has repeatedly missed its climate targets" and "emissions must fall immediately" are two points). Keep facts and value judgments apart: a point is either something evidence could settle or a judgment no study can settle, not both.
 3. Extract factual premises and open questions even when the submission uses them only as support or in passing — they are points on the map.
-4. Strip rhetoric and tone; keep the argumentative core, neutrally phrased.
+4. Strip rhetoric and tone; keep the argumentative core, neutrally phrased. A point must be understandable on its own: name what it refers to (the provision, the instrument, the actor) instead of "this" or "the regulation".
 5. label: a short editorial label (at most 80 characters). summary: one neutral sentence stating the claim. Write both in the language of the submission.
-${withQuote ? '6. quote: a short VERBATIM excerpt from the window (copy exactly, no ellipses) that best evidences the point.\n7.' : "6."} Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
-${withQuote ? "8." : "7."} A dense window often holds 15–25 points; never pad. An empty list is fine for a window without substantive content.`;
+${withQuote ? '6. quote: a short VERBATIM excerpt from the text (copy exactly, no ellipses) that best evidences the point.\n7.' : "6."} Skip greetings, thanks, self-descriptions of the submitting organisation, and procedural remarks without a substantive claim.
+${withQuote ? "8." : "7."} A dense section often holds 15–25 points; never pad. An empty list is fine for a section without substantive content.`;
 }
 
-export function extractPrompt(windowText: string, window: { index: number; count: number }): string {
+/** The automatic editor: repairs points Jev flagged (exp/jev refine). */
+export const EDITOR_SYSTEM = `You are the editor of a public argument map. An automatic check flagged a point that was extracted from a consultation submission. Repair it so it can stand on the map, using the submission passage for context.
+
+What the flags mean and how to repair:
+- several_claims: the point combines claims a reader could accept or reject independently → split: one point per claim.
+- mixed_fact_value: a checkable fact and a value judgment are mixed → split into the factual claim and the judgment.
+- not_standalone: the point cannot be understood without the submission → rewrite it naming what it refers to (provision, instrument, actor).
+- not_neutral: polemic or loaded wording → rewrite it neutrally, keeping the claim and its direction.
+- personal_data: personal data about a private individual or an attack on a person → rewrite without it, or drop if nothing substantive remains.
+- meta / off_topic: possibly greetings, procedure, or another subject → drop if there is no substantive claim about the consultation's subject; otherwise keep or rewrite.
+
+Actions: "keep" (false alarm; points empty), "rewrite" (exactly one point), "split" (two to four points), "drop" (points empty).
+Each point: label (at most 80 characters), summary (one neutral sentence), quote (a short VERBATIM excerpt from the passage that evidences this point). Write in the language of the submission. Never add a claim the passage does not make; never soften or sharpen its direction.`;
+
+export function editorPrompt(input: {
+  consultation: string;
+  flags: string[];
+  point: { label: string; summary: string; quote?: string };
+  passage: string;
+}): string {
   return (
-    `Submission window ${window.index + 1} of ${window.count}:\n\n---\n${windowText}\n---\n\n` +
-    `Extract the distinct points per the rules.`
+    `Consultation: ${input.consultation}\nFlags: ${input.flags.join(", ")}\n\n` +
+    `Point:\n  label: ${input.point.label}\n  summary: ${input.point.summary}\n` +
+    (input.point.quote ? `  quote: ${input.point.quote}\n` : "") +
+    `\nSubmission passage:\n---\n${input.passage}\n---\n\nRepair the point.`
+  );
+}
+
+/** Measures from the bill (exp/jev): the deciding structure comes from the draft law itself. */
+export const BILL_MEASURES_SYSTEM = `You read a draft law and name its separately decidable MEASURES — the units a parliament or council could adopt, change, or reject on their own. Each measure gets its own argument map, so the cut must follow what is decided, not how the law is ordered.
+
+Per measure:
+- name: short German name (e.g. "Pflicht zur Wärmeplanung", "Quoten für Wärmenetze").
+- description: one or two German sentences — what exactly is decided (who must do what, by when, with which exceptions).
+- paragraphs: the section numbers (§) of the main law that make up the measure.
+- other: provisions outside the main law that belong to it (e.g. "Artikel 2: Änderung des BauGB"), else empty.
+
+Cover the substantive provisions; definitions, transitional and final provisions only as part of the measure they serve. Name 4 to 10 measures. Do not create a measure for the law as a whole — that bucket exists already.`;
+
+/** Above this many characters, the context around a marked section is clipped. */
+export const EXTRACT_CONTEXT_MAX = 300_000;
+
+export function extractPrompt(text: string, window: { index: number; count: number; start: number; end: number }): string {
+  if (window.count === 1) {
+    return `Submission:\n\n---\n${text}\n---\n\nExtract the distinct points per the rules.`;
+  }
+  const half = Math.floor((EXTRACT_CONTEXT_MAX - (window.end - window.start)) / 2);
+  const from = Math.max(0, window.start - Math.max(0, half));
+  const to = Math.min(text.length, window.end + Math.max(0, half));
+  const marked =
+    (from > 0 ? "[…]\n" : "") +
+    text.slice(from, window.start) +
+    "⟦SECTION START⟧" +
+    text.slice(window.start, window.end) +
+    "⟦SECTION END⟧" +
+    text.slice(window.end, to) +
+    (to < text.length ? "\n[…]" : "");
+  return (
+    `Submission (shown in full for context; section ${window.index + 1} of ${window.count} is marked):\n\n---\n${marked}\n---\n\n` +
+    `Extract the distinct points made in the marked section per the rules.`
   );
 }
 
@@ -352,6 +410,39 @@ export function condensePrompt(
   return (
     `Measure under decision: ${scope}\n\nExtraction points (index. [kind/door] label — summary):\n${list}\n\n` +
     `Condense these ${points.length} extraction points into canonical map points.`
+  );
+}
+
+/**
+ * Condensation proposal (exp/jev): the LLM writes the canonical Landkarten-
+ * Punkte of one measure; Jev assigns every extraction point afterwards
+ * (no index lists in the LLM output).
+ */
+export const CONDENSE_PROPOSE_SYSTEM = `You condense the extraction-grain points of one measure of a public consultation into canonical MAP POINTS (Landkarten-Punkte).
+
+A map point is ONE argument a reader can hold in mind and a citizen can vote on: a single, neutral, declarative German sentence. The extraction points underneath are formulations, details, and repetitions of these few real arguments — the map grows by insight, not by paper. Merge aggressively: every variant, sub-aspect, and restatement of the same argument belongs to the same map point. Target 10–20 map points for a large list (fewer for a short one); never exceed 25. Fewer, sharper points beat many small ones.
+
+A map point is voted on as a whole: it states ONE claim — no "…, because …", no "X and Y" of two separable claims. Keep facts and value judgments in separate map points.
+
+Per map point:
+- "text": the canonical claim, German, one sentence, votable (someone can agree or disagree), neutral phrasing, no rhetoric.
+- "label": a short German chip label for the map, <= 45 characters.
+- "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": transition periods, hardship clauses, exemptions, staggering, procedural safeguards).
+- "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself), "ausgestaltung" (design instruments; always for typ "verfahren").
+
+Every substantive argument in the list must be represented by some map point — another step assigns each extraction point to the map point it belongs to.`;
+
+export function condenseTopUpPrompt(
+  scope: string,
+  existing: { label: string; text: string }[],
+  uncovered: { label: string; summary: string | null; kind: string; cq: string | null }[],
+): string {
+  return (
+    `Measure under decision: ${scope}\n\nMap points that already exist:\n` +
+    existing.map((m) => `- ${m.text}`).join("\n") +
+    `\n\nThese extraction points fit none of them:\n` +
+    uncovered.map((p) => `- [${p.kind}${p.cq ? "/" + p.cq : ""}] ${p.label}${p.summary ? " — " + p.summary : ""}`).join("\n") +
+    `\n\nPropose ADDITIONAL map points for the real arguments among these (none for noise or for points an existing map point already covers).`
   );
 }
 

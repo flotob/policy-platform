@@ -36,11 +36,23 @@ async function main() {
     SELECT count(*)::int n, count(canonicalized_at)::int done, count(DISTINCT submission_id)::int subs,
       coalesce(round(sum((provenance->>'durationMs')::numeric) / 60000, 1), 0)::float calls_min,
       coalesce(round(max((provenance->>'durationMs')::numeric) / 1000), 0)::int max_s
-    FROM extractions WHERE consultation_id = ${cons.id}`))[0]!;
+    FROM extractions WHERE consultation_id = ${cons.id} AND refined IS NOT NULL`))[0]!;
   if (ex.n === 0) console.log("extraction: not yet");
   else {
     console.log(`extraction: ${ex.n} windows from ${ex.subs} submissions, ${ex.done} canonicalized · LLM ${ex.calls_min} min total, slowest ${ex.max_s}s`);
     if (ex.done < ex.n) warnings.push(`${ex.n - ex.done} extracted windows not canonicalized`);
+  }
+
+  // ── Refine (automatic editor) ──
+  const rf = await q<{ s: Record<string, number> }>(sql`
+    SELECT refined->'stats' AS s FROM extractions WHERE consultation_id = ${cons.id} AND refined IS NOT NULL AND canonicalized_at IS NOT NULL`);
+  if (rf.length) {
+    const t: Record<string, number> = {};
+    for (const r of rf) for (const [k, v] of Object.entries(r.s)) t[k] = (t[k] ?? 0) + v;
+    console.log(
+      `refine: ${t.candidates} candidates · ${t.flagged} flagged → ${t.split} split, ${t.rewritten} rewritten, ${t.kept} kept, ` +
+        `${t.dropped} dropped · ${t.rejected} rejected outright · ${t.residualFlags} with residual flags`,
+    );
   }
 
   // ── Points ──
@@ -58,7 +70,7 @@ async function main() {
     console.log(`points: ${total} · status ${by("status")} · kind ${by("kind")}`);
     const orphan = (await q<{ n: number }>(sql`
       SELECT count(*)::int n FROM points p WHERE p.consultation_id = ${cons.id} AND p.created_by <> 'import:questionnaire'
-        AND NOT EXISTS (SELECT 1 FROM point_sources ps WHERE ps.point_id = p.id)`))[0]!.n;
+        AND p.status <> 'merged' AND NOT EXISTS (SELECT 1 FROM point_sources ps WHERE ps.point_id = p.id)`))[0]!.n;
     if (orphan) failures.push(`${orphan} points without any source`);
     if (ex.n > 0) {
       const noIntake = (await q<{ n: number }>(sql`
@@ -115,6 +127,31 @@ async function main() {
     if (mismatch) failures.push(`${mismatch} quotes differ from the text at their span`);
   }
 
+  // ── Measures (from the bill) ──
+  const ms = await q<{ measure: string | null; n: number }>(sql`
+    SELECT measure, count(*)::int n FROM points
+    WHERE consultation_id = ${cons.id} AND status IN ('draft','released') AND created_by <> 'import:questionnaire'
+    GROUP BY 1 ORDER BY 2 DESC`);
+  if (ms.some((m) => m.measure)) {
+    console.log(`measures: ${ms.map((m) => `${m.measure ?? "(none)"} ${m.n}`).join(" · ")}`);
+    const none = ms.find((m) => m.measure === null)?.n ?? 0;
+    if (none) warnings.push(`${none} live points without a measure`);
+  }
+
+  // ── Relations ──
+  const rel = await q<{ kind: string; n: number; cross: number }>(sql`
+    SELECT e.kind, count(*)::int n,
+      count(*) FILTER (WHERE NOT EXISTS (
+        SELECT 1 FROM point_sources a JOIN point_sources b ON a.submission_id = b.submission_id
+        WHERE a.point_id = e.from_point AND b.point_id = e.to_point))::int cross
+    FROM point_edges e JOIN points p ON p.id = e.to_point
+    WHERE p.consultation_id = ${cons.id} GROUP BY 1 ORDER BY 2 DESC`);
+  if (rel.length) {
+    const tot = rel.reduce((s2, r) => s2 + r.n, 0);
+    const cross = rel.reduce((s2, r) => s2 + r.cross, 0);
+    console.log(`relations: ${tot} edges (${cross} across submissions) · ${rel.map((r) => `${r.kind} ${r.n}`).join(" · ")}`);
+  } else console.log("relations: not yet");
+
   // ── Structure ──
   const st = (await q<{ live: number; measure: number; theme: number; mapped: number; nongap: number }>(sql`
     SELECT count(*)::int live, count(measure)::int measure, count(theme)::int theme,
@@ -124,8 +161,8 @@ async function main() {
     console.log(`structure: measure ${pct(st.measure, st.live)} · theme ${pct(st.theme, st.live)} · on a map point ${st.mapped}/${st.nongap} (${pct(st.mapped, st.nongap)})`);
   } else console.log("structure: not yet");
 
-  const mps = await q<{ scope: string; typ: string; bezirk: string; diag: string | null; n_voted: number; befund: string | null }>(sql`
-    SELECT scope, typ, bezirk, diag, n_voted, befund FROM map_points WHERE consultation_id = ${cons.id}`);
+  const mps = await q<{ scope: string; typ: string; bezirk: string; diag: string | null; n_voted: number; pa: number | null; befund: string | null }>(sql`
+    SELECT scope, typ, bezirk, diag, n_voted, pa, befund FROM map_points WHERE consultation_id = ${cons.id}`);
   if (mps.length === 0) console.log("map points: not yet");
   else {
     const scopes = new Map<string, number>();
@@ -143,10 +180,10 @@ async function main() {
       const dist = new Map<string, number>();
       for (const m of diagnosed) dist.set(m.diag!, (dist.get(m.diag!) ?? 0) + 1);
       const nonGap = mps.filter((m) => m.typ !== "luecke");
-      const noVotes = nonGap.filter((m) => m.n_voted === 0).length;
+      const withNumbers = nonGap.filter((m) => m.pa !== null).length;
       console.log(
         `diagnosis: ${[...dist.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(" · ")} · ` +
-          `map points without votes ${noVotes}/${nonGap.length} (${pct(noVotes, nonGap.length)})`,
+          `map points with camp numbers ${withNumbers}/${nonGap.length} (${pct(withNumbers, nonGap.length)})`,
       );
       const noBefund = diagnosed.filter((m) => !m.befund).length;
       if (noBefund) warnings.push(`${noBefund} diagnosed map points without Befund`);
@@ -158,7 +195,30 @@ async function main() {
     SELECT count(*)::int votes, count(DISTINCT v.participant_id)::int participants,
       count(*) FILTER (WHERE v.method = 'inferred')::int inferred
     FROM votes v JOIN participants pa ON pa.id = v.participant_id WHERE pa.consultation_id = ${cons.id}`))[0]!;
-  console.log(v.votes ? `votes: ${v.votes} from ${v.participants} participants (${v.inferred} inferred)` : "votes: not yet");
+  if (v.votes) console.log(`statement votes: ${v.votes} from ${v.participants} participants (${v.inferred} inferred)`);
+  const mv = (await q<{ votes: number; participants: number; points: number; agree: number }>(sql`
+    SELECT count(*)::int votes, count(DISTINCT v.participant_id)::int participants,
+      count(DISTINCT v.map_point_id)::int points, count(*) FILTER (WHERE v.value = 1)::int agree
+    FROM map_point_votes v JOIN map_points m ON m.id = v.map_point_id WHERE m.consultation_id = ${cons.id}`))[0]!;
+  if (mv.votes) {
+    const live = mps.filter((m) => m.typ !== "luecke").length;
+    console.log(
+      `votes on Landkarten-Punkte: ${mv.votes} from ${mv.participants} participants · ${mv.points}/${live} points voted on · ` +
+        `agree ${mv.agree} / disagree ${mv.votes - mv.agree}`,
+    );
+    if (mv.points < live) warnings.push(`${live - mv.points} Landkarten-Punkte without any vote`);
+  }
+  if (!v.votes && !mv.votes) console.log("votes: not yet");
+  const an = (await q<{ engine: string; k: number; sil: number; sizes: Record<string, number>; names: Record<string, { name: string }> | null }>(sql`
+    SELECT engine, (result->'clustering'->>'k')::int k, (result->'clustering'->>'silhouette')::float sil,
+      result->'clustering'->'groupSizes' sizes, result->'campNames' names
+    FROM analysis_runs WHERE consultation_id = ${cons.id} ORDER BY created_at DESC LIMIT 1`))[0];
+  if (an) {
+    console.log(
+      `camps (${an.engine}): k=${an.k}, silhouette ${an.sil.toFixed(2)} · ` +
+        Object.entries(an.sizes).map(([g, n]) => `${an.names?.[g]?.name ?? `G${g}`} (${n})`).join(" vs "),
+    );
+  }
 
   for (const w of warnings) console.log(`WARN  ${w}`);
   for (const f of failures) console.log(`FAIL  ${f}`);

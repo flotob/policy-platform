@@ -2,15 +2,19 @@
  * Two-phase decomposition (exp/jev) — replaces decompose.ts + the point
  * passes of jev-review / jev-classify (role, doors) / jev-grammar.
  *
- *   extract       LLM, all windows in parallel, cached in `extractions`
- *   canonicalize  Jev, windows in fixed order: known or new? + intake
- *                 judgment (release, role, door, fact/value, slot) + quote
+ *   extract       windows cut where Jev sees a topic change (stored in
+ *                 window_plans); LLM extraction of every window in parallel,
+ *                 each seeing the whole submission; cached in `extractions`;
+ *                 each window refined right away (Jev intake + LLM editor)
+ *   canonicalize  Jev, windows in fixed order: known or new? + quote;
+ *                 then an LLM second opinion on possible duplicates
  *   all           both (default)
  *
  * Usage:
  *   DATABASE_URL=... TYPESAFE_API_KEY=... tsx scripts/extract.ts --consultation <ref>
  *     [--phase extract|canonicalize|all] [--submissions <id|source_ref>,...]
- *     [--concurrency 5] [--window 20000] [--quotes jev|llm] [--model claude-sonnet-5-5]
+ *     [--concurrency 5] [--editor-concurrency 4] [--window 15000]
+ *     [--quotes llm|jev] [--model claude-sonnet-5-5]
  *
  * Order: submissions by text length (shortest first, as decompose.ts), then
  * window index. Every phase is resumable; reruns cost nothing for cached
@@ -20,8 +24,15 @@
 import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider, JevJudge } from "@policy/llm";
 
-import { canonicalize } from "../src/canonicalize.ts";
-import { extractWindows, planWindows, type ExtractConfig, type PlannedWindow, type QuoteMode } from "../src/extract.ts";
+import { canonicalize, resolvePossibleDuplicates } from "../src/canonicalize.ts";
+import {
+  extractWindows,
+  planWindows,
+  windowPlan,
+  type ExtractConfig,
+  type PlannedWindow,
+  type QuoteMode,
+} from "../src/extract.ts";
 import { resolveConsultation, USD_PER_JEV_TOKEN } from "../src/jev-stage.ts";
 
 function arg(name: string): string | undefined {
@@ -36,14 +47,15 @@ async function main() {
   if (!ref) throw new Error("--consultation required");
   const phase = arg("phase") ?? "all";
   if (!["extract", "canonicalize", "all"].includes(phase)) throw new Error("--phase extract|canonicalize|all");
-  const quotes = (arg("quotes") ?? "jev") as QuoteMode;
+  const quotes = (arg("quotes") ?? "llm") as QuoteMode;
   if (quotes !== "jev" && quotes !== "llm") throw new Error("--quotes jev|llm");
   const cfg: ExtractConfig = {
     model: arg("model") ?? process.env.LLM_MODEL ?? "claude-sonnet-5-5",
-    window: Number(arg("window") ?? 20_000),
+    window: Number(arg("window") ?? 15_000),
     quotes,
   };
   const concurrency = Number(arg("concurrency") ?? 5);
+  const editorConcurrency = Number(arg("editor-concurrency") ?? 4);
   const only = arg("submissions")?.split(",").map((s) => s.trim()).filter(Boolean);
 
   const db = createDb(url);
@@ -59,36 +71,46 @@ async function main() {
     const missing = only.filter((o) => !subs.some((s) => s.id === o || s.source_ref === o));
     if (missing.length) throw new Error(`unknown submission(s): ${missing.join(", ")}`);
   }
+  const judge = new JevJudge();
+  const provider = new AgentSdkProvider();
+  const texts = new Map(subs.map((s) => [s.id, s.text]));
+  // Cut points: stored per submission; new ones are planned by Jev in parallel.
+  const cutsBySub = new Map<string, number[]>();
+  await Promise.all(subs.map(async (s) => cutsBySub.set(s.id, await windowPlan(db, judge, s, cfg.window))));
   const windows: PlannedWindow[] = subs.flatMap((s) =>
-    planWindows({ id: s.id, tenantId: cons.tenantId, consultationId: cons.id, text: s.text }, cfg),
+    planWindows({ id: s.id, tenantId: cons.tenantId, consultationId: cons.id, text: s.text }, cfg, cutsBySub.get(s.id)!),
   );
   console.log(
     `${cons.title}: ${subs.length} submissions, ${windows.length} windows ` +
-      `(window ${cfg.window}, quotes ${cfg.quotes}, model ${cfg.model})`,
+      `(max ${cfg.window} chars, cut by Jev; quotes ${cfg.quotes}; model ${cfg.model})`,
   );
 
   if (phase !== "canonicalize") {
-    const s = await extractWindows(db, new AgentSdkProvider(), windows, cfg, concurrency);
+    const s = await extractWindows(db, provider, judge, cons.title, texts, windows, cfg, concurrency, editorConcurrency);
     const sorted = [...s.callMs].sort((a, b) => a - b);
+    const r = s.refine;
     console.log(
-      `extraction done in ${(s.wallMs / 60000).toFixed(1)} min: ${s.ok} called, ${s.cached} cached, ${s.failed} failed · ` +
-        `${s.candidates} candidates · call p50 ${Math.round((sorted[Math.floor(sorted.length / 2)] ?? 0) / 1000)}s, ` +
-        `max ${Math.round((sorted.at(-1) ?? 0) / 1000)}s, sum ${(s.callMs.reduce((a, b) => a + b, 0) / 60000).toFixed(1)} min`,
+      `extraction done in ${(s.wallMs / 60000).toFixed(1)} min: ${s.extracted} extracted, ${s.refinedOnly} refined from cache, ` +
+        `${s.windows - s.extracted - s.refinedOnly - s.failed} already done, ${s.failed} failed · ${s.candidates} candidates · ` +
+        `LLM call p50 ${Math.round((sorted[Math.floor(sorted.length / 2)] ?? 0) / 1000)}s, max ${Math.round((sorted.at(-1) ?? 0) / 1000)}s\n` +
+        `refine: ${r.flagged} flagged → ${r.split} split, ${r.rewritten} rewritten, ${r.kept} kept, ${r.dropped} dropped · ` +
+        `${r.rejected} rejected outright · ${r.out} points out · ${r.residualFlags} with residual flags`,
     );
     if (s.failed > 0) {
-      console.log("some windows failed — rerun to retry them (cached windows are skipped)");
+      console.log("some windows failed — rerun to retry them (done windows are skipped)");
       process.exit(1);
     }
   }
 
   if (phase !== "extract") {
-    const s = await canonicalize(db, new JevJudge(), cons, windows, cfg.quotes);
+    const s = await canonicalize(db, judge, cons, windows, cfg.quotes);
     console.log(
       `canonicalization done in ${(s.wallMs / 1000).toFixed(0)}s: ${s.candidates} candidates → ${s.created} new points ` +
-        `(${s.released} released, ${s.review} for review, ${s.rejected} rejected), ${s.matched} matched, ` +
+        `(${s.released} released, ${s.review} held, ${s.rejected} rejected), ${s.matched} matched, ` +
         `${s.possibleDuplicates} possible duplicates, ${s.noQuote} without quote · ${s.skipped} windows already done · ` +
         `Jev ${s.jevTokens.toLocaleString("en")} tokens ≈ $${(s.jevTokens * USD_PER_JEV_TOKEN).toFixed(3)}`,
     );
+    await resolvePossibleDuplicates(db, provider, cons, Number(arg("editor-concurrency") ?? 4));
   }
   process.exit(0);
 }

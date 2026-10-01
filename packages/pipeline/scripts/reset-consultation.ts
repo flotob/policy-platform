@@ -13,7 +13,9 @@
  * statements the reset deletes, so they cannot survive it).
  *
  * Usage (prints counts only, unless --yes):
- *   DATABASE_URL=... tsx scripts/reset-consultation.ts --consultation <ref> [--yes] [--include-real-votes]
+ *   DATABASE_URL=... tsx scripts/reset-consultation.ts --consultation <ref> [--yes] [--include-real-votes] [--refine]
+ *
+ * Kept: extraction cache, window plans, consultation documents (the bill).
  */
 
 import { createDb, sql } from "@policy/db";
@@ -53,6 +55,7 @@ async function main() {
     counts[name] = ((await db.execute(q)).rows[0] as { n: number }).n;
   };
   await count("votes", sql`SELECT count(*)::int AS n FROM votes WHERE participant_id IN (SELECT id FROM participants WHERE consultation_id = ${cons.id})`);
+  await count("map_point_votes", sql`SELECT count(*)::int AS n FROM map_point_votes WHERE participant_id IN (SELECT id FROM participants WHERE consultation_id = ${cons.id})`);
   await count("participants", sql`SELECT count(*)::int AS n FROM participants WHERE consultation_id = ${cons.id}`);
   await count("statements", sql`SELECT count(*)::int AS n FROM statements WHERE point_id IN ${P}`);
   await count("point_edges", sql`SELECT count(*)::int AS n FROM point_edges WHERE from_point IN ${P} OR to_point IN ${P}`);
@@ -73,6 +76,7 @@ async function main() {
 
   await db.transaction(async (tx) => {
     await tx.execute(sql`DELETE FROM votes WHERE participant_id IN (SELECT id FROM participants WHERE consultation_id = ${cons.id})`);
+    await tx.execute(sql`DELETE FROM map_point_votes WHERE participant_id IN (SELECT id FROM participants WHERE consultation_id = ${cons.id})`);
     await tx.execute(sql`DELETE FROM participants WHERE consultation_id = ${cons.id}`);
     await tx.execute(sql`DELETE FROM statements WHERE point_id IN ${P}`);
     await tx.execute(sql`DELETE FROM point_edges WHERE from_point IN ${P} OR to_point IN ${P}`);
@@ -83,6 +87,10 @@ async function main() {
     await tx.execute(sql`DELETE FROM map_points WHERE consultation_id = ${cons.id}`);
     await tx.execute(sql`DELETE FROM analysis_runs WHERE consultation_id = ${cons.id}`);
     await tx.execute(sql`UPDATE extractions SET canonicalized_at = NULL WHERE consultation_id = ${cons.id}`);
+    // --refine: also redo the automatic repair (after a refine-policy change); extraction stays cached.
+    if (process.argv.includes("--refine")) {
+      await tx.execute(sql`UPDATE extractions SET refined = NULL, refined_at = NULL WHERE consultation_id = ${cons.id}`);
+    }
     await tx.execute(sql`
       INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
       VALUES (${cons.tenantId}, 'pipeline:reset', 'consultation.reset', 'consultation', ${cons.id},
