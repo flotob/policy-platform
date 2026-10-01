@@ -253,7 +253,7 @@ export default async function MethodsPage({
     },
     {
       name: de ? "Modell" : "Model",
-      value: "claude-sonnet-5",
+      value: "claude-sonnet-5-5",
       expl: de
         ? "Standardmodell aller Pipeline-Aufrufe (per Umgebungsvariable LLM_MODEL wechselbar). Jeder Aufruf protokolliert Modell + Prompt-Hash."
         : "Default model for all pipeline calls (switchable via the LLM_MODEL environment variable). Every call logs model + prompt hash.",

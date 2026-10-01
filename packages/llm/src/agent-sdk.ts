@@ -22,7 +22,7 @@ import {
   promptHash,
 } from "./provider.ts";
 
-const DEFAULT_MODEL = process.env.LLM_MODEL ?? "claude-sonnet-5";
+const DEFAULT_MODEL = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
 
 export class AgentSdkProvider implements LlmProvider {
   readonly name = "agent-sdk";

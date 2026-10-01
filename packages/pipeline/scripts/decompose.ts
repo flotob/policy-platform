@@ -3,7 +3,7 @@
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @policy/pipeline decompose -- \
- *     --consultation <source_ref|uuid> [--limit 2] [--model claude-sonnet-5]
+ *     --consultation <source_ref|uuid> [--limit 2] [--model claude-sonnet-5-5]
  *     [--batch-match]   O1: one match call per chunk (validate via
  *                       replay-batch-match.ts before making this the default)
  *

@@ -4,7 +4,7 @@
  *
  * Usage:
  *   DATABASE_URL=... pnpm --filter @policy/pipeline statements -- \
- *     --consultation <source_ref|uuid> [--limit 20] [--model claude-sonnet-5]
+ *     --consultation <source_ref|uuid> [--limit 20] [--model claude-sonnet-5-5]
  *
  * Uses the Agent SDK provider (local Claude Code auth); sequential with
  * per-point fault tolerance — reruns are cheap, done points are skipped.
