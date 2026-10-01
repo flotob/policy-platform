@@ -474,6 +474,7 @@ async function main() {
           }
         },
         8,
+        { label: (row) => `reasons pre-screen "${row.label}"` },
       );
       console.log(`  reasons pre-screen (Jev): ${bridges.length} bridges → ${flagged.length} to the LLM check`);
       toCheck = flagged;
@@ -522,6 +523,7 @@ async function main() {
           reasonsDone.add(row.id);
         },
         concurrency,
+        { label: (row) => `reasons check "${row.label}"` },
       );
     }
 
@@ -597,6 +599,7 @@ async function main() {
         befundsWritten++;
       },
       concurrency,
+      { label: (j) => `Befund ${j.scope}: "${j.row.label}"`, progress: "befunde" },
     );
     console.log(`befunde done: ${befundsWritten} written, ${befundsUnchanged} unchanged, ${failed} failed`);
     await db.execute(sql`

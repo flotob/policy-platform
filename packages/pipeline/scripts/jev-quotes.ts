@@ -201,6 +201,7 @@ async function main() {
         }
       },
       concurrency,
+      { label: (m) => `quotes of map point "${m.label}"`, progress: "map quotes" },
     );
     console.log(`\n${statsLine(stats)} · map points ${mps.length}: unchanged ${unchanged}, changed ${changes.length}, applied ${applied}${applied ? " — re-render the Landkarten" : ""}`);
     const emptyAfter = changes.filter((c) => (c as { after: string[] }).after.length === 0).length;

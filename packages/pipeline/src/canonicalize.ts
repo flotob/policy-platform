@@ -193,6 +193,7 @@ export async function canonicalize(
         judged[i] = { candidate: c, match, quote };
       },
       10,
+      { label: (c) => `candidate "${c.label}" (window ${w.index + 1}/${w.count} of ${w.submissionId.slice(0, 8)})` },
     );
     if (pool.failed > 0) {
       throw new Error(`window ${w.index + 1}/${w.count} of submission ${w.submissionId}: ${pool.failed} Jev judgments failed — rerun resumes here`);
@@ -380,6 +381,7 @@ export async function resolvePossibleDuplicates(
       verdicts.set(c.md_id, { same: d.decision === "matched" && d.matched_index === 0, confidence: d.confidence, model: r.provenance.model });
     },
     concurrency,
+    { label: (c) => `duplicate check "${c.label}" ~ "${c.q_label}"`, progress: "duplicate checks" },
   );
 
   // 2. Merges applied one after another, in decision order, each against the

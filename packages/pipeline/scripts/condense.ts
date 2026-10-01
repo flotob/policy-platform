@@ -93,6 +93,7 @@ async function assign(
       if (!mp) uncovered.push(p);
     },
     8,
+    { label: (p) => `${scope}: assignment of "${p.label}"` },
   );
   // A failed judgment is neither assigned nor "none": the scope is incomplete
   // (its points stay unassigned and are picked up by the next run).
@@ -222,6 +223,7 @@ async function main() {
       console.log(`  ${line}`);
     },
     Number(arg("concurrency") ?? 4),
+    { label: (sc) => `measure "${sc}"`, progress: "condense" },
   );
   console.log(`condensation done in ${((Date.now() - started) / 1000).toFixed(0)}s · ${scopes.length} measures, ${failed} failed`);
   process.exit(failed ? 1 : 0);

@@ -102,6 +102,7 @@ async function main() {
       });
     },
     Number(arg("concurrency") ?? 8),
+    { label: (p) => `relations of "${p.label}"`, progress: "relations" },
   );
 
   // Follow-up: the target judges its attacker (gives the door).
@@ -114,6 +115,7 @@ async function main() {
       if (d.edge && !d.edge.reverse) edges.push({ from: r.attacker.id, to: r.target.id, kind: d.edge.kind, p: d.p });
     },
     Number(arg("concurrency") ?? 8),
+    { label: (r) => `reverse attack "${r.attacker.label}" → "${r.target.label}"` },
   );
 
   // Replace the old edge set only when EVERY judgment succeeded — a partial

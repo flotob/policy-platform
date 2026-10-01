@@ -91,6 +91,10 @@ export class JevJudge {
         try {
           return await this.client.systemOne({ state, questions }).withResponse();
         } catch (err) {
+          // Authentication/permission errors hit every request alike: mark them
+          // fatal so pools stop at the first one instead of failing N times.
+          const status = (err as { status?: number } | null)?.status;
+          if (status === 401 || status === 403) Object.assign(err as object, { fatal: true });
           if (attempt >= RETRIES || !transient(err)) throw err;
           await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
         }

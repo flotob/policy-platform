@@ -34,11 +34,24 @@
  *     [--render-out <dir>]  --jev: write the Landkarten here instead of docs/landkarte
  *     [--jev]               judgment stages via Jev (see above)
  *     [--list]              print stage names and exit
+ *
+ * Every run gets a folder .eval/runs/<consultation>-<timestamp>/ with
+ *   run.log   every line of every stage, timestamped and tagged by stage
+ *   run.json  code version (git commit, uncommitted changes), models,
+ *             options, database, and per stage: start, end, minutes, exit
+ * plus audit entries pipeline.run_start / pipeline.run_end. In --jev mode
+ * check-run --quiet runs after every stage; a violated invariant stops the
+ * run right there. Ctrl-C stops the running stage and records the run as
+ * interrupted (every stage resumes cleanly).
  */
 
-import { spawnSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+
+import { createDb, sql } from "@policy/db";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -98,7 +111,20 @@ function stages(consultation: string, limit: string, concurrency: string, jev: b
   ];
 }
 
-function main() {
+interface StageRecord {
+  name: string;
+  startedAt: string;
+  endedAt?: string;
+  mins?: number;
+  exit?: number | null;
+  check?: "ok" | "failed" | "skipped";
+}
+
+function stamp(): string {
+  return new Date().toISOString().slice(11, 19);
+}
+
+async function main() {
   const consultation = arg("consultation");
   const limit = arg("limit") ?? "50";
   const concurrency = arg("concurrency") ?? "5";
@@ -133,34 +159,129 @@ function main() {
     selected = selected.slice(0, idx + 1);
   }
 
-  console.log(
-    `pipeline for ${consultation}: ${selected.map((s) => s.name).join(" → ")} ` +
-      `(limit ${limit}, concurrency ${concurrency})`,
-  );
-  const startedAll = Date.now();
-  const timings: { name: string; mins: string }[] = [];
-  for (const stage of selected) {
-    console.log(`\n━━━ ${stage.name} ━━━`);
-    const started = Date.now();
-    const res = spawnSync(tsx, [stage.script, ...stage.args], {
-      cwd: stage.cwd,
-      stdio: "inherit",
-      env: process.env,
-    });
-    const mins = ((Date.now() - started) / 60_000).toFixed(1);
-    if (res.status !== 0) {
-      console.error(
-        `\n✗ ${stage.name} failed after ${mins} min. All stages are idempotent — ` +
-          `resume with:\n  tsx scripts/run-pipeline.ts --consultation ${consultation} --from ${stage.name}${jev ? " --jev" : ""}` +
-          `${arg("submissions") ? ` --submissions ${arg("submissions")}` : ""}${arg("render-out") ? ` --render-out ${arg("render-out")}` : ""}`,
-      );
-      process.exit(1);
+  // ——— Run folder, identity, and log ————————————————————————————————————
+  const startedAt = new Date();
+  const runId = `${consultation}-${startedAt.toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
+  const runDir = path.join(pipelineDir, ".eval", "runs", runId);
+  mkdirSync(runDir, { recursive: true });
+  const logFile = path.join(runDir, "run.log");
+  const log = (line: string, tag = "run") => {
+    const out = `${stamp()} [${tag}] ${line}`;
+    console.log(out);
+    appendFileSync(logFile, out + "\n");
+  };
+  const git = (cmd: string) => {
+    try {
+      return execSync(`git -C ${JSON.stringify(platformDir)} ${cmd}`, { encoding: "utf-8" }).trim();
+    } catch {
+      return null;
     }
-    console.log(`✓ ${stage.name} [${mins} min]`);
-    timings.push({ name: stage.name, mins });
+  };
+  const dbUrl = new URL(process.env.DATABASE_URL);
+  const run = {
+    runId,
+    consultation,
+    database: `${dbUrl.hostname}:${dbUrl.port}${dbUrl.pathname}`,
+    code: { commit: git("rev-parse HEAD"), branch: git("rev-parse --abbrev-ref HEAD"), uncommittedChanges: (git("status --porcelain") ?? "") !== "" },
+    models: { llm: process.env.LLM_MODEL ?? "claude-sonnet-5-5", jev: process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest", jevConcurrency: Number(process.env.JEV_CONCURRENCY ?? 16) },
+    options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
+    node: process.version,
+    startedAt: startedAt.toISOString(),
+    endedAt: null as string | null,
+    status: "running" as "running" | "done" | "failed" | "interrupted",
+    stages: [] as StageRecord[],
+  };
+  const save = () => writeFileSync(path.join(runDir, "run.json"), JSON.stringify(run, null, 2));
+  save();
+
+  // Audit entries mark the run in the database next to everything it wrote.
+  const db = createDb(process.env.DATABASE_URL);
+  const cons = (await db.execute(sql`
+    SELECT id, tenant_id FROM consultations WHERE id::text = ${consultation} OR source_ref = ${consultation}
+    ORDER BY created_at DESC LIMIT 1`)).rows[0] as { id: string; tenant_id: string } | undefined;
+  if (!cons) throw new Error(`consultation ${consultation} not found`);
+  const audit = async (action: string) =>
+    db.execute(sql`
+      INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+      VALUES (${cons.tenant_id}, 'pipeline:orchestrator', ${action}, 'consultation', ${cons.id}, ${JSON.stringify(run)})`);
+  await audit("pipeline.run_start");
+
+  log(`run ${runId} · ${selected.map((s) => s.name).join(" → ")}`);
+  log(`log: ${logFile}`);
+  log(`code ${run.code.commit?.slice(0, 7)} (${run.code.branch})${run.code.uncommittedChanges ? " WITH UNCOMMITTED CHANGES" : ""} · llm ${run.models.llm} · jev ${run.models.jev} · db ${run.database}`);
+
+  // ——— Stages ———————————————————————————————————————————————————————————
+  let child: ReturnType<typeof spawn> | null = null;
+  let interrupted = false;
+  process.on("SIGINT", () => {
+    interrupted = true;
+    log("interrupt received — stopping the running stage (resume with --from)");
+    child?.kill("SIGINT");
+  });
+
+  const runChild = (script: string, args: string[], cwd: string, tag: string): Promise<number | null> =>
+    new Promise((resolve) => {
+      child = spawn(tsx, [script, ...args], { cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+      for (const stream of [child.stdout!, child.stderr!]) {
+        createInterface({ input: stream }).on("line", (line) => log(line, tag));
+      }
+      child.on("close", (code) => {
+        child = null;
+        resolve(code);
+      });
+    });
+
+  const resumeHint = (stage: string) =>
+    `tsx scripts/run-pipeline.ts --consultation ${consultation} --from ${stage}${jev ? " --jev" : ""}` +
+    `${arg("submissions") ? ` --submissions ${arg("submissions")}` : ""}${arg("render-out") ? ` --render-out ${arg("render-out")}` : ""}`;
+
+  const finish = async (status: typeof run.status, code: number) => {
+    run.status = status;
+    run.endedAt = new Date().toISOString();
+    save();
+    await audit("pipeline.run_end");
+    log(`run ${status} after ${((Date.now() - startedAt.getTime()) / 60_000).toFixed(1)} min · ${path.join(runDir, "run.json")}`);
+    process.exit(code);
+  };
+
+  for (const stage of selected) {
+    log(`━━━ ${stage.name} ━━━`);
+    const rec: StageRecord = { name: stage.name, startedAt: new Date().toISOString() };
+    run.stages.push(rec);
+    save();
+    const t0 = Date.now();
+    const code = await runChild(stage.script, stage.args, stage.cwd, stage.name);
+    rec.endedAt = new Date().toISOString();
+    rec.mins = Number(((Date.now() - t0) / 60_000).toFixed(2));
+    rec.exit = code;
+    save();
+    if (interrupted) {
+      log(`✗ ${stage.name} interrupted after ${rec.mins} min — resume with:\n  ${resumeHint(stage.name)}`);
+      await finish("interrupted", 130);
+    }
+    if (code !== 0) {
+      log(`✗ ${stage.name} failed after ${rec.mins} min (exit ${code}). All stages are idempotent — resume with:\n  ${resumeHint(stage.name)}`);
+      await finish("failed", 1);
+    }
+    log(`✓ ${stage.name} [${rec.mins} min]`);
+    // Invariants after every stage: a broken state stops the run here, not
+    // 30 minutes later.
+    if (jev && stage.name !== "check") {
+      const c = await runChild(path.join(pipelineDir, "scripts", "check-run.ts"), ["--consultation", consultation, "--quiet"], pipelineDir, `check:${stage.name}`);
+      rec.check = c === 0 ? "ok" : "failed";
+      save();
+      if (c !== 0) {
+        log(`✗ invariant check failed after ${stage.name} — stopped. Inspect, fix, then resume with:\n  ${resumeHint(selected[selected.indexOf(stage) + 1]?.name ?? stage.name)}`);
+        await finish("failed", 1);
+      }
+    }
   }
-  console.log(`\nall stages done [${((Date.now() - startedAll) / 60_000).toFixed(1)} min]`);
-  for (const t of timings) console.log(`  ${t.name.padEnd(18)} ${t.mins} min`);
+  log(`all stages done [${((Date.now() - startedAt.getTime()) / 60_000).toFixed(1)} min]`);
+  for (const r of run.stages) log(`  ${r.name.padEnd(18)} ${r.mins} min${r.check ? ` · check ${r.check}` : ""}`);
+  await finish("done", 0);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -13,7 +13,7 @@
 import { sql, type Db } from "@policy/db";
 import type { EntryType, JevJudge, JudgeProvenance, Questions } from "@policy/llm";
 
-import { runPool } from "./pool.ts";
+import { runPool, type PoolOptions } from "./pool.ts";
 
 export const USD_PER_JEV_TOKEN = 42 / 1e9;
 
@@ -31,10 +31,10 @@ export async function judgeAll<I>(
   build: (item: I) => { state: EntryType; questions: Questions } | null,
   onResult: (item: I, answers: Record<string, unknown>, provenance: JudgeProvenance) => Promise<void>,
   concurrency = 8,
+  opts: PoolOptions<I> = {},
 ): Promise<StageStats> {
   const stats: StageStats = { ok: 0, failed: 0, tokens: 0, latencies: [], wallMs: 0 };
   const started = Date.now();
-  let done = 0;
   const result = await runPool(
     items,
     async (item) => {
@@ -44,9 +44,9 @@ export async function judgeAll<I>(
       stats.tokens += provenance.inputTokens;
       stats.latencies.push(provenance.durationMs);
       await onResult(item, answers as Record<string, unknown>, provenance);
-      if (++done % 50 === 0) process.stdout.write(".");
     },
     concurrency,
+    opts,
   );
   stats.ok = result.ok;
   stats.failed = result.failed;

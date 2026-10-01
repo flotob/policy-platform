@@ -110,6 +110,7 @@ async function main() {
       count(m);
     },
     Number(arg("concurrency") ?? 8),
+    { label: (p) => `measure of "${p.label}"`, progress: "measures (Jev)" },
   );
   // Second opinion where Jev is unsure: the LLM picks from the same options.
   const provider = new AgentSdkProvider();
@@ -138,6 +139,7 @@ async function main() {
       });
     },
     Number(arg("llm-concurrency") ?? 6),
+    { label: (p) => `second opinion for "${p.label}"`, progress: "second opinions" },
   );
   const llmFailed = second.failed;
   console.log(

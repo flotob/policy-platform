@@ -339,6 +339,7 @@ export async function extractWindows(
       );
     },
     concurrency,
+    { label: (w) => `extraction ${w.submissionId.slice(0, 8)} window ${w.index + 1}/${w.count}`, progress: "extraction" },
   );
   stats.failed = result.failed;
   stats.wallMs = Date.now() - started;

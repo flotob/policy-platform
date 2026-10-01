@@ -82,6 +82,7 @@ async function main() {
       });
     },
     Number(arg("concurrency") ?? 8),
+    { label: (r) => `stances of ${r.sub.author_org ?? r.sub.id} window ${r.window + 1} (${r.mps.length} map points)`, progress: "stances" },
   );
   console.log(`\n${statsLine(stats)}`);
   if (stats.failed > 0) throw new Error(`${stats.failed} requests failed — rerun`);

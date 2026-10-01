@@ -4,7 +4,7 @@
  * numbers a person needs to judge the run. Stages that have not run yet are
  * reported as "not yet", not as failures.
  *
- * Usage: DATABASE_URL=... tsx scripts/check-run.ts --consultation <ref>
+ * Usage: DATABASE_URL=... tsx scripts/check-run.ts --consultation <ref> [--quiet]
  */
 
 import { createDb, sql } from "@policy/db";
@@ -15,6 +15,15 @@ import { displayQuote } from "../src/quote-span.ts";
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
   return idx >= 0 ? process.argv[idx + 1] : undefined;
+}
+
+// --quiet (between orchestrator stages): only problems and the verdict.
+if (process.argv.includes("--quiet")) {
+  const print = console.log;
+  console.log = (...a: unknown[]) => {
+    const line = a.map(String).join(" ");
+    if (/^(WARN|FAIL|━━━ (all|\d))/.test(line)) print(...a);
+  };
 }
 
 async function main() {
