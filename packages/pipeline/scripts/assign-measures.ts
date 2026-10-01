@@ -121,7 +121,7 @@ async function main() {
     async (p) => {
       const r = await provider.generateStructured({
         system:
-          "You assign one point of a public consultation to the measure of the draft law it concerns. Answer with the option key (m1, m2, …, whole, beyond) and a one-sentence reason.",
+          "You assign one point of a public consultation to the measure of the draft law it concerns. A point about a specific rule that matters for several measures goes to the measure it mainly concerns; \"whole\" is only for the law as a whole. Answer with the option key (m1, m2, …, whole, beyond) and a one-sentence reason.",
         prompt: `Consultation: ${cons.title}\n\nOptions:\n${options}\n\nPoint: ${p.label} — ${p.summary ?? ""}`,
         schema: measurePickJsonSchema,
       });

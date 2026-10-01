@@ -8,7 +8,8 @@
 
 import { choice } from "@policy/llm";
 
-export const MEASURE_FAMILY = "measure.v1";
+/** v2: "whole" only for the law as a whole — a point about rules in several measures goes to its main measure. */
+export const MEASURE_FAMILY = "measure.v2";
 export const WHOLE = "übergreifend";
 export const BEYOND = "Über den Entwurf hinaus";
 
@@ -55,7 +56,7 @@ export function measureQuestion(measures: BillMeasure[]) {
       `The point concerns the measure "${m.name}" (§ ${m.paragraphs.join(", ")}${m.other.length ? `; ${m.other.join("; ")}` : ""}): ${m.description}`;
   });
   criteria.whole =
-    "The point concerns the draft law as a whole or several of its measures at once — an overall verdict, a fact about the general situation the debate builds on (the building stock, emissions, prices, the state of heat networks), cross-cutting goals or values.";
+    "The point concerns the draft law AS A WHOLE — an overall verdict on the law, its general direction or goal, a fact about the general situation the whole debate builds on (the building stock, emissions, prices, the state of heat networks), or values that cut across the whole law. NOT a point about a specific rule: a rule that matters for several measures (a biomass limit, how waste heat is counted, a deadline) belongs to the measure the point mainly concerns.";
   criteria.beyond =
     "The point DEMANDS or criticises something this draft law does not regulate — other laws (e.g. the building energy act, tenancy law), funding programmes, energy prices and taxes — rather than a provision of this draft or the situation it responds to.";
   return { measure: choice("Which measure of the draft law does `point` concern?", criteria) };
@@ -73,7 +74,7 @@ export const MEASURE_SECOND_OPINION_BELOW = 0.5;
 export function measureOptionsText(measures: BillMeasure[]): string {
   return [
     ...measures.map((m, i) => `m${i + 1}: ${m.name} (§ ${m.paragraphs.join(", ")}${m.other.length ? `; ${m.other.join("; ")}` : ""}) — ${m.description}`),
-    "whole: the draft law as a whole or several measures at once — overall verdict, a fact about the general situation, cross-cutting goals or values",
+    "whole: the draft law AS A WHOLE — overall verdict, its general direction or goal, a fact about the general situation, values across the whole law; NOT a specific rule that matters for several measures (that point goes to the measure it mainly concerns)",
     "beyond: a demand or criticism addressed to something this draft does not regulate (other laws, funding, prices and taxes)",
   ].join("\n");
 }
