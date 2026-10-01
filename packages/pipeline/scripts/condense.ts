@@ -3,11 +3,13 @@
  * condense-map.ts in the Jev chain.
  *
  * Per measure (all measures in parallel):
+ *  0. WEIGH (Jev): which organisations agree / disagree with each point,
+ *     inferred from every statement (point-stance.v1).
  *  1. PROPOSE (LLM): the disputed QUESTIONS of the measure, one votable
  *     statement each (question, text, label, typ, district), at most
- *     MAP_POINTS_MAX. The LLM sees which organisations made each point, so
- *     weight decides what gets on the map; positions on the same question
- *     (raise / lower / delete) are one Landkarten-Punkt.
+ *     MAP_POINTS_MAX. The LLM sees who said each point and who agrees or
+ *     disagrees, so weight decides what gets on the map; positions on the
+ *     same question (raise / lower / delete) are one Landkarten-Punkt.
  *  2. DEDUPE (Jev): every pair of proposals of the same typ — "do these two
  *     ask the same question?" — merges into the earlier one.
  *  3. ASSIGN (Jev): every extraction point → the question it takes a
@@ -29,8 +31,10 @@ import { AgentSdkProvider, JevJudge, type JudgeProvenance } from "@policy/llm";
 
 import { deriveBezirk } from "../src/jev-grammar.ts";
 import { MAP_ASSIGN_FAMILY, MAP_DEDUPE_FAMILY, mapAssignQuestion, mergeGroups, sameQuestion } from "../src/jev-map.ts";
-import { resolveConsultation, saveJudgment, sinceReset } from "../src/jev-stage.ts";
+import { judgeAll, resolveConsultation, saveJudgment, sinceReset, statsLine, type StageStats } from "../src/jev-stage.ts";
+import { STANCE_BATCH, decideStance, stanceQuestion, type StanceProbs } from "../src/jev-stance.ts";
 import type { BillMeasure } from "../src/measures.ts";
+import { chunkText } from "../src/pipeline.ts";
 import { runPool } from "../src/pool.ts";
 import { CONDENSE_PROPOSE_SYSTEM, MAP_POINTS_MAX, condenseQuestionsPrompt } from "../src/prompts.ts";
 import { condenseProposeJsonSchema, condenseProposeOutput } from "../src/schemas.ts";
@@ -40,6 +44,7 @@ function arg(name: string): string | undefined {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 }
 
+export const POINT_STANCE_FAMILY = "point-stance.v1";
 const BEZIRK_ORDER = ["wirkung", "machbarkeit", "kosten", "alternativen", "wert", "ausgestaltung"];
 /** Same-question pairs per Jev request (all proposals ride in the state). */
 const DEDUPE_BATCH = 60;
@@ -111,6 +116,80 @@ async function assign(
   return uncovered;
 }
 
+interface Sub {
+  id: string;
+  org: string;
+  text: string;
+}
+export type Weight = { agree: string[]; disagree: string[] };
+
+/**
+ * Jev: which organisations agree or disagree with each point — inferred from
+ * every statement, like the votes. Weight for the proposal: a point one
+ * organisation SAID can still be contested by others (WPG: "Holz ist
+ * vollwertig erneuerbar" — said by one, the core conflict of its measure).
+ */
+async function weigh(
+  db: Db,
+  judge: JevJudge,
+  cons: { id: string; tenantId: string },
+  scope: string,
+  pts: Pt[],
+  subs: Sub[],
+): Promise<{ weights: Map<string, Weight>; stats: StageStats }> {
+  const reqs: { sub: Sub; window: number; text: string; pts: Pt[] }[] = [];
+  for (const sub of subs) {
+    chunkText(sub.text, 20_000).forEach((text, window) => {
+      for (let o = 0; o < pts.length; o += STANCE_BATCH) reqs.push({ sub, window, text, pts: pts.slice(o, o + STANCE_BATCH) });
+    });
+  }
+  const probs = new Map<string, Map<string, StanceProbs[]>>(); // point → sub → windows
+  const models = new Map<string, JudgeProvenance>();
+  const stats = await judgeAll(
+    judge,
+    reqs,
+    (r) => ({
+      state: { submission: r.text },
+      questions: Object.fromEntries(r.pts.map((p, i) => [`s${i}`, stanceQuestion(p.summary ?? p.label)])),
+    }),
+    async (r, answers, provenance) => {
+      r.pts.forEach((p, i) => {
+        if (!probs.has(p.id)) probs.set(p.id, new Map());
+        const bySub = probs.get(p.id)!;
+        if (!bySub.has(r.sub.id)) bySub.set(r.sub.id, []);
+        bySub.get(r.sub.id)![r.window] = (answers[`s${i}`] as { probabilities: StanceProbs }).probabilities;
+        models.set(p.id, provenance);
+      });
+    },
+    8,
+    { label: (r) => `${scope}: weight from ${r.sub.org} window ${r.window + 1}` },
+  );
+  if (stats.failed > 0) throw new Error(`${scope}: ${stats.failed} weight requests failed — rerun`);
+  const weights = new Map<string, Weight>();
+  await db.transaction(async (tx) => {
+    for (const p of pts) {
+      const w: Weight = { agree: [], disagree: [] };
+      for (const sub of subs) {
+        const d = decideStance(probs.get(p.id)!.get(sub.id)!);
+        if (d.value === 1) w.agree.push(sub.org);
+        else if (d.value === -1) w.disagree.push(sub.org);
+      }
+      weights.set(p.id, w);
+      await saveJudgment(tx as unknown as Db, {
+        tenantId: cons.tenantId,
+        consultationId: cons.id,
+        subjectKind: "point",
+        subjectId: p.id,
+        family: POINT_STANCE_FAMILY,
+        provenance: models.get(p.id)!,
+        answers: Object.fromEntries(probs.get(p.id)!),
+        decided: w,
+      });
+    }
+  });
+  return { weights, stats };
+}
+
 /** Jev: which proposals ask the same question (pairs of the same typ only — facts, values, design stay apart). */
 async function dedupe(
   judge: JevJudge,
@@ -168,6 +247,12 @@ async function main() {
     ((billRes.rows[0] as { payload: { details: BillMeasure[] } } | undefined)?.payload.details ?? []).map((m) => [m.name, m.description]),
   );
 
+  const subRes = await db.execute(sql`
+    SELECT id, COALESCE(author_org, 'Stellungnahme') AS org, text FROM submissions
+    WHERE consultation_id = ${cons.id} AND text IS NOT NULL ORDER BY length(text) DESC
+  `);
+  const subs = subRes.rows as unknown as Sub[];
+
   const scopeRes = await db.execute(sql`
     SELECT DISTINCT measure FROM points
     WHERE consultation_id = ${cons.id} AND measure IS NOT NULL AND status = 'released'
@@ -200,9 +285,11 @@ async function main() {
       let proposedNow = 0;
       let mergedNow = 0;
       if (mps.length === 0) {
+        const { weights, stats } = await weigh(db, judge, cons, scope, pts, subs);
+        console.log(`    ${scope}: weight ${statsLine(stats)}`);
         const r = await provider.generateStructured({
           system: CONDENSE_PROPOSE_SYSTEM,
-          prompt: condenseQuestionsPrompt(scope, bill.get(scope) ?? null, pts),
+          prompt: condenseQuestionsPrompt(scope, bill.get(scope) ?? null, pts.map((p) => ({ ...p, ...weights.get(p.id)! }))),
           schema: condenseProposeJsonSchema,
         });
         const proposals = condenseProposeOutput.parse(r.output).map_points;

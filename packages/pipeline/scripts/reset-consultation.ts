@@ -115,7 +115,7 @@ async function main() {
  */
 async function resetMap(db: Db, cons: { id: string; tenantId: string; title: string }, dbName: string, yes: boolean) {
   const M = sql`(SELECT id FROM map_points WHERE consultation_id = ${cons.id})`;
-  const J = sql`consultation_id = ${cons.id} AND (subject_kind IN ('map_point', 'map_stance', 'map_scope') OR family LIKE 'map-assign.%')`;
+  const J = sql`consultation_id = ${cons.id} AND (subject_kind IN ('map_point', 'map_stance', 'map_scope') OR family LIKE 'map-assign.%' OR family LIKE 'point-stance.%')`;
   const R = sql`consultation_id = ${cons.id} AND engine LIKE '%:map-points'`;
   const counts: Record<string, number> = {};
   const count = async (name: string, q: ReturnType<typeof sql>) => {

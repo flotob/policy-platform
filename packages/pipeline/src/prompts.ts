@@ -425,12 +425,12 @@ export const MAP_POINTS_MAX = 20;
  */
 export const CONDENSE_PROPOSE_SYSTEM = `You build the Landkarte des Streits for ONE measure of a public consultation: the few questions that are really at stake, each as one statement people can vote on (Landkarten-Punkt).
 
-You get the extraction points of this measure — each one claim made by one or more organisations in their written statements — with the organisations that made it.
+You get the extraction points of this measure — each one claim made by one or more organisations in their written statements — with the organisations that SAID it and, inferred from all statements, the other organisations that agree ("for") or disagree ("against").
 
 1. Find the QUESTIONS. Which questions about this measure do the organisations actually answer, in agreement or against each other? Different positions on the same question are answers to it, not separate questions: "raise the biomass limit", "lower it", "delete it", "make it flexible" all answer ONE question — "How strict should the biomass limit for new heat networks be?".
-2. One Landkarten-Punkt per question: a single neutral German statement that answers the question in one direction, so that agreeing means one side's position and disagreeing the other side's (e.g. "Die Biomasse-Grenzen für neue Wärmenetze sind zu streng."). Phrase it the way the organisations that raise it hold it. Never two points for the same question.
+2. One Landkarten-Punkt per question: a single neutral German statement that answers the question in one direction, so that agreeing means one side's position and disagreeing the other side's (e.g. "Die Biomasse-Grenzen für neue Wärmenetze sind zu streng."). Phrase it the way the organisations that raise it hold it. Never two points for the same question. For a limit, quota, or deadline its LEVEL is one question — raising, lowering, deleting, or loosening it are answers to it; a separate point only for a genuinely different instrument someone could support while rejecting the other (a hardship clause next to the level).
 3. Facts, values, and design stay apart, because they are settled differently. A fact question — could a study, data, or a legal opinion settle it? ("Das nachhaltige Biomassepotenzial reicht für höhere Anteile nicht aus") — is its own point next to the value or design question that rests on it.
-4. Weight decides what gets on the map. First the questions several organisations address, and those on which organisations take opposite positions; questions all of them agree on count too (they are bridges). A demand only ONE organisation raises and no other touches gets no point of its own, unless it concerns the core of the measure: it is listed under the map as a single demand (Einzelforderung), so nothing is lost.
+4. Weight decides what gets on the map: the organisations that take a position (said, for, against). First the questions with organisations on BOTH sides — even when only one organisation said it, a point others reject is contested, and such questions are often the core conflict of the measure. Then questions many organisations agree on (they are bridges). A demand only its own author takes a position on gets no point of its own: it is listed under the map as a single demand (Einzelforderung), so nothing is lost.
 5. At most ${MAP_POINTS_MAX} points; fewer when fewer questions are really at stake. A short map of real questions beats a long list of positions.
 
 Every statement is voted on as a whole: ONE claim — no justification or purpose clause ("…, weil …", "…, da …", "…, um … zu …"), no "X und Y" of two separable claims; neutral, no rhetoric.
@@ -445,24 +445,39 @@ Per Landkarten-Punkt:
 export function condenseQuestionsPrompt(
   scope: string,
   description: string | null,
-  points: { label: string; summary: string | null; kind: string; cq: string | null; orgs: string[] }[],
+  points: {
+    label: string;
+    summary: string | null;
+    kind: string;
+    cq: string | null;
+    /** Organisations that said it. */
+    orgs: string[];
+    /** Organisations that agree / disagree, inferred from all statements (Jev). */
+    agree?: string[];
+    disagree?: string[];
+  }[],
 ): string {
   // Organisations as short keys: the weight of a point is visible without
   // repeating long names on every line.
-  const orgs = [...new Set(points.flatMap((p) => p.orgs))].sort();
+  const orgs = [...new Set(points.flatMap((p) => [...p.orgs, ...(p.agree ?? []), ...(p.disagree ?? [])]))].sort();
   const key = new Map(orgs.map((o, i) => [o, `O${i + 1}`]));
+  const keys = (xs: string[]) => xs.map((o) => key.get(o)).join(" ");
   const list = points
-    .map(
-      (p, i) =>
+    .map((p, i) => {
+      const forOthers = (p.agree ?? []).filter((o) => !p.orgs.includes(o));
+      return (
         `${i}. [${p.kind}${p.cq ? "/" + p.cq : ""}] ${p.label}${p.summary ? " — " + p.summary : ""}` +
-        ` · ${p.orgs.length ? p.orgs.map((o) => key.get(o)).join(", ") : "—"}`,
-    )
+        ` · said ${p.orgs.length ? keys(p.orgs) : "—"}` +
+        (forOthers.length ? ` · for ${keys(forOthers)}` : "") +
+        (p.disagree?.length ? ` · against ${keys(p.disagree)}` : "")
+      );
+    })
     .join("\n");
   return (
     `Measure under decision: ${scope}\n` +
     (description ? `What the bill says: ${description}\n` : "") +
     `\nOrganisations:\n${orgs.map((o) => `${key.get(o)} = ${o}`).join("\n")}\n` +
-    `\nExtraction points (index. [kind/door] label — summary · organisations):\n${list}\n\n` +
+    `\nExtraction points (index. [kind/door] label — summary · said by · also for · against):\n${list}\n\n` +
     `Write the Landkarten-Punkte for this measure: one per disputed question, at most ${MAP_POINTS_MAX}.`
   );
 }
