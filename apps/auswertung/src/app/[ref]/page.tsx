@@ -25,6 +25,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
   const warnings = by("warnung");
   // The paper's most dangerous case: a fact both camps believe that nobody backs with evidence.
   const unproven = all.filter((p) => p.typ === "T" && p.diag === "bruecke" && evidence.has(p.id) && ev(p) === 0).sort((a, b) => breadth(b) - breadth(a));
+  const factsMediation = facts.filter((p) => ev(p) > 0).length;
   const evidencedTotal = [...evidence.values()].reduce((s2, x) => s2 + x.evidenced, 0);
   const sourcesTotal = [...evidence.values()].reduce((s2, x) => s2 + x.sources, 0);
   const gaps = by("luecke");
@@ -64,6 +65,33 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
         stats={{ pages: s.pages, points: s.points, mapPoints: s.mapPoints, statements: s.statements }}
         camps={o.camps.map((c) => ({ name: c.name, size: c.size, side: c.side }))}
       />
+
+      <section className="recommend" aria-label="Empfehlung">
+        <h2>Empfehlung</h2>
+        <ol>
+          <li>
+            <strong>Vor der Ressortabstimmung klären:</strong> {facts.length - factsMediation} Tatsachenfragen, zu denen niemand Belege nennt, per Kurzgutachten
+            oder Daten{factsMediation ? `; bei ${factsMediation} weiteren liegen Belege vor, dort hilft Vermittlung` : ""}.{" "}
+            <a href={`${base}/gutachten`}>Zur Gutachten-Agenda</a>
+          </li>
+          <li>
+            <strong>Auf die Leitungsebene:</strong> {kerns.length} Kernkonflikte, etwa „{kerns[0]?.label}“, und {values.length} weitere Wertfragen. Hier hilft keine
+            Studie mehr, hier muss entschieden werden.
+          </li>
+          <li>
+            <strong>Verhandeln:</strong> {designs.length} Fragen der Ausgestaltung (Fristen, Grenzen, Ausnahmen), etwa „{designs[0]?.label}“.
+          </li>
+          <li>
+            <strong>Darauf bauen:</strong> {bridges.length} Brücken, die beide Lager aus denselben Gründen tragen, etwa „{bridges[0]?.label}“.
+          </li>
+          {unproven.length ? (
+            <li>
+              <strong>Nachfragen:</strong> {unproven.length} Tatsachen, die alle glauben, aber niemand belegt, und {gaps.length} kritische Fragen, die niemand
+              gestellt hat.
+            </li>
+          ) : null}
+        </ol>
+      </section>
 
       {section(
         `Für die Leitungsebene: ${kerns.length + values.length} Wertfragen`,

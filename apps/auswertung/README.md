@@ -70,3 +70,23 @@ becomes a horizontal strip.
 ("4 von 6") not percentages; the one motion moment is the Verdichtung opener
 (skippable, static under reduced motion); plain German a first-time reader
 understands — the paper's terms (Brücke, Lücke, Tür) explained in place.
+
+## Status (prototype, 2026-10-02)
+
+All pages above are built on the WPG data (246 pages checked: all load).
+Evidence: `packages/pipeline/scripts/evidence.ts` (Jev, source-evidence.v2)
+must have run for the evidence balance (point page, Lagebild, agenda).
+
+Known limits:
+- Votes are inferred from the statements (Jev), not cast; no human editorial
+  desk yet — the machine editor worked alone.
+- "Frag die Landkarte" starts a Claude Code process per question (dev, Max
+  subscription): no login, no rate limit — gate it before any deployment.
+- Organisation short names and aliases are hard-coded for this hearing
+  (`shortOrg`, ask.ts).
+- About half of the machine editor's reasons are logged in English (shown
+  as such in the Prüfpfad and Laufzettel).
+- The BDEW profile (373 arguments) is the heaviest page; the printed report
+  runs to ~59 A4 pages because every bridge carries its full Befund.
+- `namedSections` exists twice (pipeline + landkarte/bill.ts); ranges
+  ("§§ 29 bis 32") count only their ends.

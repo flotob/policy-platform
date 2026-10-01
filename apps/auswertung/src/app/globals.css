@@ -189,3 +189,8 @@ h3 { font-family: var(--sans); font-size: 1rem; font-weight: 600; margin: 1.5rem
 .trail { border-top: 1px solid var(--rule); padding: 0.6rem 0; max-width: calc(68ch + 240px); }
 .trail summary { cursor: pointer; font-family: var(--serif); font-size: 1rem; }
 .trail ol { margin: 0.6rem 0; padding-left: 1.4rem; font-size: 0.875rem; color: var(--ink-2); display: grid; gap: 0.3rem; }
+
+/* Recommendation on the Lagebild — the paper's report ending, computed */
+.recommend { border-left: 4px solid var(--ink); padding: 0.25rem 0 0.25rem 1.1rem; margin: 1.5rem 0 1rem; max-width: 68ch; }
+.recommend h2 { margin-top: 0; font-size: 1.25rem; }
+.recommend ol { margin: 0; padding-left: 1.2rem; font-family: var(--serif); font-size: 1.0625rem; line-height: 1.6; display: grid; gap: 0.45rem; }
