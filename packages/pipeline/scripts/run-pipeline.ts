@@ -48,9 +48,9 @@
  * failed or interrupted run keeps a pg_dump of its database in the folder.
  */
 
-import { execSync, spawn } from "node:child_process";
+import { execSync, spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -148,7 +148,8 @@ function makeSanitizer(): (line: string) => string {
   };
 }
 
-const quote = (a: string) => (/^[\w@%+=:,./-]+$/.test(a) ? a : JSON.stringify(a));
+/** POSIX shell quoting for displayed commands: $, backticks, quotes stay literal. */
+const quote = (a: string) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`);
 
 async function main() {
   const consultation = arg("consultation");
@@ -363,14 +364,18 @@ async function main() {
     const container = process.env.PIPELINE_SNAPSHOT_CONTAINER;
     if (!container) return;
     const file = path.join(runDir, "db-snapshot.dump");
+    // Argument array + file descriptor: no shell, no quoting.
+    const fd = openSync(file, "w");
     try {
-      execSync(
-        `docker exec ${JSON.stringify(container)} pg_dump -Fc -U ${JSON.stringify(decodeURIComponent(dbUrl.username || "policy"))} ${JSON.stringify(dbUrl.pathname.slice(1))} > ${JSON.stringify(file)}`,
-        { stdio: ["ignore", "ignore", "pipe"], timeout: 180_000, shell: "/bin/sh" },
+      const r = spawnSync(
+        "docker",
+        ["exec", container, "pg_dump", "-Fc", "-U", decodeURIComponent(dbUrl.username || "policy"), decodeURIComponent(dbUrl.pathname.slice(1))],
+        { stdio: ["ignore", fd, "pipe"], timeout: 180_000 },
       );
-      log(`database snapshot kept: ${file}`);
-    } catch (err) {
-      log(`database snapshot failed — ${err instanceof Error ? err.message.split("\n")[0] : err}`);
+      if (r.status === 0) log(`database snapshot kept: ${file}`);
+      else log(`database snapshot failed — ${r.error?.message ?? (r.stderr?.toString().split("\n")[0] || `exit ${r.status}`)}`);
+    } finally {
+      closeSync(fd);
     }
   };
 
@@ -443,9 +448,13 @@ async function main() {
         }
         if (c.error || c.code !== 0) {
           rec.check.status = "failed";
+          if (c.error) (rec.check as { error?: string }).error = sanitize(c.error);
           save();
           // Point back to the producing stage: its check must pass before anything later runs.
-          log(`✗ invariant check failed after ${stage.name} — stopped. Inspect and fix, then re-run ${stage.name} and its check with:\n  ${resumeHint(stage.name)}`);
+          log(
+            `✗ ${c.error ? `the check after ${stage.name} could not be launched (${c.error})` : `invariant check failed after ${stage.name}`} — stopped. ` +
+              `Inspect and fix, then re-run ${stage.name} and its check with:\n  ${resumeHint(stage.name)}`,
+          );
           return await finish("failed", 1);
         }
         save();
