@@ -415,6 +415,17 @@ async function main() {
         (members.length >= 3 || (r.quotes?.length ?? 0) >= 2)
       );
     });
+    // A forced refresh first invalidates the old fingerprint: if the refresh
+    // fails, the next ordinary run sees no current verdict and retries.
+    if (force && bridges.length > 0) {
+      for (const r of bridges) {
+        await db.execute(sql`
+          UPDATE map_points SET diag_flags = COALESCE(diag_flags, '{}'::jsonb) || '{"reasons_for": null}'::jsonb
+          WHERE id = ${r.id}`);
+        r.diag_flags = { ...(r.diag_flags ?? {}), reasons_for: null };
+      }
+    }
+
     // Jev pre-screen (map-points engine): only bridges with a sign of
     // diverging reasons go to the LLM check.
     let toCheck = bridges;

@@ -255,7 +255,12 @@ export async function extractWindows(
   const rows = res.rows as { submission_id: string; window_index: number; call_hash: string; refined: boolean; canonicalized: boolean }[];
   // A window already on the map that was refined under another policy must
   // not be re-refined in place: its points were built from the old payload.
-  const stale = rows.filter((r) => r.canonicalized && !r.refined);
+  // Only the windows asked for count — an identical text of ANOTHER
+  // submission (same call hash) is not this run's business.
+  const requested = new Set(windows.map(key));
+  const stale = rows.filter(
+    (r) => r.canonicalized && !r.refined && requested.has(key({ submissionId: r.submission_id, index: r.window_index, hash: r.call_hash })),
+  );
   if (stale.length) {
     throw new Error(
       `${stale.length} canonicalized windows were refined under an older policy than ${REFINE_POLICY} — ` +
