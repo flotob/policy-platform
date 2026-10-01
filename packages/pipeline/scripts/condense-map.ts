@@ -27,6 +27,7 @@ import {
   condenseAssignPrompt,
   condensePrompt,
 } from "../src/prompts.ts";
+import { deriveBezirk } from "../src/jev-grammar.ts";
 import {
   condenseAssignJsonSchema,
   condenseAssignOutput,
@@ -125,14 +126,16 @@ async function main() {
       });
       const parsed = condenseOutput.parse(result.output);
 
-      // Server-side consistency: typ wins over bezirk where they conflict.
-      const proposals = parsed.map_points.map((mp) => {
-        let bezirk = mp.bezirk;
-        if (mp.typ === "W") bezirk = "wert";
-        else if (mp.typ === "verfahren") bezirk = "ausgestaltung";
-        else if (bezirk === "wert" || bezirk === "ausgestaltung") bezirk = "kosten";
-        return { ...mp, bezirk };
-      });
+      // The district is derived in code: typ decides the zone, a fact point's
+      // district follows its members' critical questions (the doors).
+      const proposals = parsed.map_points.map((mp) => ({
+        ...mp,
+        bezirk: deriveBezirk(
+          mp.typ,
+          mp.members.filter((i) => i >= 0 && i < points.length).map((i) => points[i]!.cq),
+          mp.bezirk,
+        ),
+      }));
       proposals.sort(
         (a, b) =>
           BEZIRK_ORDER.indexOf(a.bezirk) - BEZIRK_ORDER.indexOf(b.bezirk) ||

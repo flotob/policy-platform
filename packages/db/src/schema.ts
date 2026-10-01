@@ -92,6 +92,21 @@ export const mapPoints = pgTable("map_points", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** exp/jev: raw System One judgments, one row per (subject, family). */
+export const judgments = pgTable("judgments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  consultationId: uuid("consultation_id").notNull().references(() => consultations.id),
+  subjectKind: text("subject_kind").notNull(),
+  subjectId: text("subject_id").notNull(),
+  family: text("family").notNull(),
+  model: text("model").notNull(),
+  requestId: text("request_id"),
+  answers: jsonb("answers").notNull(),
+  decided: jsonb("decided"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const pointEdges = pgTable("point_edges", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
