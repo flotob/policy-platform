@@ -91,7 +91,7 @@ export function shortlist<P extends MatchablePoint>(
 
 // ——— The judgment ————————————————————————————————————————————————————————
 
-const RELATION_LEVELS = [
+export const RELATION_LEVELS = [
   "Different arguments: the two points make different claims, even if they concern the same topic, measure, or actor.",
   "Related but not the same argument: same topic or a neighbouring claim, but a different aspect, a narrower or broader claim with different implications, a different mechanism, or the opposite position. Merging them would lose a nuance someone actually argued.",
   "The same argument: the same claim content in the same direction; the points differ only in wording, tone, or level of detail.",

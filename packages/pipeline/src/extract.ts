@@ -75,7 +75,7 @@ export function breakCandidates(text: string): number[] {
   return out;
 }
 
-const CUT_QUESTION = (key: string) =>
+export const CUT_QUESTION = (key: string) =>
   noul(
     `Does a new topic, section, or argument begin with \`cuts.${key}.after\`, rather than \`cuts.${key}.after\` continuing the argument of \`cuts.${key}.before\`?`,
     {

@@ -14,26 +14,22 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { CUT_QUESTION } from "../src/extract.ts";
+import { intakeRequest } from "../src/intake.ts";
+import { mapAssignQuestion, REASONS_SCREEN } from "../src/jev-map.ts";
+import { RELATION_LEVELS } from "../src/jev-match.ts";
+import { relationRequest } from "../src/jev-relations.ts";
+import { stanceQuestion } from "../src/jev-stance.ts";
+import { measureQuestion } from "../src/measures.ts";
 import {
-  AI_REVIEW_POINTS_SYSTEM,
-  AI_REVIEW_STATEMENTS_SYSTEM,
-  BATCH_MATCH_SYSTEM,
   BEFUND_SYSTEM,
-  CLASSIFY_CQ_SYSTEM,
-  CONDENSE_ASSIGN_SYSTEM,
-  CONDENSE_SYSTEM,
-  DECOMPOSE_SYSTEM,
+  BILL_MEASURES_SYSTEM,
+  CONDENSE_PROPOSE_SYSTEM,
+  EDITOR_SYSTEM,
+  extractSystem,
   MATCH_SYSTEM,
-  MEASURES_ASSIGN_SYSTEM,
-  MEASURES_PROPOSE_SYSTEM,
   NAME_CAMPS_SYSTEM,
   REASONS_CHECK_SYSTEM,
-  RELATIONS_SYSTEM,
-  SHORTEN_LABELS_SYSTEM,
-  STANCE_SYSTEM,
-  STATEMENT_SYSTEM,
-  THEMES_ASSIGN_SYSTEM,
-  THEMES_PROPOSE_SYSTEM,
 } from "../src/prompts.ts";
 
 function arg(name: string): string | undefined {
@@ -44,14 +40,32 @@ function arg(name: string): string | undefined {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-type Kind = "ki" | "det" | "gate" | "plan";
+type Kind = "ki" | "jev" | "det" | "plan";
 
 const KIND: Record<Kind, { label: string; fg: string; bg: string; border: string }> = {
-  ki: { label: "KI-Stufe", fg: "#0C447C", bg: "#DCE9F6", border: "#185FA5" },
-  det: { label: "Deterministisch — keine KI", fg: "#085041", bg: "#DFF1EA", border: "#0F6E56" },
-  gate: { label: "Redaktions-Gate — Mensch gibt frei", fg: "#633806", bg: "#F7E8CB", border: "#9A6A14" },
+  ki: { label: "KI schreibt — Sprachmodell", fg: "#0C447C", bg: "#DCE9F6", border: "#185FA5" },
+  jev: { label: "KI entscheidet — Jev, mit Wahrscheinlichkeit", fg: "#4B2E83", bg: "#ECE6F7", border: "#6A4BB0" },
+  det: { label: "Gerechnet — keine KI", fg: "#085041", bg: "#DFF1EA", border: "#0F6E56" },
   plan: { label: "Geplant — noch nicht gebaut", fg: "#444441", bg: "transparent", border: "#5F5E5A" },
 };
+
+/** Jev questions, readable: name, kind of judgment, question, answer options. */
+type JevQuestion = { type: string; instructions: unknown; criteria?: Record<string, unknown> | readonly string[] };
+function questionsText(qs: Record<string, unknown>): string {
+  return Object.entries(qs)
+    .map(([name, raw]) => {
+      const q = raw as JevQuestion;
+      const instr = typeof q.instructions === "string" ? q.instructions : JSON.stringify(q.instructions, null, 1);
+      const crit = q.criteria
+        ? Array.isArray(q.criteria)
+          ? (q.criteria as string[]).map((v, i) => `   ${i}: ${v}`).join("\n")
+          : Object.entries(q.criteria).map(([k, v]) => `   – ${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join("\n")
+        : "";
+      const kind = q.type === "noul" ? "ja/nein, als Wahrscheinlichkeit" : q.type === "choice" ? "Auswahl" : "Skala";
+      return `[${name} · ${kind}] ${instr}${crit ? `\n${crit}` : ""}`;
+    })
+    .join("\n\n");
+}
 
 interface Station {
   /** Stable identity for anchors and cross-references — display codes
@@ -64,7 +78,11 @@ interface Station {
   text: string;
   note?: string;
   prompts?: { label: string; text: string }[];
+  /** Jev question families, shown verbatim like the prompts. */
+  questions?: { label: string; text: string }[];
 }
+
+const EXAMPLE = { label: "…", summary: "…" };
 
 /** Shared trunk: everything downstream depends on these. */
 const TRUNK: Station[] = [
@@ -72,103 +90,100 @@ const TRUNK: Station[] = [
     key: "import",
     strand: "st",
     name: "Import & Aufbereitung",
-    script: "harvester · import-harvest.ts",
+    script: "harvester · import-harvest.ts · import-documents.ts",
     kinds: ["det"],
-    text: "Stellungnahmen, Fragebögen und Anhänge werden aus den Quellsystemen geholt und unverändert gespeichert. Lange Texte werden nie gekürzt, sondern in überlappenden Fenstern vollständig verarbeitet.",
+    text: "Stellungnahmen, Fragebögen und Anhänge werden aus den Quellsystemen geholt und unverändert gespeichert — dazu der Entwurf selbst (Gesetzentwurf, Beschlussvorlage), aus dem der Zuschnitt in Maßnahmen kommt.",
     note: "Nur im Anlauf: Im Dauerbetrieb (T2) kommt neues Material durch die drei Türen herein, nicht per Import.",
   },
   {
     key: "zerlegung",
     strand: "st",
-    name: "Zerlegung + Abgleich",
-    script: "decompose.ts",
-    kinds: ["ki"],
-    text: "Jede Stellungnahme wird in einzelne Punkte zerlegt — Behauptungen entlang des Grundmusters (P1–P4), Einwände durch eine der fünf Türen (die fünf kritischen Fragen: die fünf Wege, ein Maßnahmen-Argument anzugreifen), Lösungsvorschläge mit der Tür, die sie beantworten. Jeder Punkt trägt ein wörtliches Beleg-Zitat. Direkt verzahnt der Abgleich: Ist der Kandidat ein bekannter Punkt in neuen Worten oder wirklich neu? 214 Wiederholungen werden ein Punkt — die Landkarte wächst um Erkenntnis, nicht um Papier. Die Neupunkt-Rate ergibt das Sättigungsmaß.",
-    prompts: [
-      { label: "Zerlegungs-Prompt", text: DECOMPOSE_SYSTEM },
-      { label: "Abgleich-Prompt (einzeln)", text: MATCH_SYSTEM },
-      { label: "Abgleich-Prompt (Batch)", text: BATCH_MATCH_SYSTEM },
-    ],
-  },
-  {
-    key: "bezuege",
-    strand: "st",
-    name: "Bezüge zwischen Punkten",
-    script: "backfill-relations.ts",
-    kinds: ["ki"],
-    text: "Stützt- und Angriffs-Beziehungen: welcher Punkt ist Prämisse wofür, welcher Einwand zielt auf welche Behauptung. Die Angriffskanten tragen als Vokabular die fünf Türen — daran hängt später die deterministische Türen-Zuordnung.",
-    prompts: [{ label: "Bezüge-Prompt", text: RELATIONS_SYSTEM }],
+    name: "Zerlegung",
+    script: "extract.ts",
+    kinds: ["jev", "ki"],
+    text: "Lange Stellungnahmen werden in Abschnitte geteilt — dort, wo Jev einen Themenwechsel erkennt, nicht nach Zeichenzahl. Alle Abschnitte laufen gleichzeitig: Das Sprachmodell sieht jeweils die ganze Stellungnahme und schreibt die Punkte seines Abschnitts — jeder Punkt genau eine Behauptung, Tatsachen und Wertungen getrennt, Prämissen als eigene Punkte, dazu ein wörtliches Beleg-Zitat. Etikettieren muss das Sprachmodell nichts mehr; das entscheidet Jev in der nächsten Stufe.",
+    prompts: [{ label: "Zerlegungs-Prompt", text: extractSystem(true) }],
+    questions: [{ label: "Wo wird geschnitten?", text: questionsText({ schnitt: CUT_QUESTION("cN") }) }],
   },
   {
     key: "redaktion",
     strand: "st",
-    name: "Redaktion: Punkte",
-    script: "ai-review.ts --what points",
-    kinds: ["ki", "gate"],
-    text: "Kein Punkt erscheint ungeprüft auf der Karte. Ein KI-Redakteur schlägt Freigabe oder Ablehnung vor; in der Redaktions-Workbench kann ein Mensch jede Entscheidung einsehen und umdrehen.",
-    prompts: [{ label: "Redaktions-Prompt: Punkte", text: AI_REVIEW_POINTS_SYSTEM }],
+    name: "Automatische Redaktion",
+    script: "extract.ts (refine)",
+    kinds: ["jev", "ki"],
+    text: "Jev prüft jeden Punkt in einer einzigen Anfrage: freigabefähig (eine Behauptung, für sich verständlich, sachlich, zum Thema, keine persönlichen Daten)? Welche Rolle — Behauptung, Einwand, Lösungsvorschlag, offene Frage —, durch welche der fünf Türen, Tatsache oder Wertung, welche Stelle im Grundmuster P1–P4? Findet Jev ein Problem, repariert es das Sprachmodell (teilen, umformulieren, streichen), und Jev prüft erneut. Die Redakteure sind Maschinen; jede Entscheidung ist protokolliert, damit ein Mensch sie jederzeit nachprüfen und umdrehen kann.",
+    prompts: [{ label: "Redaktions-Prompt (Reparatur)", text: EDITOR_SYSTEM }],
+    questions: [{ label: "Die Prüffragen je Punkt", text: questionsText(intakeRequest("…", EXAMPLE).questions) }],
+  },
+  {
+    key: "abgleich",
+    strand: "st",
+    name: "Abgleich: bekannt oder neu?",
+    script: "extract.ts (canonicalize)",
+    kinds: ["jev", "ki"],
+    text: "Jeder neue Punkt wird mit den ähnlichsten Punkten der Karte verglichen: dasselbe Argument, verwandt oder verschieden? Ab 50 % Wahrscheinlichkeit für „dasselbe“ wird zusammengeführt; Fälle zwischen 20 und 50 % entscheidet das Sprachmodell als Zweitmeinung. Unter einer Sekunde je Punkt — die Voraussetzung dafür, dass Tür 2 sofort antworten kann: „Das wurde schon gesagt“ oder „neu“.",
+    prompts: [{ label: "Abgleich-Prompt (Zweitmeinung)", text: MATCH_SYSTEM }],
+    questions: [{ label: "Wie verhält sich der neue Punkt zu einem bekannten?", text: questionsText({ bezug: { type: "score", instructions: "How does the candidate argument `candidate` relate to the existing map point `existing.pN`?", criteria: RELATION_LEVELS } }) }],
   },
 ];
 
 /** Strand A: the structure of the dispute — needs no votes. */
 const STRAND_A: Station[] = [
   {
-    key: "tueren",
-    strand: "sa",
-    name: "Fünf Türen",
-    script: "classify-cq.ts",
-    kinds: ["det", "ki"],
-    text: "Jeder Einwand wird einer der fünf kritischen Fragen zugeordnet: Empirie, Alternativen, Zielkonflikt, Machbarkeit, Wertkonflikt. Wo die Angriffskanten die Tür bereits eindeutig bestimmen, geschieht das deterministisch; nur der Rest geht ans Sprachmodell. Türen, durch die niemand gekommen ist, werden später als Lücken ausgewiesen.",
-    prompts: [{ label: "Türen-Prompt", text: CLASSIFY_CQ_SYSTEM }],
-  },
-  {
     key: "zuschnitt",
     strand: "sa",
-    name: "Maßnahmen-Zuschnitt",
-    script: "segment-measures.ts",
+    name: "Zuschnitt aus dem Entwurf",
+    script: "propose-measures-bill.ts",
     kinds: ["ki"],
-    text: "Ein Gesetzentwurf oder Maßnahmenkatalog ist selten eine einzige Entscheidung. Die Karte wird in getrennt entscheidbare Teilentscheidungen zerlegt — jede bekommt ihre eigene Landkarte; übergreifende Punkte bilden den gemeinsamen Stamm („Das Vorhaben als Ganzes“).",
-    prompts: [
-      { label: "Zuschnitt-Prompt (Vorschlag)", text: MEASURES_PROPOSE_SYSTEM },
-      { label: "Zuschnitt-Prompt (Zuordnung)", text: MEASURES_ASSIGN_SYSTEM },
+    text: "Worüber entschieden wird, steht im Entwurf: Das Sprachmodell liest den Gesetzentwurf oder die Beschlussvorlage einmal und benennt die getrennt entscheidbaren Maßnahmen — jede mit ihren Paragraphen. Jede Maßnahme bekommt ihre eigene Landkarte; dazu „Das Vorhaben als Ganzes“ und „Über den Entwurf hinaus“.",
+    note: "Im Zielverfahren bestätigt die Kommune den Zuschnitt; die KI schlägt vor.",
+    prompts: [{ label: "Zuschnitt-Prompt", text: BILL_MEASURES_SYSTEM }],
+  },
+  {
+    key: "zuordnung",
+    strand: "sa",
+    name: "Zuordnung zur Maßnahme",
+    script: "assign-measures.ts",
+    kinds: ["det", "jev", "ki"],
+    text: "Jeder Punkt kommt zu der Maßnahme, die er betrifft. Nennt er seinen Paragraphen („§ 29 Abs. 7 streichen“), ordnet der Code direkt zu; sonst entscheidet Jev — und wo Jev unsicher ist, das Sprachmodell.",
+    questions: [
+      {
+        label: "Welche Maßnahme betrifft der Punkt?",
+        text: questionsText(measureQuestion([{ name: "<Maßnahme aus dem Entwurf>", description: "<was entschieden wird>", paragraphs: [0], other: [] }])),
+      },
     ],
+  },
+  {
+    key: "bezuege",
+    strand: "sa",
+    name: "Bezüge über alle Stellungnahmen",
+    script: "relations.ts",
+    kinds: ["jev"],
+    text: "Wer stützt wen, wer greift wen an — durch welche der fünf Türen? Jev vergleicht jeden Punkt mit seinen 15 nächsten Nachbarn aus allen Stellungnahmen, beide Richtungen ausdrücklich. Mit dem Sprachmodell war das unbezahlbar; mit Jev kostet es für eine ganze Konsultation Cent-Beträge. So wird sichtbar, welches Argument wo beantwortet wird — und welches unbeantwortet steht.",
+    questions: [{ label: "Wie hängen zwei Punkte zusammen?", text: questionsText(relationRequest("…", EXAMPLE, [EXAMPLE]).questions) }],
   },
   {
     key: "verdichtung",
     strand: "sa",
-    name: "Verdichtung",
-    script: "condense-map.ts",
-    kinds: ["ki"],
-    text: "Aus den fein-granularen Extraktionspunkten (oft 50 je Stellungnahme) werden je Maßnahme 15–25 kanonische Landkarten-Punkte — die Einheit, die ein Leser im Kopf behalten und über die ein Bürger abstimmen kann. Nichts geht verloren: Jeder Extraktionspunkt bleibt als Beleg-Schicht seinem kanonischen Punkt zugeordnet.",
-    note: "Im Zielverfahren erzeugt dieser Schritt den Startbestand für die Abstimmung. Im Dauerbetrieb (T2) arbeitet die Verdichtung inkrementell: Neue Punkte werden bestehenden kanonischen Punkten zugeordnet oder der Redaktion als neue vorgeschlagen. In den bisherigen Testdaten lief die Abstimmung noch auf der feineren Ebene; die Profile werden auf die kanonischen Punkte aggregiert.",
-    prompts: [
-      { label: "Verdichtungs-Prompt", text: CONDENSE_SYSTEM },
-      { label: "Verdichtungs-Prompt (Nachzuordnung)", text: CONDENSE_ASSIGN_SYSTEM },
-    ],
+    name: "Verdichtung zu Landkarten-Punkten",
+    script: "condense.ts",
+    kinds: ["ki", "jev"],
+    text: "Je Maßnahme schreibt das Sprachmodell die Landkarten-Punkte — wenige, scharfe Sätze, über die man abstimmen kann (etwa einer je drei Extraktionspunkte, höchstens 25); alle Maßnahmen gleichzeitig. Dann ordnet Jev jeden Extraktionspunkt seinem Landkarten-Punkt zu; bleibt zu viel übrig, ergänzt das Sprachmodell einmal. Nichts geht verloren: Jeder Extraktionspunkt bleibt als Beleg-Schicht darunter.",
+    note: "Im Dauerbetrieb (T2) arbeitet die Verdichtung inkrementell: Neue Punkte werden bestehenden Landkarten-Punkten zugeordnet oder als neue vorgeschlagen.",
+    prompts: [{ label: "Verdichtungs-Prompt", text: CONDENSE_PROPOSE_SYSTEM }],
+    questions: [{ label: "Zu welchem Landkarten-Punkt gehört der Punkt?", text: questionsText(mapAssignQuestion([{ label: "<Landkarten-Punkt>" }])) }],
   },
 ];
 
-/** Strand B: the people behind the arguments — needs no doors/measures. */
+/** Strand B: the people — they vote on the Landkarten-Punkte. */
 const STRAND_B: Station[] = [
-  {
-    key: "aussagen",
-    strand: "sb",
-    name: "Abstimmbare Aussagen",
-    script: "generate-statements.ts + ai-review.ts",
-    kinds: ["ki", "gate"],
-    text: "Jeder freigegebene Punkt wird in genau eine abstimmbare Aussage übersetzt: neutral, eine Behauptung pro Aussage, zweisprachig. Auch hier prüft die Redaktion vor der Freigabe.",
-    prompts: [
-      { label: "Aussagen-Prompt", text: STATEMENT_SYSTEM },
-      { label: "Redaktions-Prompt: Aussagen", text: AI_REVIEW_STATEMENTS_SYSTEM },
-    ],
-  },
   {
     key: "tuer1",
     strand: "sb",
     name: "Tür 1: Abstimmen",
-    script: "Vote-Deck (App)",
-    kinds: ["det"],
-    text: "Die niedrigste Schwelle der Beteiligung: Aussage für Aussage zustimmen, ablehnen oder überspringen — einen Antworten-Knopf gibt es mit Absicht nicht, Streitspiralen werden strukturell verhindert.",
+    script: null,
+    kinds: ["plan"],
+    text: "Die niedrigste Schwelle der Beteiligung: über die Landkarten-Punkte selbst abstimmen — zustimmen, ablehnen oder überspringen; einen Antworten-Knopf gibt es mit Absicht nicht. Die neue App dafür ist noch nicht gebaut; die Daten liegen schon in dieser Form vor.",
   },
   {
     key: "tuer2",
@@ -176,33 +191,33 @@ const STRAND_B: Station[] = [
     name: "Tür 2: Eigene Kurzaussage",
     script: null,
     kinds: ["plan"],
-    text: "Zwei Sätze, automatisch geprüft: bekannt oder neu? Die Maschinerie dahinter — Abgleich und Redaktions-Gate — existiert und läuft im Stamm; das Bürger-Formular davor ist noch nicht gebaut.",
+    text: "Zwei Sätze, sofort geprüft: Mit Jev läuft die Strecke S1–S3 in Sekunden — bekannt oder neu, freigabefähig, wohin gehört der Punkt. Das Bürger-Formular davor ist noch nicht gebaut.",
   },
   {
     key: "tuer3",
     strand: "sb",
     name: "Tür 3: Volle Stellungnahme",
-    script: "decompose.ts",
-    kinds: ["ki"],
-    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt zurück in die Zerlegung (S1) und landet als Punkte und Belege auf derselben Karte.",
+    script: "extract.ts",
+    kinds: ["ki", "jev"],
+    text: "Der Verband, der vier Seiten mit Anlagen schickt: Die Stellungnahme fließt in die Zerlegung (S1) und durchläuft dieselbe Strecke wie alles andere.",
   },
   {
-    key: "stances",
+    key: "haltung",
     strand: "sb",
-    name: "Stance-Ableitung",
-    script: "infer-stances.ts",
-    kinds: ["ki"],
-    text: "Für bereits gelaufene Konsultationen (unsere Testdaten) wird die Haltung der Freitext-Einreicher zu den Aussagen aus ihren eigenen Texten abgeleitet und als Votum gewertet — überall als „abgeleitet“ gekennzeichnet.",
+    name: "Haltung aus Stellungnahmen",
+    script: "map-stances.ts",
+    kinds: ["jev"],
+    text: "Für eingereichte Stellungnahmen leitet Jev ab, wie jede Organisation zu jedem Landkarten-Punkt steht — Zustimmung, Ablehnung oder nicht angesprochen —, aus ihrem eigenen Text und mit Wahrscheinlichkeit. Nicht angesprochen heißt: keine Stimme. Für eine ganze Konsultation dauert das Sekunden; überall als „abgeleitet“ gekennzeichnet.",
     note: "Im echten Verfahren ergänzt diese Stufe die Live-Beteiligung (Stellungnahmen zählen mit), sie ersetzt sie nicht.",
-    prompts: [{ label: "Stance-Prompt", text: STANCE_SYSTEM }],
+    questions: [{ label: "Wie steht der Text zum Landkarten-Punkt?", text: questionsText({ haltung: stanceQuestion("<Landkarten-Punkt>") }) }],
   },
   {
     key: "analyse",
     strand: "sb",
     name: "Lager & Brücken",
-    script: "analyze.ts",
+    script: "camps.ts",
     kinds: ["det"],
-    text: "Das Polis-Verfahren: Wer ähnlich votet, bildet ein Lager (PCA + k-means, deterministisch, differentialgetestet gegen die Referenz-Implementierung). Brücken und Konfliktlinien folgen Signifikanztests; jede Aussage bekommt ein Zustimmungsprofil je Lager.",
+    text: "Das Polis-Verfahren über den Stimmen zu den Landkarten-Punkten: Wer ähnlich stimmt, bildet ein Lager (PCA + k-means, deterministisch, differentialgetestet gegen die Referenz-Implementierung). Jeder Landkarten-Punkt bekommt sein Profil je Lager direkt — gezählt, nicht gemittelt.",
   },
   {
     key: "namen",
@@ -210,7 +225,7 @@ const STRAND_B: Station[] = [
     name: "Lager-Namen",
     script: "name-camps.ts",
     kinds: ["ki"],
-    text: "Damit „Gruppe 0“ und „Gruppe 1“ lesbar werden, benennt ein Sprachmodell die Lager anhand ihrer charakteristischen Positionen — reine Benennung, keine Zahl wird angefasst.",
+    text: "Damit „Gruppe 0“ und „Gruppe 1“ lesbar werden, benennt ein Sprachmodell die Lager anhand der Punkte, die sie am deutlichsten trennen, und ihrer Mitglieder — reine Benennung, keine Zahl wird angefasst.",
     prompts: [{ label: "Lager-Namen-Prompt", text: NAME_CAMPS_SYSTEM }],
   },
 ];
@@ -222,9 +237,10 @@ const JOIN: Station[] = [
     strand: "sh",
     name: "Diagnose je Punkt — das Scharnier",
     script: "diagnose-map.ts",
-    kinds: ["det", "ki"],
-    text: "Hier treffen sich die Stränge: Die kanonischen Punkte (grüner Strang) bekommen die Zustimmungsprofile (blauer Strang) — und daraus fällt für jeden Punkt die Diagnose, aus festen Schwellen gerechnet: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen. Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Einzige KI-Beteiligung: Der Scheinbrücken-Check prüft bei Brücken, ob die sichtbaren Begründungen wirklich in dieselbe Richtung tragen; ein Fund wird als Warnung markiert — als maschinelle Markierung mit redaktionellem Prüfvermerk, nicht als Faktum.",
+    kinds: ["det", "jev", "ki"],
+    text: "Hier treffen sich Struktur und Menschen: Jeder Landkarten-Punkt hat sein Profil je Lager, gezählt („3 von 4 Organisationen dafür“), und daraus fällt die Diagnose aus festen Schwellen: Brücke der Gründe (beide Lager ≥ 60 %), klärbar durch Gutachten (Tatsachenpunkt, Lager ≥ 15 Punkte auseinander), Wertdifferenz, Kernkonflikt (die größte Wert-Differenz der Maßnahme), offen. Türen ohne einen einzigen Einwand werden zu Lücken-Punkten. Scheinbrücken: Jev prüft jede Brücke vor, nur Verdachtsfälle prüft das Sprachmodell; ein Fund wird als Warnung markiert, nicht als Faktum.",
     prompts: [{ label: "Scheinbrücken-Check-Prompt", text: REASONS_CHECK_SYSTEM }],
+    questions: [{ label: "Scheinbrücken-Vorprüfung", text: questionsText({ verdacht: REASONS_SCREEN }) }],
   },
   {
     key: "befund",
@@ -232,7 +248,7 @@ const JOIN: Station[] = [
     name: "Befund je Punkt",
     script: "diagnose-map.ts (Befund-Teil)",
     kinds: ["ki"],
-    text: "Zu jeder gerechneten Diagnose entsteht der Befund: zwei bis fünf Sätze Klartext — was die Zahlen zeigen, was daraus für das Verfahren folgt (Kurzgutachten? Ratsentscheidung? Lücke schließen?), was im Material dahintersteht. Die Diagnose selbst ist dem Modell vorgegeben und unantastbar.",
+    text: "Zu jeder gerechneten Diagnose entsteht der Befund: zwei bis fünf Sätze Klartext — was die Zählungen zeigen, was daraus für das Verfahren folgt (Kurzgutachten? Ratsentscheidung? Lücke schließen?), was im Material dahintersteht. Die Diagnose selbst ist dem Modell vorgegeben und unantastbar.",
     prompts: [{ label: "Befund-Prompt (mit Bindungsregel)", text: BEFUND_SYSTEM }],
   },
   {
@@ -241,13 +257,8 @@ const JOIN: Station[] = [
     name: "Die Landkarte",
     script: "render-landkarte.ts",
     kinds: ["det"],
-    text: "Aus den Daten wird je Maßnahme eine eigenständige Seite gebaut: das Grundmuster als Leiste, die Zone der Gutachter mit ihren Bezirken, die Zone des Rates, die Ausgestaltung — jeder Punkt mit Lagerprofil, Befund, Originalzitaten und aufklappbarer Beleg-Schicht. Reines Rendern, keine KI.",
+    text: "Je Maßnahme eine eigenständige Seite: das Grundmuster als Leiste, die Zone der Gutachter mit ihren Bezirken, die Zone des Rates, die Ausgestaltung — jeder Punkt mit Zählung je Lager, Befund, Originalzitaten samt Lager der Organisation und aufklappbarer Beleg-Schicht. Reines Rendern, keine KI.",
   },
-];
-
-const AUX: { label: string; text: string }[] = [
-  { label: "Themen-Cluster (cluster-themes.ts)", text: THEMES_PROPOSE_SYSTEM + "\n\n---\n\n" + THEMES_ASSIGN_SYSTEM },
-  { label: "Kurz-Labels (shorten-labels.ts)", text: SHORTEN_LABELS_SYSTEM },
 ];
 
 /** The Verfahren board (Zielbild, paper §8 + §12): one integrated diagram —
@@ -286,7 +297,7 @@ function outerColumns(): { before: Column[]; after: Column[] } {
         code: "T0",
         title: "T0 · Anlass & Zuschnitt",
         dur: "Woche 0",
-        text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: eine Maßnahme oder ein Katalog — jede Teilentscheidung bekommt ihre eigene Landkarte. Im Zielverfahren ist der Zuschnitt eine bewusste Entscheidung der Kommune; die KI schlägt höchstens vor.",
+        text: "Die Kommune beschließt das Verfahren und legt fest, worüber entschieden wird: Der Zuschnitt kommt aus der Beschlussvorlage selbst — jede Teilentscheidung bekommt ihre eigene Landkarte. Die KI liest den Entwurf und schlägt vor; die Kommune bestätigt.",
         cards: [n("zuschnitt")],
       },
     ],
@@ -324,7 +335,7 @@ const T12 = {
   t1: {
     title: "T1 · Vorbereitung — der Anlauf",
     dur: "≈ 2 Wochen",
-    text: "Der vorhandene Bestand — Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — läuft einmal komplett im Stapel durch die Verarbeitungsstrecke (S1–S6). Die Redaktion gibt den Startbestand frei.",
+    text: "Der vorhandene Bestand — Beschlussvorlage samt Begründung, Gutachten, Stellungnahmen aus Träger- und Verbändebeteiligung — läuft einmal komplett im Stapel durch die Verarbeitungsstrecke (S1–S6), alle Abschnitte gleichzeitig: für ein Verfahren in der Größe des Wärmeplanungsgesetzes in rund einer halben Stunde.",
   },
   t2: {
     title: "T2 · Offene Beteiligung — der Dauerbetrieb",
@@ -332,9 +343,9 @@ const T12 = {
     text: "Dieselbe Strecke läuft weiter, jetzt gespeist aus den drei Türen — je Beitrag statt im Stapel. Neue Punkte gehen nach Freigabe selbst in die Abstimmung: der Rückkanal, keine eingefrorene Landkarte.",
     sat: "endet bei Sättigung, nicht nach Kalender — „es kommt seit zehn Tagen nichts Neues mehr“ (§10)",
   },
-  strecke: ["zerlegung", "bezuege", "redaktion", "tueren", "verdichtung", "aussagen"].map(n),
+  strecke: ["zerlegung", "redaktion", "abgleich", "zuordnung", "bezuege", "verdichtung"].map(n),
   t1Only: ["import"].map(n),
-  t2Only: ["tuer1", "tuer2", "tuer3", "stances"].map(n),
+  t2Only: ["tuer1", "tuer2", "tuer3", "haltung"].map(n),
   t2Minis: [
     {
       label: "↻ Lagerbildung",
@@ -408,12 +419,19 @@ function badge(k: Kind): string {
 }
 
 function stationHtml(s: Station, code: string): string {
-  const prompts = (s.prompts ?? [])
-    .map(
-      (p) =>
-        `<details class="prompt"><summary>Prompt ansehen: ${esc(p.label)}</summary><pre>${esc(p.text)}</pre></details>`,
-    )
-    .join("");
+  const prompts =
+    (s.prompts ?? [])
+      .map(
+        (p) =>
+          `<details class="prompt"><summary>Prompt ansehen: ${esc(p.label)}</summary><pre>${esc(p.text)}</pre></details>`,
+      )
+      .join("") +
+    (s.questions ?? [])
+      .map(
+        (q) =>
+          `<details class="prompt prompt-jev"><summary>Jev-Fragen ansehen: ${esc(q.label)}</summary><pre>${esc(q.text)}</pre></details>`,
+      )
+      .join("");
   return `<div class="station strand-${s.strand}${s.kinds.includes("plan") ? " station-plan" : ""}" id="st-${s.key}">
     <div class="station-head">
       <span class="station-num">${code}</span>
@@ -430,11 +448,6 @@ function stationHtml(s: Station, code: string): string {
 function main() {
   const outDir = resolve(arg("out") ?? "../../../docs/landkarte");
   mkdirSync(outDir, { recursive: true });
-
-  const aux = AUX.map(
-    (a) =>
-      `<details class="prompt"><summary>${esc(a.label)}</summary><pre>${esc(a.text)}</pre></details>`,
-  ).join("");
 
   const today = new Date().toLocaleDateString("de-DE", {
     year: "numeric",
@@ -492,6 +505,7 @@ function main() {
   .note { color:#9A6A14; background:#FBF3E0; border-radius:.4rem; padding:.4rem .55rem; font-size:.74rem !important; }
   details.prompt { margin-top:.45rem; font-size:.78rem; }
   details.prompt summary { cursor:pointer; color:#1E4A7A; }
+  details.prompt-jev summary { color:#4B2E83; }
   details.prompt pre { white-space:pre-wrap; background:#F1EFE8; border:1px solid #E3E1D8;
     border-radius:.5rem; padding:.6rem .8rem; font-size:.68rem; line-height:1.5; margin:.35rem 0 0; }
   .mini { display:block; background:transparent; border:1px dashed #B4B8A9; border-radius:.6rem;
@@ -546,11 +560,13 @@ function main() {
     Kommune es erlebt — von Anlass bis Ratsentscheidung (Zielbild nach §8 und §12 des Konzeptpapiers) —
     und <strong>unter jedem Zeitblock die Pipeline-Stufen</strong>, die dort arbeiten. Die farbige Kante
     jeder Karte zeigt den Strang: Die Struktur des Streits und die Menschen dahinter (die Komplementarität
-    aus §7) laufen unabhängig voneinander und treffen sich erst im Scharnier der Diagnose. Jede KI-Stufe
-    zeigt den tatsächlichen System-Prompt, direkt aus dem Code eingebettet; jede Stufe ist wiederholbar
-    und protokolliert ihre Entscheidungen im Audit-Log.</p>
-  <p class="principle">Das Vertrauensprinzip auf jeder Ebene: <strong>Die Maschine schlägt vor, der Mensch gibt frei.
-    Die Diagnosen werden gerechnet, nicht gemeint. Wertungsfragen entscheidet die Maschine nie.</strong></p>
+    aus §7): Die Struktur bringt die Landkarten-Punkte hervor, die Menschen stimmen über sie ab, beides trifft
+    sich im Scharnier der Diagnose. Jede Stufe zeigt, wer entscheidet: das Sprachmodell schreibt, Jev
+    entscheidet mit Wahrscheinlichkeit, der Code rechnet — mit den tatsächlichen Prompts und Jev-Fragen,
+    direkt aus dem Code eingebettet. Jede Stufe ist wiederholbar und protokolliert ihre Entscheidungen.</p>
+  <p class="principle">Das Vertrauensprinzip auf jeder Ebene: <strong>Das Sprachmodell schreibt, Jev entscheidet,
+    der Code rechnet. Die Diagnosen werden gerechnet, nicht gemeint. Wertungsfragen entscheidet die Maschine nie.
+    Jede Entscheidung ist protokolliert — ein Mensch kann jede nachprüfen und umdrehen.</strong></p>
   <div class="legend">${(Object.keys(KIND) as Kind[]).map(badge).join("")}</div>
 
   <h2 class="seg-title">Das Verfahren — und die Maschine darunter</h2>
@@ -564,16 +580,11 @@ function main() {
     ].join(""); })()}</div>
   </div>
   <p class="strand-legend">Kartenkante = Strang: <i style="color:#6B6E76">▍</i> Stamm ·
-    <i style="color:#0F6E56">▍</i> Struktur des Streits (läuft ohne Voten) ·
-    <i style="color:#1E4A7A">▍</i> die Menschen dahinter (läuft ohne Türen/Zuschnitt) ·
-    <i style="color:#9A6A14">▍</i> Scharnier &amp; Bericht (Struktur × Lagerprofile) —
-    die Stränge sind unabhängig und treffen sich erst in der Diagnose ·
+    <i style="color:#0F6E56">▍</i> Struktur des Streits (bringt die Landkarten-Punkte hervor) ·
+    <i style="color:#1E4A7A">▍</i> die Menschen dahinter (stimmen über die Landkarten-Punkte ab) ·
+    <i style="color:#9A6A14">▍</i> Scharnier &amp; Bericht (Struktur × Lagerprofile) ·
     gestrichelte Karten = geplant · ↻ = läuft im Fenster durchgehend als Dienst</p>
 
-  <section class="aux">
-    <h2>Hilfsstufen (Darstellung, keine Inhalte)</h2>
-    ${aux}
-  </section>
   <p class="foot">Alle Stufen quelloffen (MIT) unter github.com/flotob/policy-platform · Lagermathematik als
     differentialgetestete Portierung des Polis-Verfahrens · Dieses Dokument wird generiert
     (render-pipeline.ts) — die Prompt-Texte sind zwangsläufig aktuell.</p>

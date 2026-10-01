@@ -21,9 +21,10 @@
  */
 
 import { createDb, sql, type Db } from "@policy/db";
-import { AgentSdkProvider, choice, JevJudge } from "@policy/llm";
+import { AgentSdkProvider, JevJudge } from "@policy/llm";
 
 import { deriveBezirk } from "../src/jev-grammar.ts";
+import { MAP_ASSIGN_FAMILY, mapAssignQuestion } from "../src/jev-map.ts";
 import { resolveConsultation, saveJudgment } from "../src/jev-stage.ts";
 import { runPool } from "../src/pool.ts";
 import { CONDENSE_PROPOSE_SYSTEM, condensePrompt, condenseTopUpPrompt } from "../src/prompts.ts";
@@ -34,7 +35,6 @@ function arg(name: string): string | undefined {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 }
 
-export const MAP_ASSIGN_FAMILY = "map-assign.v1";
 /** Above this share of uncovered points, the LLM gets one top-up round. */
 const TOP_UP_ABOVE = 0.15;
 const BEZIRK_ORDER = ["wirkung", "machbarkeit", "kosten", "alternativen", "wert", "ausgestaltung"];
@@ -55,15 +55,6 @@ interface Mp {
   bezirk: string;
 }
 
-function assignQuestion(mps: Mp[]) {
-  const criteria: Record<string, string> = {};
-  mps.forEach((m, i) => {
-    criteria[`k${i + 1}`] = `\`point\` expresses, supports, details, or restates the canonical point "${m.label}" (\`map_points.k${i + 1}\`).`;
-  });
-  criteria.none = "`point` fits none of the canonical map points.";
-  return { map_point: choice("Which canonical map point of this measure does `point` belong to?", criteria) };
-}
-
 async function assign(
   db: Db,
   judge: JevJudge,
@@ -80,7 +71,7 @@ async function assign(
     async (p) => {
       const { answers, provenance } = await judge.judge(
         { measure: scope, point: { label: p.label, summary: p.summary }, map_points: options },
-        assignQuestion(mps),
+        mapAssignQuestion(mps),
       );
       const a = answers.map_point as { choice: string; confidence: number };
       const mp = a.choice === "none" ? null : mps[Number(a.choice.slice(1)) - 1]!;

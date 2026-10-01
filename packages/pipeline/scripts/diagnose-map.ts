@@ -22,7 +22,7 @@
  */
 
 import { createDb, sql } from "@policy/db";
-import { AgentSdkProvider, JevJudge, noul } from "@policy/llm";
+import { AgentSdkProvider, JevJudge } from "@policy/llm";
 
 import {
   BEFUND_SYSTEM,
@@ -39,6 +39,7 @@ import {
 } from "../src/schemas.ts";
 import { runPool } from "../src/pool.ts";
 import { saveJudgment } from "../src/jev-stage.ts";
+import { REASONS_SCREEN, REASONS_SCREEN_MIN } from "../src/jev-map.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -53,17 +54,6 @@ const AGREE_FLOOR = 60;
 const KERN_MIN_GAP = 30;
 /** Direct votes (map-points engine): a camp profile needs this many voters per camp — 2, or half of a camp smaller than 4. */
 const minCampVoters = (size: number) => Math.min(2, Math.max(1, Math.ceil(size / 2)));
-/** Jev pre-screen: below this P(diverging reasons) the LLM reasons check is skipped. */
-const REASONS_SCREEN_MIN = 0.25;
-
-const REASONS_SCREEN = noul(
-  "Do the points in `members` and the quotes in `quotes` back the claim in `claim` for DIVERGING reasons that cannot both be satisfied — e.g. one side wants a transition period so that the obligation arrives cleanly, the other so that it never arrives?",
-  {
-    true: "The supporters agree with the claim but want different, ultimately incompatible things from it; the agreement would break at the first design question.",
-    false: "The supporters agree for the same or compatible reasons, or the material shows no sign of diverging motives.",
-  },
-);
-
 const DOORS: Record<
   string,
   { bezirk: string; label: string; text: string }
