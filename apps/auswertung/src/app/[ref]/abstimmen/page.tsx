@@ -37,7 +37,7 @@ export default async function Abstimmen({
           <a href={base}>Lagebild</a> / Wo stehen Sie?
         </p>
         <h1>Wo stehen Sie?</h1>
-        <p className="lead">Für diese Anhörung gibt es noch keine Streitfragen zum Abstimmen.</p>
+        <p className="lead">Für diese {o.procedure} gibt es noch keine Streitfragen zum Abstimmen.</p>
       </header>
     );
   }

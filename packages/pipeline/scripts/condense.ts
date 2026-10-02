@@ -33,7 +33,7 @@ import { deriveBezirk } from "../src/jev-grammar.ts";
 import { MAP_ASSIGN_FAMILY, MAP_DEDUPE_FAMILY, mapAssignQuestion, mergeGroups, sameQuestion } from "../src/jev-map.ts";
 import { judgeAll, resolveConsultation, saveJudgment, sinceReset, statsLine, type StageStats } from "../src/jev-stage.ts";
 import { STANCE_BATCH, decideStance, stanceQuestion, type StanceProbs } from "../src/jev-stance.ts";
-import type { BillMeasure } from "../src/measures.ts";
+import { draftKindOf, type BillMeasure, type DraftKind } from "../src/measures.ts";
 import { chunkText } from "../src/pipeline.ts";
 import { runPool } from "../src/pool.ts";
 import { CONDENSE_PROPOSE_SYSTEM, MAP_POINTS_MAX, condenseQuestionsPrompt } from "../src/prompts.ts";
@@ -45,6 +45,21 @@ function arg(name: string): string | undefined {
 }
 
 export const POINT_STANCE_FAMILY = "point-stance.v1";
+/**
+ * Weighing asks every statement about every point of a measure — fine for a
+ * hearing (11 statements), not for 487 senders × hundreds of points. Above
+ * this many statements a measure is weighed by a panel: the organisations and
+ * the private persons with the most points in it (WEIGH_PANEL_PRIVATE of the
+ * seats go to private persons, so citizens' objections count too).
+ */
+export const WEIGH_PANEL = 40;
+const WEIGH_PANEL_PRIVATE = 10;
+/**
+ * The proposal prompt lists at most this many extraction points: the ones with
+ * the most voices (said + for + against), in their original order. Weight
+ * decides what gets on the map anyway; Jev still assigns every point.
+ */
+export const PROPOSE_POINTS_MAX = 900;
 const BEZIRK_ORDER = ["wirkung", "machbarkeit", "kosten", "alternativen", "wert", "ausgestaltung"];
 /** Same-question pairs per Jev request (all proposals ride in the state). */
 const DEDUPE_BATCH = 60;
@@ -120,6 +135,21 @@ interface Sub {
   id: string;
   org: string;
   text: string;
+  private: boolean;
+}
+
+/** The statements that weigh a measure: all of them, or a panel of the most engaged (WEIGH_PANEL). */
+export function weighPanel<S extends { org: string; private: boolean }>(subs: S[], pointsBy: Map<string, number>): S[] {
+  if (subs.length <= WEIGH_PANEL) return subs;
+  const ranked = subs
+    .filter((s) => (pointsBy.get(s.org) ?? 0) > 0)
+    .sort((a, b) => (pointsBy.get(b.org) ?? 0) - (pointsBy.get(a.org) ?? 0) || a.org.localeCompare(b.org));
+  const priv = ranked.filter((s) => s.private).slice(0, WEIGH_PANEL_PRIVATE);
+  const orgs = ranked.filter((s) => !s.private).slice(0, WEIGH_PANEL - priv.length);
+  // Seats private persons leave empty go to organisations, and the other way round.
+  const panel = [...orgs, ...priv];
+  for (const s of ranked) if (panel.length < WEIGH_PANEL && !panel.includes(s)) panel.push(s);
+  return panel;
 }
 export type Weight = { agree: string[]; disagree: string[] };
 
@@ -243,12 +273,12 @@ async function main() {
       AND payload ? 'details' AND a.created_at > ${sinceReset(cons.id)}
     ORDER BY created_at DESC LIMIT 1
   `);
-  const bill = new Map(
-    ((billRes.rows[0] as { payload: { details: BillMeasure[] } } | undefined)?.payload.details ?? []).map((m) => [m.name, m.description]),
-  );
+  const billPayload = (billRes.rows[0] as { payload: { details: BillMeasure[]; source?: { kind?: DraftKind } } } | undefined)?.payload;
+  const bill = new Map((billPayload?.details ?? []).map((m) => [m.name, m.description]));
+  const draftKind = draftKindOf(billPayload);
 
   const subRes = await db.execute(sql`
-    SELECT id, COALESCE(author_org, 'Stellungnahme') AS org, text FROM submissions
+    SELECT id, COALESCE(author_org, 'Stellungnahme') AS org, text, author_type = 'PRIVATE' AS private FROM submissions
     WHERE consultation_id = ${cons.id} AND text IS NOT NULL ORDER BY length(text) DESC
   `);
   const subs = subRes.rows as unknown as Sub[];
@@ -285,11 +315,24 @@ async function main() {
       let proposedNow = 0;
       let mergedNow = 0;
       if (mps.length === 0) {
-        const { weights, stats } = await weigh(db, judge, cons, scope, pts, subs);
-        console.log(`    ${scope}: weight ${statsLine(stats)}`);
+        const pointsBy = new Map<string, number>();
+        for (const p of pts) for (const o of p.orgs) pointsBy.set(o, (pointsBy.get(o) ?? 0) + 1);
+        const panel = weighPanel(subs, pointsBy);
+        const { weights, stats } = await weigh(db, judge, cons, scope, pts, panel);
+        console.log(`    ${scope}: weight${panel.length < subs.length ? ` (panel of ${panel.length} of ${subs.length} statements)` : ""} ${statsLine(stats)}`);
+        const weighted = pts.map((p) => ({ ...p, ...weights.get(p.id)! }));
+        const voices = (p: (typeof weighted)[number]) => new Set([...p.orgs, ...p.agree, ...p.disagree]).size;
+        const listed =
+          weighted.length <= PROPOSE_POINTS_MAX
+            ? weighted
+            : (() => {
+                const keep = new Set([...weighted].sort((a, b) => voices(b) - voices(a)).slice(0, PROPOSE_POINTS_MAX));
+                return weighted.filter((p) => keep.has(p));
+              })();
+        if (listed.length < weighted.length) console.log(`    ${scope}: proposal lists the ${listed.length} points with most voices of ${weighted.length}`);
         const r = await provider.generateStructured({
           system: CONDENSE_PROPOSE_SYSTEM,
-          prompt: condenseQuestionsPrompt(scope, bill.get(scope) ?? null, pts.map((p) => ({ ...p, ...weights.get(p.id)! }))),
+          prompt: condenseQuestionsPrompt(scope, bill.get(scope) ?? null, listed, draftKind, weighted.length - listed.length),
           schema: condenseProposeJsonSchema,
         });
         const proposals = condenseProposeOutput.parse(r.output).map_points;

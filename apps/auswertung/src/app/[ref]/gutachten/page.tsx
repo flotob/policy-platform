@@ -56,7 +56,7 @@ export default async function Gutachten({ params }: { params: Promise<{ ref: str
             Ressortabstimmung beginnt. Was danach noch strittig ist, ist der politische Kern.
           </p>
         ) : (
-          <p className="lead">In dieser Anhörung trennt keine Tatsachenfrage die beiden Lager. Was strittig ist, sind Wertungen und die Ausgestaltung.</p>
+          <p className="lead">In dieser {o.procedure} trennt keine Tatsachenfrage die beiden Lager. Was strittig ist, sind Wertungen und die Ausgestaltung.</p>
         )}
         <p className="rep-ag-stand small muted">
           {shortTitle(o.title)}

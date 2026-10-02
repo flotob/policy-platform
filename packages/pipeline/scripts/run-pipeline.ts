@@ -31,6 +31,7 @@
  *     [--until <stage>]     stop after this stage
  *     [--only <a,b,...>]    run exactly these stages
  *     [--submissions <id|source_ref,...>]  --jev: extract/canonicalize only these (test runs)
+ *     [--editor-concurrency 4]  --jev: parallel LLM editor calls (refine, duplicate second opinions)
  *     [--render-out <dir>]  --jev: write the Landkarten here instead of docs/landkarte
  *     [--jev]               judgment stages via Jev (see above)
  *     [--list]              print stage names and exit
@@ -81,10 +82,11 @@ function stages(consultation: string, limit: string, concurrency: string, jev: b
   const analyze = { name: "analyze", cwd: platformDir, script: path.join(platformDir, "scripts", "analyze.ts"), args: c };
   if (jev) {
     const subs = arg("submissions") ? ["--submissions", arg("submissions")!] : [];
+    const editors = arg("editor-concurrency") ? ["--editor-concurrency", arg("editor-concurrency")!] : [];
     const out = arg("render-out") ? ["--out", arg("render-out")!] : [];
     return [
-      { name: "extract", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "extract", "--concurrency", concurrency, ...subs] },
-      { name: "canonicalize", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "canonicalize", ...subs] },
+      { name: "extract", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "extract", "--concurrency", concurrency, ...editors, ...subs] },
+      { name: "canonicalize", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "canonicalize", ...editors, ...subs] },
       { name: "measures", cwd: pipelineDir, script: p("propose-measures-bill.ts"), args: c },
       { name: "assign-measures", cwd: pipelineDir, script: p("assign-measures.ts"), args: c },
       { name: "relations", cwd: pipelineDir, script: p("relations.ts"), args: c },

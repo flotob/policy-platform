@@ -53,6 +53,10 @@ export interface Overview {
   id: string;
   ref: string;
   title: string;
+  /** What the procedure is called in the interface: a hearing (Bundestag) or a consultation (ministry). Both "die …". */
+  procedure: "Anhörung" | "Konsultation";
+  /** The draft under consultation: a law (sections) or a strategy (fields of action). */
+  draft: { kind: "law" | "strategy"; title: string };
   orgs: Org[];
   camps: Camp[];
   measures: MeasureSummary[];

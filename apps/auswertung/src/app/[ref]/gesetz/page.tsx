@@ -2,10 +2,13 @@ import { DiagLabel, nf } from "@policy/landkarte";
 import { billMeasures, type MeasureSummary } from "@policy/landkarte/data";
 import { firstSentence, loadBill, type LawSection, type LawSegment, type SectionHeat } from "@policy/landkarte/data/bill";
 
+import { sql } from "@policy/db";
+
 import { Row } from "@/components/rows";
 import { getDb } from "@/lib/db";
 import { overview } from "@/lib/load";
 
+import { StrategyView } from "./Strategy";
 import "./styles.css";
 
 type Section = LawSection & { heat: SectionHeat };
@@ -159,6 +162,12 @@ export default async function Gesetz({ params }: { params: Promise<{ ref: string
   const o = await overview(ref);
   const base = `/${o.ref}`;
   const db = getDb();
+  if (o.draft.kind === "strategy") {
+    const documents = (
+      await db.execute(sql`SELECT kind, source_url AS "sourceUrl" FROM consultation_documents WHERE consultation_id = ${o.id}`)
+    ).rows as { kind: string; sourceUrl: string | null }[];
+    return <StrategyView o={o} bill={await billMeasures(db, o.id)} documents={documents} />;
+  }
   const bill = await loadBill(db, o.id);
 
   const head = (
@@ -173,7 +182,7 @@ export default async function Gesetz({ params }: { params: Promise<{ ref: string
     return (
       <>
         {head}
-        <p className="prose">Zu dieser Anhörung liegt der Text des Gesetzentwurfs nicht vor.</p>
+        <p className="prose">Zu dieser {o.procedure} liegt der Text des Gesetzentwurfs nicht vor.</p>
       </>
     );
   }

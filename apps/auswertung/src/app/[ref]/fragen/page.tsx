@@ -28,7 +28,7 @@ export default async function Fragen({ params }: { params: Promise<{ ref: string
         <h1>Frag die Landkarte</h1>
         <p className="lead">
           Fragen Sie in eigenen Worten nach einem Thema, einer Organisation oder einer Streitfrage: Die Antwort stützt sich nur auf die Stellungnahmen
-          dieser Anhörung; jeder Satz nennt seine Quelle.
+          dieser {o.procedure}; jeder Satz nennt seine Quelle.
         </p>
       </header>
 

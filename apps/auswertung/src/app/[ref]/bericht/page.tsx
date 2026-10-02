@@ -36,7 +36,7 @@ const fmtDate = (d: Date) => new Intl.DateTimeFormat("de-DE", { dateStyle: "long
 export async function generateMetadata({ params }: { params: Promise<{ ref: string }> }): Promise<Metadata> {
   const { ref } = await params;
   const o = await overview(ref);
-  return { title: `Bericht zur Anhörung: ${shortTitle(o.title)} — Landkarte des Streits` };
+  return { title: `Bericht zur ${o.procedure}: ${shortTitle(o.title)} — Landkarte des Streits` };
 }
 
 /** "die 8 Kernkonflikte" / "der Kernkonflikt" — subject phrases for the recommendation sentence. */
@@ -184,7 +184,7 @@ export default async function Bericht({ params }: { params: Promise<{ ref: strin
         <p className="crumbs no-print">
           <a href={base}>Lagebild</a> / Bericht zum Drucken
         </p>
-        <p className="rep-kicker-title">Bericht zur Anhörung</p>
+        <p className="rep-kicker-title">Bericht zur {o.procedure}</p>
         <h1>{o.title}</h1>
         <dl className="rep-meta">
           <div>
@@ -341,7 +341,7 @@ export default async function Bericht({ params }: { params: Promise<{ ref: strin
           {gaps.length ? (
             <li>
               <p>
-                <strong>Nachfragen.</strong> Diese kritischen Fragen hat in der Anhörung niemand gestellt:
+                <strong>Nachfragen.</strong> Diese kritischen Fragen hat in der {o.procedure} niemand gestellt:
               </p>
               <ul>
                 {groupByMeasure(gaps, o.measures)
@@ -452,7 +452,7 @@ export default async function Bericht({ params }: { params: Promise<{ ref: strin
         lead={
           <p>
             Jeder Einwand kommt durch eine von fünf kritischen Fragen: ob die Wirkung eintritt, ob ein anderes Mittel besser wäre, ob ein anderes Ziel leidet, ob
-            es sich umsetzen lässt und ob der Wert den Preis rechtfertigt. Die folgenden hat in der Anhörung zu der jeweiligen Teilentscheidung niemand gestellt.
+            es sich umsetzen lässt und ob der Wert den Preis rechtfertigt. Die folgenden hat in der {o.procedure} zu der jeweiligen Teilentscheidung niemand gestellt.
             Das kann die wichtigste Erkenntnis sein: Hier sollte man aktiv nachfragen.
           </p>
         }

@@ -1,7 +1,7 @@
 import { sql, type Db } from "@policy/db";
 
 import { verdictOf } from "../verdict.ts";
-import { displayScope, shortOrg, slugOf, WHOLE, BEYOND, type Diag } from "../vocab.ts";
+import { displayScope, shortNames, slugOf, WHOLE, BEYOND, type Diag } from "../vocab.ts";
 import type { Camp, MeasureSummary, Org, Overview } from "./types.ts";
 
 type Row = Record<string, unknown>;
@@ -11,16 +11,35 @@ export interface ConsultationRef {
   id: string;
   ref: string;
   title: string;
+  sourceSystem: string | null;
 }
 
 /** A consultation by its stable source_ref (e.g. "302875") or its UUID. */
 export async function findConsultation(db: Db, ref: string): Promise<ConsultationRef | null> {
-  const r = await rows<{ id: string; title: string; source_ref: string | null }>(db, sql`
-    SELECT id, title, source_ref FROM consultations
+  const r = await rows<{ id: string; title: string; source_ref: string | null; source_system: string | null }>(db, sql`
+    SELECT id, title, source_ref, source_system FROM consultations
     WHERE id::text = ${ref} OR source_ref = ${ref}
     ORDER BY created_at DESC LIMIT 1`);
   const c = r[0];
-  return c ? { id: c.id, ref: c.source_ref ?? c.id, title: c.title } : null;
+  return c ? { id: c.id, ref: c.source_ref ?? c.id, title: c.title, sourceSystem: c.source_system } : null;
+}
+
+/** The draft under consultation, from its documents: a bill, else a draft strategy. */
+export async function draftOf(db: Db, consultationId: string): Promise<{ kind: "law" | "strategy"; title: string }> {
+  const kinds = (await rows<{ kind: string }>(db, sql`SELECT DISTINCT kind FROM consultation_documents WHERE consultation_id = ${consultationId}`)).map((r) => r.kind);
+  return kinds.includes("drucksache:Gesetzentwurf") || !kinds.includes("strategie:Entwurf")
+    ? { kind: "law", title: "Das Gesetz" }
+    : { kind: "strategy", title: "Die Strategie" };
+}
+
+/** Consultations the app can show: those with a Landkarte. */
+export async function listConsultations(db: Db): Promise<{ ref: string; title: string; statements: number; mapPoints: number; measures: number }[]> {
+  return rows(db, sql`
+    SELECT COALESCE(c.source_ref, c.id::text) AS ref, c.title,
+      (SELECT count(*) FROM submissions s WHERE s.consultation_id = c.id AND s.text IS NOT NULL)::int AS statements,
+      count(m.*)::int AS "mapPoints", count(DISTINCT m.scope)::int AS measures
+    FROM consultations c JOIN map_points m ON m.consultation_id = c.id AND m.typ <> 'luecke'
+    GROUP BY c.id ORDER BY max(m.created_at) ASC`);
 }
 
 export interface AnalysisResult {
@@ -50,13 +69,14 @@ export async function loadOrgs(db: Db, consultationId: string, analysis: Analysi
     WHERE s.consultation_id = ${consultationId} AND s.text IS NOT NULL
     ORDER BY length(s.text) DESC`);
   const groupOf = new Map((analysis?.participantGroups ?? []).map((p) => [p.participant, p.group]));
+  const short = shortNames(subs.map((s) => s.author_org ?? "Stellungnahme"));
   return subs.map((s) => {
     const name = s.author_org ?? "Stellungnahme";
     return {
       submissionId: s.id,
       participantId: s.pid,
       name,
-      short: shortOrg(name),
+      short: short.get(name)!,
       type: s.author_type,
       chars: s.chars,
       points: s.points,
@@ -172,8 +192,11 @@ export async function loadOverview(db: Db, ref: string): Promise<Overview | null
                            WHERE a.point_id = e.from_point AND b.point_id = e.to_point))::int AS cross_relations`)
   )[0]!;
   const chars = orgs.reduce((s, o) => s + o.chars, 0);
+  const { sourceSystem, ...cons } = c;
   return {
-    ...c,
+    ...cons,
+    procedure: sourceSystem === "harvester:dip" ? "Anhörung" : "Konsultation",
+    draft: await draftOf(db, c.id),
     orgs,
     camps,
     measures,

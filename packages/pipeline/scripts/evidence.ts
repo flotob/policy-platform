@@ -16,6 +16,7 @@ import { createDb, sql, type Db } from "@policy/db";
 import { choice, JevJudge } from "@policy/llm";
 
 import { judgeAll, resolveConsultation, saveJudgment, statsLine } from "../src/jev-stage.ts";
+import { DRAFT_DOCUMENT_KINDS, type DraftKind } from "../src/measures.ts";
 
 function arg(name: string): string | undefined {
   const idx = process.argv.indexOf(`--${name}`);
@@ -28,10 +29,16 @@ const BATCH = 20;
 /** Below this probability of "no evidence" a source counts as evidenced. */
 export const EVIDENCED_BELOW = 0.5;
 
-export function evidenceQuestion(key: string) {
+/** What `draft` is and how a passage points at it (law wording unchanged since v2). */
+const DRAFT_REFS: Record<DraftKind, string> = {
+  law: `The draft law under discussion is \`draft\`: a reference to its own sections ("§ 29", "§ 13 Absatz 4", "der Entwurf", "WPG-E") only says WHAT is discussed and is never evidence. A demand to change a section is never evidence.`,
+  strategy: `The draft strategy under discussion is \`draft\`: a reference to its own parts ("Handlungsfeld 3.4", "Kapitel 3", "der Entwurf", "die Strategie") only says WHAT is discussed and is never evidence. A demand to change the strategy is never evidence.`,
+};
+
+export function evidenceQuestion(key: string, kind: DraftKind = "law") {
   return choice(
     {
-      task: `What evidence does the quoted passage in \`sources.${key}.quote\` give for the argument in \`sources.${key}.argument\`? Judge only what the passage itself contains. The draft law under discussion is \`draft\`: a reference to its own sections ("§ 29", "§ 13 Absatz 4", "der Entwurf", "WPG-E") only says WHAT is discussed and is never evidence. A demand to change a section is never evidence.`,
+      task: `What evidence does the quoted passage in \`sources.${key}.quote\` give for the argument in \`sources.${key}.argument\`? Judge only what the passage itself contains. ${DRAFT_REFS[kind]}`,
     },
     {
       data: `\`sources.${key}.quote\` presents concrete figures, measurements, or statistics AND their basis (a named source, a calculation, a survey) — a bare number or estimate without basis does not count.`,
@@ -65,6 +72,10 @@ async function main() {
                       AND j.family = ${SOURCE_EVIDENCE_FAMILY})
     ORDER BY ps.created_at`);
   const srcs = res.rows as unknown as Src[];
+  // The draft under consultation: a law (WPG) or a strategy (its title is the consultation's).
+  const docKinds = (await db.execute(sql`SELECT DISTINCT kind FROM consultation_documents WHERE consultation_id = ${cons.id}`)).rows.map((r) => (r as { kind: string }).kind);
+  const draftKind: DraftKind = docKinds.includes("drucksache:Gesetzentwurf") ? "law" : (docKinds.map((k) => DRAFT_DOCUMENT_KINDS[k]).find(Boolean) ?? "law");
+  const draft = draftKind === "law" ? "Entwurf eines Gesetzes für die Wärmeplanung (Wärmeplanungsgesetz, WPG-E)" : `Entwurf: ${cons.title}`;
   console.log(`${srcs.length} source quotes to judge`);
   const batches: Src[][] = [];
   for (let o = 0; o < srcs.length; o += BATCH) batches.push(srcs.slice(o, o + BATCH));
@@ -74,8 +85,8 @@ async function main() {
     new JevJudge(),
     batches,
     (b) => ({
-      state: { draft: "Entwurf eines Gesetzes für die Wärmeplanung (Wärmeplanungsgesetz, WPG-E)", sources: Object.fromEntries(b.map((s, i) => [`s${i + 1}`, { argument: s.summary ?? s.label, quote: s.quote }])) },
-      questions: Object.fromEntries(b.map((_, i) => [`s${i + 1}`, evidenceQuestion(`s${i + 1}`)])),
+      state: { draft, sources: Object.fromEntries(b.map((s, i) => [`s${i + 1}`, { argument: s.summary ?? s.label, quote: s.quote }])) },
+      questions: Object.fromEntries(b.map((_, i) => [`s${i + 1}`, evidenceQuestion(`s${i + 1}`, draftKind)])),
     }),
     async (b, answers, provenance) => {
       await db.transaction(async (tx) => {

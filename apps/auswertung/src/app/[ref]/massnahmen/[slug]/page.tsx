@@ -123,7 +123,7 @@ export default async function Massnahme({ params }: { params: Promise<{ ref: str
             .map((p) => (
               <Row key={p.id} margin={<DiagLabel diag="luecke" />}>
                 <p className="row-text">{p.text.replace(/ — Diese kritische Frage hat im Verfahren niemand gestellt\.$/, "")}</p>
-                <p className="small muted">Diese kritische Frage hat in der Anhörung niemand gestellt.</p>
+                <p className="small muted">Diese kritische Frage hat in der {o.procedure} niemand gestellt.</p>
               </Row>
             ))}
         </section>

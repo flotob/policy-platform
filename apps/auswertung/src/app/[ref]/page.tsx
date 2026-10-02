@@ -9,9 +9,22 @@ import { overview } from "@/lib/load";
 
 const TOP = 5;
 
+/** A camp's members: organisations by name, private persons only counted. */
+function membersOf(names: string[], privateNames: Set<string>) {
+  const orgs = names.filter((n) => !privateNames.has(n));
+  const people = names.length - orgs.length;
+  const n = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  const count = [orgs.length ? n(orgs.length, "Organisation", "Organisationen") : null, people ? n(people, "Privatperson", "Privatpersonen") : null]
+    .filter(Boolean)
+    .join(" und ");
+  const list = people ? `${orgs.join(", ")}${orgs.length ? " und " : ""}${n(people, "Privatperson", "Privatpersonen")}` : orgs.join(", ");
+  return { count, list };
+}
+
 export default async function Lagebild({ params }: { params: Promise<{ ref: string }> }) {
   const { ref } = await params;
   const o = await overview(ref);
+  const privateNames = new Set(o.orgs.filter((x) => x.type === "PRIVATE").map((x) => x.name));
   const base = `/${o.ref}`;
   const all = await loadAllMapPoints(getDb(), o.id);
   const evidence = await loadEvidence(getDb(), o.id);
@@ -51,7 +64,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
     <>
       <header className="page-head">
         <p className="crumbs">Lagebild</p>
-        <h1>Was die Anhörung ergibt</h1>
+        <h1>Was die {o.procedure} ergibt</h1>
         <p className="lead">
           {o.stats.statements} Organisationen haben zum Entwurf Stellung genommen, zusammen rund {nf.format(s.pages)} Seiten. Daraus
           wurden {nf.format(s.points)} einzelne Argumente, verdichtet zu {nf.format(s.mapPoints)} Streitfragen in {o.measures.length}{" "}
@@ -134,7 +147,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
         <section>
           <h2>Niemand hat gefragt: {gaps.length} Lücken</h2>
           <p className="prose">
-            Jeder Einwand kommt durch eine von fünf kritischen Fragen. Diese hat in der Anhörung zu der jeweiligen Teilentscheidung niemand gestellt. Das kann die
+            Jeder Einwand kommt durch eine von fünf kritischen Fragen. Diese hat in der {o.procedure} zu der jeweiligen Teilentscheidung niemand gestellt. Das kann die
             wichtigste Erkenntnis sein: Hier sollte man aktiv nachfragen.
           </p>
           {gaps.map((p) => (
@@ -188,9 +201,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
             key={c.group}
             margin={
               <>
-                <div>
-                  {c.size} {c.size === 1 ? "Organisation" : "Organisationen"}
-                </div>
+                <div>{membersOf(c.orgs, privateNames).count}</div>
                 <div className={`lk-voices lk-side-${c.side}`} style={{ display: "block" }}>
                   <span className="lk-voices-dots">
                     {Array.from({ length: c.size }, (_, i) => (
@@ -204,7 +215,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
             <p className="row-title">{c.name}</p>
             {c.summary ? <p className="row-text">{c.summary}</p> : null}
             <p className="small muted" style={{ marginTop: "0.4rem" }}>
-              {c.orgs.join(", ")}
+              {membersOf(c.orgs, privateNames).list}
             </p>
           </Row>
         ))}

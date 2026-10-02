@@ -9,7 +9,9 @@
  *
  * Usage:
  *   DATABASE_URL=... tsx scripts/propose-measures-bill.ts --consultation <ref>
- *     [--document <filename>]   default: the longest 'drucksache:Gesetzentwurf'
+ *     [--document <filename>]   default: the longest 'drucksache:Gesetzentwurf', else the
+ *                               longest 'strategie:Entwurf' (a draft strategy: its
+ *                               fields of action are the measures)
  *     [--force]                 ask the LLM again (default: reuse the cached cut)
  *
  * Cached like the extraction: the same bill, prompt, and model give the same
@@ -22,7 +24,8 @@ import { createDb, sql } from "@policy/db";
 import { AgentSdkProvider } from "@policy/llm";
 
 import { resolveConsultation } from "../src/jev-stage.ts";
-import { BILL_MEASURES_SYSTEM } from "../src/prompts.ts";
+import { DRAFT_DOCUMENT_KINDS } from "../src/measures.ts";
+import { BILL_MEASURES_SYSTEM, STRATEGY_MEASURES_SYSTEM } from "../src/prompts.ts";
 import { billMeasuresJsonSchema, billMeasuresOutput } from "../src/schemas.ts";
 
 function arg(name: string): string | undefined {
@@ -47,21 +50,28 @@ async function main() {
   const db = createDb(url);
   const cons = await resolveConsultation(db, ref);
 
+  const kinds = Object.keys(DRAFT_DOCUMENT_KINDS);
   const docRes = await db.execute(sql`
-    SELECT filename, text FROM consultation_documents
+    SELECT filename, kind, text FROM consultation_documents
     WHERE consultation_id = ${cons.id} AND text IS NOT NULL
-      AND ${arg("document") ? sql`filename = ${arg("document")}` : sql`kind = 'drucksache:Gesetzentwurf'`}
-    ORDER BY length(text) DESC LIMIT 1
+      AND ${arg("document") ? sql`filename = ${arg("document")}` : sql`kind IN (${sql.join(kinds.map((k) => sql`${k}`), sql`, `)})`}
+    ORDER BY kind = 'drucksache:Gesetzentwurf' DESC, length(text) DESC LIMIT 1
   `);
-  const doc = docRes.rows[0] as { filename: string; text: string } | undefined;
-  if (!doc) throw new Error("no bill found — run scripts/import-documents.ts first (or pass --document)");
-  const law = lawTextOf(doc.text);
-  console.log(`${cons.title}: reading ${doc.filename} — law text ${law.length.toLocaleString("en")} of ${doc.text.length.toLocaleString("en")} chars`);
+  const doc = docRes.rows[0] as { filename: string; kind: string; text: string } | undefined;
+  if (!doc) throw new Error("no draft found — run scripts/import-documents.ts first (or pass --document)");
+  const kind = DRAFT_DOCUMENT_KINDS[doc.kind] ?? "law";
+  const law = kind === "law" ? lawTextOf(doc.text) : doc.text.slice(0, LAW_TEXT_MAX);
+  console.log(`${cons.title}: reading ${doc.filename} (${kind}) — text ${law.length.toLocaleString("en")} of ${doc.text.length.toLocaleString("en")} chars`);
 
-  const prompt = `Draft law (cover sheet and law text):\n\n---\n${law}\n---\n\nName the separately decidable measures.`;
+  const prompt =
+    kind === "law"
+      ? `Draft law (cover sheet and law text):\n\n---\n${law}\n---\n\nName the separately decidable measures.`
+      : `Draft strategy:\n\n---\n${law}\n---\n\nName the separately decidable measures (its fields of action).`;
+  const system = kind === "law" ? BILL_MEASURES_SYSTEM : STRATEGY_MEASURES_SYSTEM;
   const model = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
+  // The law's hash input is unchanged — WPG keeps its cached cut.
   const callHash = createHash("sha256")
-    .update(JSON.stringify({ BILL_MEASURES_SYSTEM, prompt, model, schema: billMeasuresJsonSchema }))
+    .update(JSON.stringify(kind === "law" ? { BILL_MEASURES_SYSTEM, prompt, model, schema: billMeasuresJsonSchema } : { system, prompt, model, schema: billMeasuresJsonSchema }))
     .digest("hex");
   const cached = process.argv.includes("--force")
     ? undefined
@@ -78,13 +88,13 @@ async function main() {
     actor = cached.actor;
     console.log(`${measures.length} measures (cached cut — --force to ask the LLM again):`);
   } else {
-    const res = await new AgentSdkProvider().generateStructured({ system: BILL_MEASURES_SYSTEM, prompt, schema: billMeasuresJsonSchema, model });
+    const res = await new AgentSdkProvider().generateStructured({ system, prompt, schema: billMeasuresJsonSchema, model });
     ({ measures } = billMeasuresOutput.parse(res.output));
     actor = `ai-editor:${res.provenance.model}`;
     console.log(`${measures.length} measures in ${((Date.now() - t0) / 1000).toFixed(0)}s:`);
   }
   for (const m of measures) {
-    console.log(`  - ${m.name}  [§ ${m.paragraphs.join(", ")}${m.other.length ? ` · ${m.other.join("; ")}` : ""}]\n      ${m.description}`);
+    console.log(`  - ${m.name}  [${[kind === "law" ? `§ ${m.paragraphs.join(", ")}` : "", ...m.other].filter(Boolean).join(" · ")}]\n      ${m.description}`);
   }
   // A section number must belong to one measure only — otherwise the code
   // pre-assignment by "§ N" would be ambiguous (jev-classify skips those).
@@ -97,7 +107,7 @@ async function main() {
     INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
     VALUES (${cons.tenantId}, ${actor}, 'consultation.propose_measures',
             'consultation', ${cons.id},
-            ${JSON.stringify({ measures: measures.map((m) => m.name), details: measures, callHash, cached: !!cached, source: { document: doc.filename, chars: law.length } })})
+            ${JSON.stringify({ measures: measures.map((m) => m.name), details: measures, callHash, cached: !!cached, source: { document: doc.filename, kind, chars: law.length } })})
   `);
   process.exit(0);
 }

@@ -68,7 +68,7 @@ export const DIAG: Record<Diag, DiagMeta> = {
   },
   luecke: {
     label: "Lücke",
-    explain: "Diese kritische Frage hat in der Anhörung niemand gestellt.",
+    explain: "Diese kritische Frage hat in den Stellungnahmen niemand gestellt.",
     resolver: "Aktiv nachfragen",
     tone: "open",
     dashed: true,
@@ -133,7 +133,23 @@ export function shortOrg(org: string): string {
     "Deutscher Verein des Gas- und Wasserfaches e. V. (DVGW)": "DVGW",
     "ZIA Zentraler Immobilien Ausschuss e. V.": "ZIA",
   };
-  return known[org] ?? org.replace(/\s+e\.\s?V\.$/, "");
+  if (known[org]) return known[org];
+  // "BDEW – Bundesverband der …" → "BDEW"; "NABU (Naturschutzbund …)" → "NABU".
+  const acronym = /^([A-ZÄÖÜ][A-Za-zÄÖÜäöü&.-]{1,9})\s+(?:[–-]\s+|\()/.exec(org)?.[1];
+  if (acronym && /[A-ZÄÖÜ].*[A-ZÄÖÜ]/.test(acronym)) return acronym;
+  // "Nordrhein-Westfalen: Ministerium für …" → "Nordrhein-Westfalen (Ministerium)".
+  const land = /^([A-ZÄÖÜ][\wäöüß-]+): (Ministerium|Staatsministerium|Behörde)\b/.exec(org);
+  if (land) return `${land[1]} (${land[2]})`;
+  return org.replace(/\s+e\.\s?V\.?$/, "");
+}
+
+/** Short names, unique within one consultation: a short name two senders share falls back to the full name. */
+export function shortNames(names: string[]): Map<string, string> {
+  const short = new Map(names.map((n) => [n, shortOrg(n)]));
+  const count = new Map<string, number>();
+  for (const s of short.values()) count.set(s, (count.get(s) ?? 0) + 1);
+  for (const [n, s] of short) if ((count.get(s) ?? 0) > 1) short.set(n, n.replace(/\s+e\.\s?V\.?$/, ""));
+  return short;
 }
 
 export const nf = new Intl.NumberFormat("de-DE");

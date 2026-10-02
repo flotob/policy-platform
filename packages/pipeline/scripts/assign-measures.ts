@@ -20,6 +20,7 @@ import { measurePickJsonSchema, measurePickOutput } from "../src/schemas.ts";
 import { judgeAll, resolveConsultation, saveJudgment, sinceReset, statsLine } from "../src/jev-stage.ts";
 import {
   decideMeasure,
+  draftKindOf,
   MEASURE_FAMILY,
   MEASURE_SECOND_OPINION_BELOW,
   measureBySection,
@@ -47,8 +48,10 @@ async function main() {
       AND payload ? 'details' AND a.created_at > ${sinceReset(cons.id)}
     ORDER BY created_at DESC LIMIT 1
   `);
-  const measures = (propRes.rows[0] as { payload: { details: BillMeasure[] } } | undefined)?.payload.details;
+  const proposal = (propRes.rows[0] as { payload: { details: BillMeasure[]; source?: { kind?: "law" | "strategy" } } } | undefined)?.payload;
+  const measures = proposal?.details;
   if (!measures?.length) throw new Error("no measures from the bill — run propose-measures-bill.ts first");
+  const kind = draftKindOf(proposal);
 
   const pRes = await db.execute(sql`
     SELECT p.id, p.label, p.summary,
@@ -85,7 +88,7 @@ async function main() {
   const stats = await judgeAll(
     judge,
     toJudge,
-    (p) => ({ state: { consultation: cons.title, point: { label: p.label, summary: p.summary } }, questions: measureQuestion(measures) }),
+    (p) => ({ state: { consultation: cons.title, point: { label: p.label, summary: p.summary } }, questions: measureQuestion(measures, kind) }),
     async (p, answers, provenance) => {
       const a = answers.measure as { choice: string; confidence: number };
       const m = decideMeasure(measures, a);
@@ -114,14 +117,16 @@ async function main() {
   );
   // Second opinion where Jev is unsure: the LLM picks from the same options.
   const provider = new AgentSdkProvider();
-  const options = measureOptionsText(measures);
+  const options = measureOptionsText(measures, kind);
   let changed = 0;
   const second = await runPool(
     unsure,
     async (p) => {
       const r = await provider.generateStructured({
         system:
-          "You assign one point of a public consultation to the measure of the draft law it concerns. A point about a specific rule that matters for several measures goes to the measure it mainly concerns; \"whole\" is only for the law as a whole. Answer with the option key (m1, m2, …, whole, beyond) and a one-sentence reason.",
+          kind === "law"
+            ? "You assign one point of a public consultation to the measure of the draft law it concerns. A point about a specific rule that matters for several measures goes to the measure it mainly concerns; \"whole\" is only for the law as a whole. Answer with the option key (m1, m2, …, whole, beyond) and a one-sentence reason."
+            : "You assign one point of a public consultation to the field of action of the draft strategy it concerns. A point about a specific demand that matters for several fields goes to the field it mainly concerns; \"whole\" is only for the strategy as a whole. Answer with the option key (m1, m2, …, whole, beyond) and a one-sentence reason.",
         prompt: `Consultation: ${cons.title}\n\nOptions:\n${options}\n\nPoint: ${p.label} — ${p.summary ?? ""}`,
         schema: measurePickJsonSchema,
       });

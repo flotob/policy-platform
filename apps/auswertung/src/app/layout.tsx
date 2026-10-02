@@ -10,7 +10,7 @@ const sans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], 
 
 export const metadata: Metadata = {
   title: "Landkarte des Streits — Auswertung",
-  description: "Auswertung einer Anhörung: was zu klären ist, von wem, und wo die Lager übereinstimmen.",
+  description: "Auswertung einer Anhörung oder Konsultation: was zu klären ist, von wem, und wo die Lager übereinstimmen.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

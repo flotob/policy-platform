@@ -9,7 +9,7 @@ import type { AskMaterial } from "@policy/landkarte/data/ask";
 import { KEYS } from "@/components/AskBoxText";
 
 /** The fixed sentence when the material does not answer the question. */
-export const NO_ANSWER = "Dazu enthält das Material dieser Anhörung keine Aussage.";
+export const NO_ANSWER = "Dazu enthalten die Stellungnahmen keine Aussage.";
 
 export const ANSWER_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -28,7 +28,7 @@ export const ANSWER_SCHEMA: Record<string, unknown> = {
   },
 };
 
-export const SYSTEM = `Du beantwortest Fragen einer Referentin in einem Bundesministerium zu einer Anhörung über einen Gesetzentwurf. Grundlage ist allein das nummerierte Material, das du bekommst: der Überblick über die ganze Landkarte mit den Lagern (Schlüssel L0), Landkarten-Punkte (Schlüssel L1, L2, …) und Argumente aus den Stellungnahmen mit wörtlichem Zitat (Schlüssel A1, A2, …).
+export const SYSTEM = `Du beantwortest Fragen einer Referentin in einem Bundesministerium zu einer Anhörung oder Konsultation über einen Entwurf (ein Gesetz oder eine Strategie). Grundlage ist allein das nummerierte Material, das du bekommst: der Überblick über die ganze Landkarte mit den Lagern (Schlüssel L0), Landkarten-Punkte (Schlüssel L1, L2, …) und Argumente aus den Stellungnahmen mit wörtlichem Zitat (Schlüssel A1, A2, …).
 
 Regeln:
 1. Jeder Satz endet mit einem bis drei Quellenschlüsseln in eckigen Klammern vor dem Satzzeichen, zum Beispiel „Der BDEW will die Grenze streichen [A3]. Die Deutsche Umwelthilfe lehnt das ab [L2, A7].“ Ein Satz ohne Quellenschlüssel ist nicht erlaubt. Verwende nur Schlüssel, die im Material stehen. Schlüssel stehen nur in diesen Klammern am Satzende, nie im Satz selbst: im Satz benennst du einen Punkt mit seinem Inhalt.
@@ -45,10 +45,20 @@ const KIND: Record<string, string> = { fact: "Tatsachenbehauptung", value: "Wert
 export function buildPrompt(m: AskMaterial, title: string): string {
   const out: string[] = [];
   out.push(`Frage: „${m.question.replace(/\s+/g, " ").trim()}“`, "");
-  out.push(`[L0] Die ganze Landkarte. Anhörung: ${title}. ${m.allOrgs.length} Stellungnahmen von Organisationen.`);
+  // Private persons ("Privatperson 12") are counted, never listed one by one.
+  const isPerson = (o: string) => /^Privatperson \d+$/.test(o);
+  const people = m.allOrgs.filter((o) => o.type === "PRIVATE").length;
+  out.push(
+    `[L0] Die ganze Landkarte. ${title}. ${m.allOrgs.length} Stellungnahmen` +
+      (people ? `: ${m.allOrgs.length - people} von Organisationen, ${people} von Privatpersonen (ohne Namen).` : " von Organisationen."),
+  );
   if (m.camps.length >= 2) {
     out.push("  Lager (aus den abgeleiteten Haltungen berechnet):");
-    for (const c of m.camps) out.push(`  - „${c.name}“, ${c.orgs.length} Organisationen: ${c.orgs.map(shortOrg).join(", ")}`);
+    for (const c of m.camps) {
+      const orgs = c.orgs.filter((o) => !isPerson(o));
+      const n = c.orgs.length - orgs.length;
+      out.push(`  - „${c.name}“, ${c.orgs.length} Stellungnahmen: ${orgs.map(shortOrg).join(", ")}${n ? `${orgs.length ? " und " : ""}${n} Privatpersonen` : ""}`);
+    }
   }
   out.push(
     `  Umfang: ${m.totals.mapPoints} Streitfragen, davon ` +

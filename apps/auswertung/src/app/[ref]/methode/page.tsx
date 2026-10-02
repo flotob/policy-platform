@@ -30,7 +30,7 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
       </header>
 
       <section>
-        <h2>Hat die Anhörung alles gehört?</h2>
+        <h2>Hat die {o.procedure} alles gehört?</h2>
         <p className="prose">
           Eine Debatte ist ausgeschöpft, wenn neue Stellungnahmen keine neuen Streitfragen mehr bringen. Das Konzeptpapier nennt das Sättigung: Statt nach
           Kalender endet ein Verfahren, wenn nichts Neues mehr kommt. Hier jede Stellungnahme in der Reihenfolge, in der sie verarbeitet wurde (die kürzeste
@@ -61,7 +61,7 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
             <p className="prose" style={{ margin: 0 }}>
               {saturated
                 ? `Die Debatte wirkt ausgeschöpft: Die letzte Stellungnahme brachte kaum noch neue Streitfragen.`
-                : `Die Anhörung war nicht gesättigt. Auch die letzte Stellungnahme (${last.short}) warf noch ${last.newQuestions} von ${last.touchedQuestions} Streitfragen als erste auf. Mehr Stimmen hätten wahrscheinlich weitere Streitfragen auf die Karte gebracht; bei elf Sachverständigen ist das zu erwarten.`}
+                : `Die ${o.procedure} war nicht gesättigt. Auch die letzte Stellungnahme (${last.short}) warf noch ${last.newQuestions} von ${last.touchedQuestions} Streitfragen als erste auf. Mehr Stimmen hätten wahrscheinlich weitere Streitfragen auf die Karte gebracht; bei elf Sachverständigen ist das zu erwarten.`}
             </p>
           </Row>
         ) : null}
@@ -81,7 +81,7 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
           <p className="row-title">Ordnen</p>
           <p className="row-text">
             Jev prüft jedes Argument (Tatsache oder Wertung, welche kritische Frage), erkennt dasselbe Argument in verschiedenen Stellungnahmen, ordnet es einer
-            Maßnahme des Gesetzentwurfs zu, findet Verbindungen zwischen Argumenten und leitet aus jedem Text ab, wie die Organisation zu jeder Streitfrage steht.
+            {o.draft.kind === "law" ? "Maßnahme des Gesetzentwurfs" : "Handlungsfeld des Strategieentwurfs"} zu, findet Verbindungen zwischen Argumenten und leitet aus jedem Text ab, wie die Organisation zu jeder Streitfrage steht.
           </p>
         </Row>
         <Row margin={<span>Jev</span>}>

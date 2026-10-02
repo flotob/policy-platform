@@ -106,6 +106,17 @@ Per measure:
 
 Cover the substantive provisions. Definitions, goals, transitional and final provisions are no measure of their own: list their sections under the measure whose obligations they shape (e.g. the definition of unavoidable waste heat belongs to the measures that set renewable shares for heat networks; a section may appear under several measures). Name 4 to 10 measures. Do not create a measure for the law as a whole — that bucket exists already.`;
 
+/** Measures from a draft STRATEGY: its fields of action are what a government pursues, changes, or drops. */
+export const STRATEGY_MEASURES_SYSTEM = `You read a draft government strategy and name its separately decidable MEASURES — the fields of action a government could pursue, change, or drop on their own. Each measure gets its own argument map, so the cut must follow what is decided, not how the document is ordered.
+
+Per measure:
+- name: short German name (e.g. "Freiflächenanlagen ausbauen", "Netzanschlüsse beschleunigen").
+- description: one or two German sentences — what the strategy plans in this field (the concrete steps it names: who should do what, by when).
+- paragraphs: always empty — a strategy has no numbered sections.
+- other: where the field sits in the document (e.g. "Handlungsfeld 3.5"), else empty.
+
+Follow the strategy's own fields of action where each is separately decidable; merge fields only when they cannot be decided apart. Introduction, summary, goals, and the description of the current situation are no measure of their own. Name 4 to 12 measures. Do not create a measure for the strategy as a whole — that bucket exists already.`;
+
 /** Above this many characters, the context around a marked section is clipped. */
 export const EXTRACT_CONTEXT_MAX = 300_000;
 
@@ -442,6 +453,9 @@ Per Landkarten-Punkt:
 - "typ": "T" if evidence could settle it (facts, prognoses, costs, legal effect), "W" if it is a pure value judgment no study can decide, "verfahren" if it is a design/implementation instrument ("if we do it, then like this": deadlines, thresholds, transition periods, hardship clauses, exemptions, procedural safeguards).
 - "bezirk": the district on the map — "wirkung" (does the measure work; effect prognosis and goal attainment), "machbarkeit" (can it be implemented), "kosten" (costs and side effects on other goals), "alternativen" (would another means do), "wert" (the value question itself), "ausgestaltung" (design instruments; always for typ "verfahren").`;
 
+/** Above this many organisations in one list, the prompt names the first ones and counts the rest. */
+const ORG_LIST_MAX = 12;
+
 export function condenseQuestionsPrompt(
   scope: string,
   description: string | null,
@@ -456,12 +470,19 @@ export function condenseQuestionsPrompt(
     agree?: string[];
     disagree?: string[];
   }[],
+  draft: "law" | "strategy" = "law",
+  /** Points left out of the list (only the voice-weighted top fit the prompt). */
+  omitted = 0,
 ): string {
   // Organisations as short keys: the weight of a point is visible without
-  // repeating long names on every line.
+  // repeating long names on every line. With hundreds of senders a list names
+  // the first ORG_LIST_MAX and counts the rest (WPG never reaches the cap).
   const orgs = [...new Set(points.flatMap((p) => [...p.orgs, ...(p.agree ?? []), ...(p.disagree ?? [])]))].sort();
   const key = new Map(orgs.map((o, i) => [o, `O${i + 1}`]));
-  const keys = (xs: string[]) => xs.map((o) => key.get(o)).join(" ");
+  const keys = (xs: string[]) =>
+    xs.length > ORG_LIST_MAX
+      ? `${xs.slice(0, ORG_LIST_MAX).map((o) => key.get(o)).join(" ")} +${xs.length - ORG_LIST_MAX} more (${xs.length} in all)`
+      : xs.map((o) => key.get(o)).join(" ");
   const list = points
     .map((p, i) => {
       const forOthers = (p.agree ?? []).filter((o) => !p.orgs.includes(o));
@@ -475,9 +496,11 @@ export function condenseQuestionsPrompt(
     .join("\n");
   return (
     `Measure under decision: ${scope}\n` +
-    (description ? `What the bill says: ${description}\n` : "") +
+    (description ? `${draft === "law" ? "What the bill says" : "What the draft strategy plans"}: ${description}\n` : "") +
     `\nOrganisations:\n${orgs.map((o) => `${key.get(o)} = ${o}`).join("\n")}\n` +
-    `\nExtraction points (index. [kind/door] label — summary · said by · also for · against):\n${list}\n\n` +
+    `\nExtraction points (index. [kind/door] label — summary · said by · also for · against):\n${list}\n` +
+    (omitted ? `(${omitted} further points, each with fewer voices than any listed, are left out of this list.)\n` : "") +
+    `\n` +
     `Write the Landkarten-Punkte for this measure: one per disputed question, at most ${MAP_POINTS_MAX}.`
   );
 }

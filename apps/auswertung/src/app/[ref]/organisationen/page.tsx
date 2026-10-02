@@ -50,6 +50,7 @@ export default async function Organisationen({ params }: { params: Promise<{ ref
   const o = await overview(ref);
   const base = `/${o.ref}`;
   const list = await loadOrganisations(getDb(), o);
+  const privateCount = o.orgs.filter((x) => x.type === "PRIVATE").length;
   const groups = [
     ...o.camps.map((c) => ({ camp: c, items: list.filter((s) => s.camp?.group === c.group) })),
     { camp: null, items: list.filter((s) => !s.camp) },
@@ -63,7 +64,10 @@ export default async function Organisationen({ params }: { params: Promise<{ ref
         </p>
         <h1>Wer Stellung genommen hat</h1>
         <p className="lead">
-          {o.stats.statements} Organisationen haben zum Entwurf Stellung genommen, zusammen rund {nf.format(o.stats.pages)} Seiten. Für jede lässt sich
+          {privateCount > 0
+            ? `${o.stats.statements - privateCount} Organisationen und ${privateCount} Privatpersonen haben`
+            : `${o.stats.statements} Organisationen haben`}{" "}
+          zum Entwurf Stellung genommen, zusammen rund {nf.format(o.stats.pages)} Seiten. Für jede lässt sich
           nachvollziehen, was aus jedem ihrer Argumente geworden ist und mit wem sie übereinstimmt.
         </p>
       </header>
@@ -88,15 +92,34 @@ export default async function Organisationen({ params }: { params: Promise<{ ref
         </div>
       </Row>
 
-      {groups.map((g) => (
-        <section key={g.camp?.group ?? "none"}>
-          <h2>{g.camp ? `Lager „${g.camp.name}“: ${plural(g.items.length, "Organisation", "Organisationen")}` : "Keinem Lager zugeordnet"}</h2>
-          {g.camp?.summary ? <p className="prose">{g.camp.summary}</p> : null}
-          {g.items.map((s) => (
-            <OrgRow key={s.org.submissionId} s={s} base={base} />
-          ))}
-        </section>
-      ))}
+      {groups.map((g) => {
+        // Private persons are numbered, never named; with hundreds of them they fold away under the organisations.
+        const orgs = g.items.filter((s) => s.org.type !== "PRIVATE");
+        const people = g.items.filter((s) => s.org.type === "PRIVATE");
+        const count = [orgs.length ? plural(orgs.length, "Organisation", "Organisationen") : null, people.length ? plural(people.length, "Privatperson", "Privatpersonen") : null]
+          .filter(Boolean)
+          .join(" und ");
+        return (
+          <section key={g.camp?.group ?? "none"}>
+            <h2>{g.camp ? `Lager „${g.camp.name}“: ${count}` : `Keinem Lager zugeordnet: ${count}`}</h2>
+            {g.camp?.summary ? <p className="prose">{g.camp.summary}</p> : null}
+            {orgs.map((s) => (
+              <OrgRow key={s.org.submissionId} s={s} base={base} />
+            ))}
+            {people.length > 0 ? (
+              <details className="org-people">
+                <summary>
+                  {plural(people.length, "Privatperson", "Privatpersonen")} anzeigen
+                  <span className="muted"> (ohne Namen, nummeriert)</span>
+                </summary>
+                {people.map((s) => (
+                  <OrgRow key={s.org.submissionId} s={s} base={base} />
+                ))}
+              </details>
+            ) : null}
+          </section>
+        );
+      })}
 
       <p className="small muted org-foot">
         Ein Lager ist eine Gruppe von Organisationen, die bei den Streitfragen ähnlich urteilen. Die Lager hat die Maschine aus den abgeleiteten Haltungen

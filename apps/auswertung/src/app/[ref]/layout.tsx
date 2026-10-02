@@ -9,7 +9,7 @@ export default async function ConsultationLayout({ children, params }: { childre
   const base = `/${o.ref}`;
   const items: PathItem[] = [
     { href: base, label: "Lagebild" },
-    { href: `${base}/gesetz`, label: "Das Gesetz" },
+    { href: `${base}/gesetz`, label: o.draft.title },
     ...o.measures.map((m, i) => ({
       href: `${base}/massnahmen/${m.slug}`,
       label: m.display,
@@ -29,7 +29,9 @@ export default async function ConsultationLayout({ children, params }: { childre
       <nav className="path" aria-label="Auswertung">
         <a className="path-title" href={base}>
           <strong>{o.title.replace(/\s*\(.*\)\s*$/, "")}</strong>
-          <span>Anhörung, {o.stats.statements} Stellungnahmen</span>
+          <span>
+            {o.procedure}, {o.stats.statements} Stellungnahmen
+          </span>
         </a>
         <PathNav items={items} />
         <p className="path-foot">Prototyp. Alle Inhalte stammen aus den echten Stellungnahmen; Voten sind aus deren Text abgeleitet.</p>

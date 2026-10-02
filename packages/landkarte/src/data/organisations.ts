@@ -23,6 +23,18 @@ export function orgTypeLabel(authorType: string | null): string | null {
       return "Nichtregierungsorganisation";
     case "EXPERT":
       return "Sachverständige";
+    case "PUBLIC_AUTHORITY":
+      return "Behörde";
+    case "POLITICS":
+      return "Politik";
+    case "ASSOCIATION":
+      return "Verband oder Verein";
+    case "RESEARCH":
+      return "Wissenschaft";
+    case "COMPANY":
+      return "Unternehmen";
+    case "PRIVATE":
+      return "Privatperson";
     default:
       return null;
   }

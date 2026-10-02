@@ -81,3 +81,8 @@
   .org-arg-more > summary { list-style: none; }
   .org-index { display: none; }
 }
+
+/* Private persons: folded under the organisations of a camp */
+.org-people { margin: 1rem 0 0; }
+.org-people > summary { cursor: pointer; font-family: var(--sans); font-size: 0.9375rem; color: var(--ink); padding: 0.5rem 0; }
+.org-people[open] > summary { margin-bottom: 0.5rem; }
