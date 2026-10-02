@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { CampVoices, DIAG_ORDER, DiagLabel, DoorNote, Landkarte, Legend, shortOrg } from "@policy/landkarte";
+import { CampVoices, DIAG_ORDER, DiagLabel, DoorNote, Landkarte, Legend, namesText, shortOrg } from "@policy/landkarte";
 import { loadMeasure, type SinglePoint } from "@policy/landkarte/data";
 
 import { FindingRow, Row, Strip } from "@/components/rows";
@@ -15,9 +15,9 @@ function SingleRow({ s }: { s: SinglePoint }) {
     <Row
       margin={
         <>
-          <div>Gesagt von {s.orgs.map(shortOrg).join(", ")}</div>
-          {s.agree.length ? <div>Zustimmung auch von {s.agree.map(shortOrg).join(", ")}</div> : null}
-          {contested ? <div>Abgelehnt von {s.disagree.map(shortOrg).join(", ")}</div> : null}
+          <div>Gesagt von {namesText(s.orgs)}</div>
+          {s.agree.length ? <div>Zustimmung auch von {namesText(s.agree)}</div> : null}
+          {contested ? <div>Abgelehnt von {namesText(s.disagree)}</div> : null}
         </>
       }
     >

@@ -226,3 +226,5 @@
 @media (max-width: 760px) {
   .sheet:has(.vote) { align-content: start; }
 }
+.vote-orgs-more { margin-top: 0.5rem; }
+.vote-orgs-more > summary { cursor: pointer; font-family: var(--sans); font-size: 0.875rem; padding: 0.4rem 0; }

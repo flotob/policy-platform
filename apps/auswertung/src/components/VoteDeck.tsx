@@ -218,7 +218,7 @@ export function VoteDeck({ data, base, initialSlug, fromUrl }: { data: VoteData;
             Wo stehen Sie?
           </h1>
           <p className="lead">
-            Beantworten Sie die Streitfragen der Anhörung selbst. Danach sehen Sie, welchem Lager und welchen Organisationen Sie am nächsten sind, und
+            Beantworten Sie die Streitfragen selbst. Danach sehen Sie, welchem Lager und welchen Organisationen Sie am nächsten sind, und
             nebenbei, worüber sich streiten lässt und worüber nicht.
           </p>
         </header>
@@ -247,7 +247,7 @@ export function VoteDeck({ data, base, initialSlug, fromUrl }: { data: VoteData;
               Mit {chosen.points.length} Fragen beginnen
             </button>
             <p className="vote-hint">
-              Zu jeder Frage: zustimmen, ablehnen oder überspringen. Danach sehen Sie, wie die Organisationen der Anhörung geantwortet haben
+              Zu jeder Frage: zustimmen, ablehnen oder überspringen. Danach sehen Sie, wie die Organisationen geantwortet haben
               {campA && campB ? `, getrennt nach den zwei Lagern, die sich in ihren Stellungnahmen zeigen: „${campA.name}“ und „${campB.name}“` : ""}. Ihre
               Antworten verlassen diesen Browser nicht.
             </p>

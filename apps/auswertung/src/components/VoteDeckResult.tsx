@@ -322,8 +322,9 @@ export function VoteResult({
             ) : null}
             <div className="row">
               <div className="row-main">
-                <ol className="vote-orgs">
-                  {orgScores.map((x) => {
+                {(() => {
+                  // Hundreds of organisations: the closest fifteen, the rest folded.
+                  const item = (x: (typeof orgScores)[number]) => {
                     const camp = camps.find((c) => c.side === x.org.side);
                     return (
                       <li key={x.org.id} className={x.n === 0 ? "is-silent" : undefined}>
@@ -340,8 +341,23 @@ export function VoteResult({
                         <Meter k={x.k} n={x.n} />
                       </li>
                     );
-                  })}
-                </ol>
+                  };
+                  const head = orgScores.length > 25 ? orgScores.slice(0, 15) : orgScores;
+                  const rest = orgScores.slice(head.length);
+                  return (
+                    <>
+                      <ol className="vote-orgs">{head.map(item)}</ol>
+                      {rest.length ? (
+                        <details className="vote-orgs-more">
+                          <summary>{rest.length} weitere Organisationen anzeigen</summary>
+                          <ol className="vote-orgs" start={head.length + 1}>
+                            {rest.map(item)}
+                          </ol>
+                        </details>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
               <aside className="margin">
                 <div>

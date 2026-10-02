@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { DIAG_ORDER, DiagLabel, nf, shortOrg, type Diag, type VerdictKey } from "@policy/landkarte";
+import { DIAG_ORDER, DiagLabel, membersText, nf, sendersText, shortOrg, type Diag, type VerdictKey } from "@policy/landkarte";
 import type { Camp, MapPoint, MeasureSummary } from "@policy/landkarte/data";
 import { loadEvidence } from "@policy/landkarte/data/evidence";
 import {
@@ -240,15 +240,14 @@ export default async function Bericht({ params }: { params: Promise<{ ref: strin
         lead={
           <>
             <p>
-              {s.statements} Organisationen haben zum Entwurf Stellung genommen, zusammen rund {nf.format(s.pages)} Seiten. Daraus wurden {nf.format(s.points)}{" "}
+              {sendersText(s)} haben zum Entwurf Stellung genommen, zusammen rund {nf.format(s.pages)} Seiten. Daraus wurden {nf.format(s.points)}{" "}
               einzelne Argumente, verdichtet zu {nf.format(s.mapPoints)} Streitfragen in {o.measures.length} Teilentscheidungen.
               {gaps.length ? ` Dazu kommen ${gaps.length === 1 ? "eine kritische Frage" : `${gaps.length} kritische Fragen`}, die niemand gestellt hat.` : ""}
             </p>
             {campA && campB ? (
               <p>
-                Wer ähnlich Stellung nimmt, bildet ein Lager. Aus den Voten ergeben sich zwei: „{campA.name}“ mit {campA.size} Organisationen (
-                {campA.orgs.map(shortOrg).join(", ")}) und „{campB.name}“ mit {campB.size} (
-                {campB.orgs.map(shortOrg).join(", ")}).
+                Wer ähnlich Stellung nimmt, bildet ein Lager. Aus den Voten ergeben sich zwei: „{campA.name}“ mit {sendersText({ statements: campA.size, privatePersons: campA.people })} (
+                {membersText(campA)}) und „{campB.name}“ mit {campB.size} ({membersText(campB)}).
               </p>
             ) : null}
             <p>

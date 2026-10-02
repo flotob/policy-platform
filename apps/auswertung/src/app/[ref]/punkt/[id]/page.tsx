@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { DIAG, DOOR, DiagLabel, QuoteBlock, shortOrg, slugOf, TYP, TypTag } from "@policy/landkarte";
+import { DIAG, DOOR, DiagLabel, namesText, QuoteBlock, shortOrg, slugOf, TYP, TypTag } from "@policy/landkarte";
 import { loadPoint, type MemberTrail, type OrgVote } from "@policy/landkarte/data";
 import { EVIDENCE_LABEL, evidenceVerdict } from "@policy/landkarte/data/evidence";
 
@@ -55,12 +55,8 @@ const LIST_ALL_UP_TO = 15;
 function VoteList({ votes, side, name }: { votes: OrgVote[]; side: "a" | "b"; name: string }) {
   if (votes.length > LIST_ALL_UP_TO) {
     const by = (value: number) => votes.filter((v) => v.value === value);
-    // Organisations by name, private persons only counted.
-    const who = (vs: OrgVote[]) => {
-      const orgs = vs.filter((v) => v.org.type !== "PRIVATE").map((v) => v.org.short);
-      const people = vs.length - orgs.length;
-      return [...orgs, ...(people ? [`${people} ${people === 1 ? "Privatperson" : "Privatpersonen"}`] : [])].join(", ");
-    };
+    // Organisations by name (the first ten), private persons only counted.
+    const who = (vs: OrgVote[]) => namesText(vs.map((v) => v.org.name), 10);
     const agree = by(1);
     const disagree = by(-1);
     const silent = votes.length - agree.length - disagree.length;

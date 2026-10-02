@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
-import { DIAG, DIAG_ORDER, DiagLabel, displayScope, shortOrg, slugOf } from "@policy/landkarte";
+import { DIAG, DIAG_ORDER, DiagLabel, displayScope, namesText, shortOrg, slugOf } from "@policy/landkarte";
 import type { AskCitedArgument, AskCitedPoint, AskFocus, AskResponse } from "@policy/landkarte/data/ask";
 
 import { cited, KEYS, sentencesOf, uncitedSentences } from "@/components/AskBoxText";
@@ -27,7 +27,7 @@ const FOCUS_LABEL: Record<AskFocus, string> = {
 };
 
 /** "Frag die Landkarte": question form, waiting state, answer with citation links, and the source list. */
-export function AskBox({ base, examples, howItWorks }: { base: string; examples: string[]; howItWorks: ReactNode }) {
+export function AskBox({ base, examples, howItWorks, placeholder }: { base: string; examples: string[]; howItWorks: ReactNode; placeholder: string }) {
   const [question, setQuestion] = useState("");
   const [state, setState] = useState<State>({ status: "idle" });
   const abort = useRef<AbortController | null>(null);
@@ -110,7 +110,7 @@ export function AskBox({ base, examples, howItWorks }: { base: string; examples:
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Zum Beispiel: Was sagen die Organisationen zu den Fristen für die Wärmepläne?"
+            placeholder={placeholder}
           />
           <div className="ask-actions">
             <button type="submit" className="btn btn-primary" disabled={loading || question.trim().length < 3}>
@@ -342,7 +342,7 @@ function WholeSource({ res, base }: { res: Answer; base: string }) {
         </p>
         {w.camps.map((c) => (
           <p key={c.name} className="small muted">
-            Lager „{c.name}“: {c.orgs.map(shortOrg).join(", ")}
+            Lager „{c.name}“: {namesText(c.orgs, 20)}
           </p>
         ))}
         {w.orgs.map((o) => (

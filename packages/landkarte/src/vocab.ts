@@ -153,3 +153,31 @@ export function shortNames(names: string[]): Map<string, string> {
 }
 
 export const nf = new Intl.NumberFormat("de-DE");
+
+/** A list of senders for a margin note: organisations first, private persons counted, long lists cut. */
+export function namesText(names: string[], max = 6): string {
+  const people = names.filter((n) => /^Privatperson \d+$/.test(n)).length;
+  const orgs = names.filter((n) => !/^Privatperson \d+$/.test(n)).map(shortOrg);
+  const shown = orgs.slice(0, max);
+  const parts = [...shown];
+  if (orgs.length > max) parts.push(`${orgs.length - max} weitere Organisationen`);
+  if (people) parts.push(`${nf.format(people)} ${people === 1 ? "Privatperson" : "Privatpersonen"}`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} und ${parts.at(-1)}` : (parts[0] ?? "");
+}
+
+/** A camp's members in a sentence: organisations by name, private persons counted. */
+export function membersText(camp: { named: string[]; people: number }, short: (name: string) => string = shortOrg): string {
+  const names = camp.named.map(short).join(", ");
+  if (!camp.people) return names;
+  const people = `${nf.format(camp.people)} ${camp.people === 1 ? "Privatperson" : "Privatpersonen"}`;
+  return names ? `${names} und ${people}` : people;
+}
+
+/** Who wrote in: "11 Organisationen" or "232 Organisationen und 255 Privatpersonen". */
+export function sendersText(stats: { statements: number; privatePersons: number }): string {
+  const orgs = stats.statements - stats.privatePersons;
+  const n = (k: number, one: string, many: string) => `${nf.format(k)} ${k === 1 ? one : many}`;
+  if (!stats.privatePersons) return n(orgs, "Organisation", "Organisationen");
+  if (!orgs) return n(stats.privatePersons, "Privatperson", "Privatpersonen");
+  return `${n(orgs, "Organisation", "Organisationen")} und ${n(stats.privatePersons, "Privatperson", "Privatpersonen")}`;
+}

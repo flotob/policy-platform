@@ -12,12 +12,25 @@ export default async function Fragen({ params }: { params: Promise<{ ref: string
   const s = o.stats;
   // Example questions: the organisation examples only where that organisation took part.
   const has = (short: string) => o.orgs.some((x) => x.short === short);
-  const examples = [
-    has("BDEW") ? "Was sagt der BDEW zur Biomasse?" : null,
-    "Wo sind sich alle Lager einig?",
-    "Welche Tatsachenfragen sollte ein Gutachten klären?",
-    has("Deutsche Umwelthilfe") ? "Was kritisiert die Deutsche Umwelthilfe?" : null,
-  ].filter((x): x is string => x !== null);
+  // The hearing on the bill has hand-picked examples; otherwise they come from the data:
+  // the organisation with the most arguments and the most disputed field.
+  const topOrg = o.orgs.filter((x) => x.type !== "PRIVATE").sort((a, b) => b.points - a.points)[0];
+  const topMeasure = [...o.measures].filter((m) => m.slug && m.points > 0).sort((a, b) => b.extractionPoints - a.extractionPoints)[0];
+  const examples = (
+    o.draft.kind === "law"
+      ? [
+          has("BDEW") ? "Was sagt der BDEW zur Biomasse?" : null,
+          "Wo sind sich alle Lager einig?",
+          "Welche Tatsachenfragen sollte ein Gutachten klären?",
+          has("Deutsche Umwelthilfe") ? "Was kritisiert die Deutsche Umwelthilfe?" : null,
+        ]
+      : [
+          topMeasure ? `Worüber wird bei „${topMeasure.display}“ gestritten?` : null,
+          "Wo sind sich alle Lager einig?",
+          "Welche Tatsachenfragen sollte ein Gutachten klären?",
+          topOrg ? `Was fordert ${topOrg.short}?` : null,
+        ]
+  ).filter((x): x is string => x !== null);
 
   return (
     <>
@@ -35,6 +48,7 @@ export default async function Fragen({ params }: { params: Promise<{ ref: string
       <AskBox
         base={base}
         examples={examples}
+        placeholder={`Zum Beispiel: ${examples[0] ?? "Wo sind sich alle Lager einig?"}`}
         howItWorks={
           <>
             <strong>So entsteht die Antwort</strong>

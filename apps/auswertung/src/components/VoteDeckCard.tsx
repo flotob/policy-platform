@@ -113,7 +113,7 @@ export function VoteCard({
             </p>
             {a && b && campA && campB ? (
               <>
-                <p className="vote-reveal-head">So sehen es die beiden Lager der Anhörung (ein Kreis je Organisation):</p>
+                <p className="vote-reveal-head">So sehen es die beiden Lager:</p>
                 <div className="lk-campvoices vote-voices">
                   <Voices count={a} side="a" name={campA.name} />
                   <Voices count={b} side="b" name={campB.name} />

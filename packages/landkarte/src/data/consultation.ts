@@ -98,6 +98,8 @@ export function campsOf(analysis: AnalysisResult | null, orgs: Org[]): Camp[] {
       name: analysis.campNames?.[String(c.group)]?.name ?? `Lager ${i + 1}`,
       summary: analysis.campNames?.[String(c.group)]?.summary ?? null,
       orgs: orgs.filter((o) => o.camp === c.group).map((o) => o.name),
+      named: orgs.filter((o) => o.camp === c.group && o.type !== "PRIVATE").map((o) => o.name),
+      people: orgs.filter((o) => o.camp === c.group && o.type === "PRIVATE").length,
       side: i === 0 ? ("a" as const) : ("b" as const),
     }));
 }
@@ -202,6 +204,7 @@ export async function loadOverview(db: Db, ref: string): Promise<Overview | null
     measures,
     stats: {
       statements: orgs.length,
+      privatePersons: orgs.filter((x) => x.type === "PRIVATE").length,
       chars,
       pages: Math.round(chars / 2500),
       points: st.points as number,

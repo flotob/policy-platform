@@ -20,6 +20,9 @@ export interface Camp {
   summary: string | null;
   size: number;
   orgs: string[];
+  /** The organisations among `orgs` (by name) and how many private persons the camp has. */
+  named: string[];
+  people: number;
   /** "a" = the larger camp (solid ink), "b" = the other (hatched grey). */
   side: "a" | "b";
 }
@@ -62,6 +65,8 @@ export interface Overview {
   measures: MeasureSummary[];
   stats: {
     statements: number;
+    /** Statements by private persons ("Privatperson N"). */
+    privatePersons: number;
     chars: number;
     /** Rough page count of the statements (2,500 characters per page). */
     pages: number;

@@ -36,8 +36,27 @@ export function TypTag({ typ }: { typ: MapPoint["typ"] }) {
  * filled = stimmt zu, ring with stroke = lehnt ab, faint = äußert sich nicht.
  * Counts, not percentages ("4 von 6") — the votes are inferred from a few statements.
  */
+/** Above this camp size one circle per sender stops being readable: a bar in the same vocabulary. */
+const DOTS_UP_TO = 40;
+
 export function Voices({ count, side, name }: { count: CampCount; side: "a" | "b"; name: string }) {
   const silent = Math.max(0, count.size - count.agree - count.disagree);
+  if (count.size > DOTS_UP_TO) {
+    const said = count.agree + count.disagree;
+    const w = (n: number) => `${Math.round((n / Math.max(1, count.size)) * 1000) / 10}%`;
+    return (
+      <div className={`lk-voices lk-side-${side}`}>
+        <span className="lk-voices-name">{name}</span>
+        <span className="lk-voices-bar" aria-hidden>
+          <i className="lk-bar-agree" style={{ width: w(count.agree) }} />
+          <i className="lk-bar-disagree" style={{ width: w(count.disagree) }} />
+        </span>
+        <span className="lk-voices-count">
+          {said === 0 ? "äußert sich nicht" : `${count.agree} von ${said} dafür`}
+        </span>
+      </div>
+    );
+  }
   const dots = [
     ...Array.from({ length: count.agree }, () => "agree"),
     ...Array.from({ length: count.disagree }, () => "disagree"),

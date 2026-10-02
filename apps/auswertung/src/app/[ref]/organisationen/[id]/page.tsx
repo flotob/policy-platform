@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { DiagMark, displayScope, shortOrg, slugOf } from "@policy/landkarte";
+import { DiagMark, displayScope, sendersText, shortOrg, slugOf } from "@policy/landkarte";
 import {
   loadOrgProfile,
   MIN_SHARED,
@@ -18,8 +18,29 @@ import { overview } from "@/lib/load";
 import "../styles.css";
 
 const SHOW_APART = 8;
+/** With hundreds of senders: the closest and the most distant few, the rest folded. */
+const SHOW_AGREE = 12;
 
 function AgreeList({ items, base }: { items: Agreement[]; base: string }) {
+  if (items.length > SHOW_AGREE * 2) {
+    const head = items.slice(0, SHOW_AGREE);
+    const tail = items.slice(-SHOW_AGREE);
+    const middle = items.slice(SHOW_AGREE, -SHOW_AGREE);
+    return (
+      <>
+        <AgreeRows items={head} base={base} />
+        <details className="org-people">
+          <summary>{middle.length} weitere Organisationen dazwischen anzeigen</summary>
+          <AgreeRows items={middle} base={base} />
+        </details>
+        <AgreeRows items={tail} base={base} />
+      </>
+    );
+  }
+  return <AgreeRows items={items} base={base} />;
+}
+
+function AgreeRows({ items, base }: { items: Agreement[]; base: string }) {
   return (
     <ul className="org-agree">
       {items.map((a) => (
@@ -172,7 +193,7 @@ export default async function Organisation({ params }: { params: Promise<{ ref: 
           margin={
             <>
               <div>
-                Das Lager umfasst {plural(ownCamp.size, "Organisation", "Organisationen")}. Die Maschine hat es aus den Haltungen zu den Streitfragen gerechnet,
+                Das Lager umfasst {sendersText({ statements: ownCamp.size, privatePersons: ownCamp.people })}. Die Maschine hat es aus den Haltungen zu den Streitfragen gerechnet,
                 die aus den Stellungnahmen abgeleitet sind.
               </div>
             </>
