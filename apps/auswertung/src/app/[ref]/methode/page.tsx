@@ -1,5 +1,5 @@
 import { nf } from "@policy/landkarte";
-import { loadMachineWork, loadSaturation } from "@policy/landkarte/data/method";
+import { loadMachineWork, loadSaturation, loadSaturationCurve } from "@policy/landkarte/data/method";
 
 import { Row } from "@/components/rows";
 import { getDb } from "@/lib/db";
@@ -7,11 +7,51 @@ import { overview } from "@/lib/load";
 
 import "./styles.css";
 
+/** Above this many statements the page shows the curve instead of one row per statement. */
+const ROWS_UP_TO = 40;
+
+/** Known dispute questions after k statements (random order): a line that flattens when nothing new comes. */
+function Curve({ curve }: { curve: { k: number; known: number }[] }) {
+  const W = 640;
+  const H = 180;
+  const pad = { l: 36, r: 8, t: 8, b: 26 };
+  const n = curve.length;
+  const max = Math.max(1, curve[n - 1]?.known ?? 1);
+  const x = (k: number) => Math.round((pad.l + ((k - 1) / Math.max(1, n - 1)) * (W - pad.l - pad.r)) * 100) / 100;
+  const y = (v: number) => Math.round((H - pad.b - (v / max) * (H - pad.t - pad.b)) * 100) / 100;
+  const path = curve.map((c, i) => `${i ? "L" : "M"}${x(c.k)},${y(c.known)}`).join(" ");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.max(1, Math.round(f * n)));
+  return (
+    <svg className="sat-curve" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Bekannte Streitfragen nach Zahl der Stellungnahmen: ${max} nach ${n}`}>
+      <line x1={pad.l} x2={W - pad.r} y1={H - pad.b} y2={H - pad.b} className="sat-axis" />
+      <line x1={pad.l} x2={pad.l} y1={pad.t} y2={H - pad.b} className="sat-axis" />
+      {ticks.map((k) => (
+        <text key={k} x={x(k)} y={H - 8} textAnchor="middle" className="sat-tick">
+          {k}
+        </text>
+      ))}
+      <text x={pad.l - 6} y={y(max) + 4} textAnchor="end" className="sat-tick">
+        {max}
+      </text>
+      <text x={pad.l - 6} y={H - pad.b} textAnchor="end" className="sat-tick">
+        0
+      </text>
+      <path d={path} className="sat-line" />
+    </svg>
+  );
+}
+
 export default async function Methode({ params }: { params: Promise<{ ref: string }> }) {
   const { ref } = await params;
   const o = await overview(ref);
   const db = getDb();
   const steps = await loadSaturation(db, o.id);
+  const many = o.stats.statements > ROWS_UP_TO;
+  const curve = many ? await loadSaturationCurve(db, o.id) : [];
+  const total = curve[curve.length - 1]?.known ?? 0;
+  const lastQuarter = curve.slice(Math.floor(curve.length * 0.75));
+  const lateNew = lastQuarter.reduce((s, c) => s + c.newQuestions, 0);
+  const ninety = curve.find((c) => c.known >= total * 0.9);
   const work = await loadMachineWork(db, o.id);
   const max = Math.max(...steps.map((s) => s.touchedQuestions), 1);
   const last = steps[steps.length - 1];
@@ -31,6 +71,25 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
 
       <section>
         <h2>Hat die {o.procedure} alles gehört?</h2>
+        {many ? (
+          <>
+            <p className="prose">
+              Eine Debatte ist ausgeschöpft, wenn neue Stellungnahmen keine neuen Streitfragen mehr bringen. Das Konzeptpapier nennt das Sättigung: Statt
+              nach Kalender endet ein Verfahren, wenn nichts Neues mehr kommt. Die Kurve zeigt, wie viele der {total} Streitfragen nach einer bestimmten
+              Zahl von Stellungnahmen bekannt sind, die Stellungnahmen in zufälliger Reihenfolge gelesen. Flacht sie ab, kommt nichts Neues mehr.
+            </p>
+            <Curve curve={curve} />
+            <Row margin={<span>Reihenfolge zufällig, aber fest, damit das Bild jedes Mal gleich ist.</span>}>
+              <p className="prose" style={{ margin: 0 }}>
+                {ninety ? `Nach ${ninety.k} von ${curve.length} Stellungnahmen waren neun von zehn Streitfragen bekannt. ` : null}
+                {lateNew / Math.max(1, total) < 0.05
+                  ? `Das letzte Viertel der Stellungnahmen brachte nur noch ${lateNew} neue Streitfragen: Die Debatte wirkt ausgeschöpft.`
+                  : `Das letzte Viertel der Stellungnahmen brachte noch ${lateNew} neue Streitfragen: Die Debatte war noch nicht ausgeschöpft.`}
+              </p>
+            </Row>
+          </>
+        ) : (
+          <>
         <p className="prose">
           Eine Debatte ist ausgeschöpft, wenn neue Stellungnahmen keine neuen Streitfragen mehr bringen. Das Konzeptpapier nennt das Sättigung: Statt nach
           Kalender endet ein Verfahren, wenn nichts Neues mehr kommt. Hier jede Stellungnahme in der Reihenfolge, in der sie verarbeitet wurde (die kürzeste
@@ -61,10 +120,12 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
             <p className="prose" style={{ margin: 0 }}>
               {saturated
                 ? `Die Debatte wirkt ausgeschöpft: Die letzte Stellungnahme brachte kaum noch neue Streitfragen.`
-                : `Die ${o.procedure} war nicht gesättigt. Auch die letzte Stellungnahme (${last.short}) warf noch ${last.newQuestions} von ${last.touchedQuestions} Streitfragen als erste auf. Mehr Stimmen hätten wahrscheinlich weitere Streitfragen auf die Karte gebracht; bei elf Sachverständigen ist das zu erwarten.`}
+                : `Die ${o.procedure} war nicht gesättigt. Auch die letzte Stellungnahme (${last.short}) warf noch ${last.newQuestions} von ${last.touchedQuestions} Streitfragen als erste auf. Mehr Stimmen hätten wahrscheinlich weitere Streitfragen auf die Karte gebracht; bei ${steps.length} Stellungnahmen ist das zu erwarten.`}
             </p>
           </Row>
         ) : null}
+          </>
+        )}
       </section>
 
       <section>

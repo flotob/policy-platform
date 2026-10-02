@@ -19,12 +19,26 @@ pnpm --filter @policy/auswertung dev     # http://localhost:3200 (needs dangerou
 The app never writes to the database. "Frag die Landkarte" calls the LLM
 (Agent SDK, dev: Max subscription) and answers only from retrieved points.
 
+Two real consultations so far: the Wärmeplanungsgesetz hearing (`/302875`, a
+draft law, 11 expert statements) and the BMWK PV-Strategie 2023
+(`/pv-strategie-2023`, a draft strategy, 487 senders of whom 255 private
+persons). `/` lists every consultation that has a Landkarte. What differs is
+read from the data: "Anhörung" vs "Konsultation" (source system), "Das
+Gesetz" vs "Die Strategie" (the draft's document kind: a bill is shown § by
+§, a strategy field of action by field of action).
+
+Private persons are imported as "Privatperson N" (`platform/scripts/
+prepare-pv-strategie.ts`: names, e-mail addresses, phone numbers and street
+addresses masked in their letters); the app counts them and folds them away
+instead of listing hundreds of rows.
+
 ## Pages (German UI, route = what Frau K. does)
 
 | Route | Idea | What it answers |
 |---|---|---|
 | `/[ref]` | 1 + 7 | Lagebild: the report — what to clarify, by whom; Verdichtung opener |
-| `/[ref]/gesetz` | 2 | The bill, § by §, with how much dispute each section draws |
+| `/` | — | The consultations with a Landkarte |
+| `/[ref]/gesetz` | 2 | The bill, § by §, with how much dispute each section draws (a strategy: field by field) |
 | `/[ref]/massnahmen/[slug]` | — | Landkarte per measure: verdict, zones, solution space, Einzelforderungen |
 | `/[ref]/punkt/[id]` | 8 | One Landkarten-Punkt: who believes it · evidence · origin; Prüfpfad |
 | `/[ref]/gutachten` | 5 | Study agenda: factual disputes a short study could settle |

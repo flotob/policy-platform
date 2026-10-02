@@ -79,8 +79,10 @@ export function Verdichtung(props: Props) {
       const docsW = W * 0.24;
       const base = H - 28;
       const maxChars = Math.max(...props.orgs.map((o) => o.chars));
-      const bw = Math.min(16, (docsW - 8) / props.orgs.length - 4);
-      const docX = (i: number) => 4 + i * (bw + 4);
+      // Hundreds of statements: hairline bars without gaps.
+      const gap = props.orgs.length > 40 ? 0 : 4;
+      const bw = Math.max(0.5, Math.min(16, (docsW - 8) / props.orgs.length - gap));
+      const docX = (i: number) => 4 + i * (bw + gap);
       const docH = (o: Props["orgs"][number]) => 18 + (o.chars / maxChars) * (base - 40);
       const mx0 = W * 0.42;
       const mw = (W - mx0 - 4) / props.measures.length;
@@ -104,6 +106,10 @@ export function Verdichtung(props: Props) {
       const measOf: number[] = [];
       perMeasure.forEach((k, i) => { for (let j = 0; j < k; j++) measOf.push(i); });
       const seen = new Array(props.measures.length).fill(0) as number[];
+      // Dot grid per measure: as dense as the fullest measure needs to fit the height.
+      const fullest = Math.max(1, ...perMeasure);
+      const cell = Math.max(1.2, Math.min(3.4, Math.sqrt(((mw - 6) * (base - 28)) / fullest)));
+      const dot = Math.min(2, cell * 0.6);
       const pBurst = ease((elapsed - T.docs) / (T.burst - T.docs));
       const pFlow = ease((elapsed - T.burst) / (T.flow - T.burst));
       const pCond = ease((elapsed - T.flow) / (T.condense - T.flow));
@@ -118,12 +124,12 @@ export function Verdichtung(props: Props) {
           const sy = base - docH(props.orgs[d]!) * jit(i, 1);
           const cx = docsW + 12 + jit(i, 2) * (mx0 - docsW - 24);
           const cy = 14 + jit(i, 3) * (base - 28);
-          const rows = Math.max(1, Math.floor((mw - 6) / 3.4));
-          const tx = mx0 + m * mw + 3 + (slot % rows) * 3.4;
-          const ty = base - 2 - Math.floor(slot / rows) * 3.4;
+          const rows = Math.max(1, Math.floor((mw - 6) / cell));
+          const tx = mx0 + m * mw + 3 + (slot % rows) * cell;
+          const ty = base - 2 - Math.floor(slot / rows) * cell;
           const x = sx + (cx - sx) * pBurst + (tx - cx) * pFlow;
           const y = sy + (cy - sy) * pBurst + (ty - cy) * pFlow;
-          g.fillRect(x, y, 2, 2);
+          g.fillRect(x, y, dot, dot);
         }
         g.globalAlpha = 1;
       }

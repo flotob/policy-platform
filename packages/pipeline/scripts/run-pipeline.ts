@@ -32,6 +32,8 @@
  *     [--only <a,b,...>]    run exactly these stages
  *     [--submissions <id|source_ref,...>]  --jev: extract/canonicalize only these (test runs)
  *     [--editor-concurrency 4]  --jev: parallel LLM editor calls (refine, duplicate second opinions)
+ *     [--jev-concurrency 8]     --jev: parallel Jev requests in assign-measures, relations, map-quotes, map-stances
+ *     [--llm-concurrency 6]     --jev: parallel LLM calls in assign-measures (second opinions) and diagnose
  *     [--render-out <dir>]  --jev: write the Landkarten here instead of docs/landkarte
  *     [--jev]               judgment stages via Jev (see above)
  *     [--list]              print stage names and exit
@@ -83,19 +85,21 @@ function stages(consultation: string, limit: string, concurrency: string, jev: b
   if (jev) {
     const subs = arg("submissions") ? ["--submissions", arg("submissions")!] : [];
     const editors = arg("editor-concurrency") ? ["--editor-concurrency", arg("editor-concurrency")!] : [];
+    const jevPar = arg("jev-concurrency") ? ["--concurrency", arg("jev-concurrency")!] : [];
+    const llmPar = arg("llm-concurrency");
     const out = arg("render-out") ? ["--out", arg("render-out")!] : [];
     return [
       { name: "extract", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "extract", "--concurrency", concurrency, ...editors, ...subs] },
       { name: "canonicalize", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "canonicalize", ...editors, ...subs] },
       { name: "measures", cwd: pipelineDir, script: p("propose-measures-bill.ts"), args: c },
-      { name: "assign-measures", cwd: pipelineDir, script: p("assign-measures.ts"), args: c },
-      { name: "relations", cwd: pipelineDir, script: p("relations.ts"), args: c },
+      { name: "assign-measures", cwd: pipelineDir, script: p("assign-measures.ts"), args: [...c, ...jevPar, ...(llmPar ? ["--llm-concurrency", llmPar] : [])] },
+      { name: "relations", cwd: pipelineDir, script: p("relations.ts"), args: [...c, ...jevPar] },
       { name: "condense", cwd: pipelineDir, script: p("condense.ts"), args: c },
-      { name: "map-quotes", cwd: pipelineDir, script: p("jev-quotes.ts"), args: [...c, "--what", "landkarte", "--apply"] },
-      { name: "map-stances", cwd: pipelineDir, script: p("map-stances.ts"), args: c },
+      { name: "map-quotes", cwd: pipelineDir, script: p("jev-quotes.ts"), args: [...c, "--what", "landkarte", "--apply", ...jevPar] },
+      { name: "map-stances", cwd: pipelineDir, script: p("map-stances.ts"), args: [...c, ...jevPar] },
       { name: "camps", cwd: platformDir, script: path.join(platformDir, "scripts", "camps.ts"), args: c },
       { name: "name-camps", cwd: pipelineDir, script: p("name-camps.ts"), args: c },
-      { name: "diagnose", cwd: pipelineDir, script: p("diagnose-map.ts"), args: [...c, "--concurrency", "6"] },
+      { name: "diagnose", cwd: pipelineDir, script: p("diagnose-map.ts"), args: [...c, "--concurrency", llmPar ?? "6"] },
       { name: "render", cwd: pipelineDir, script: p("render-landkarte.ts"), args: [...c, ...out] },
       { name: "check", cwd: pipelineDir, script: p("check-run.ts"), args: c },
     ];
@@ -224,7 +228,7 @@ async function main() {
     database: `${dbUrl.hostname}:${dbUrl.port}${dbUrl.pathname}`,
     code: { commit: git("rev-parse HEAD"), branch: git("rev-parse --abbrev-ref HEAD"), uncommittedChanges: dirty },
     models: { llm: process.env.LLM_MODEL ?? "claude-sonnet-5-5", jev: process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest", jevConcurrency: Number(process.env.JEV_CONCURRENCY ?? 16) },
-    options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
+    options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, editorConcurrency: arg("editor-concurrency") ?? null, jevConcurrency: arg("jev-concurrency") ?? null, llmConcurrency: arg("llm-concurrency") ?? null, from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
     node: process.version,
     startedAt: startedAt.toISOString(),
     endedAt: null as string | null,

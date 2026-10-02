@@ -49,6 +49,28 @@ export async function loadSaturation(db: Db, consultationId: string): Promise<Sa
   });
 }
 
+/**
+ * Saturation for many statements: how many dispute questions are known after
+ * k statements, in a fixed random order (md5 of the id). Processing order is
+ * shortest first, which with hundreds of senders means citizens first and
+ * long association statements last — the curve would only show that order.
+ */
+export async function loadSaturationCurve(db: Db, consultationId: string): Promise<{ k: number; newQuestions: number; known: number }[]> {
+  const r = await rows<{ k: number; new_q: number }>(db, sql`
+    WITH ord AS (
+      SELECT id AS submission_id, row_number() OVER (ORDER BY md5(id::text))::int AS k
+      FROM submissions WHERE consultation_id = ${consultationId} AND text IS NOT NULL),
+    firsts AS (
+      SELECT mp.id, min(o.k) AS k FROM map_points mp
+      JOIN points p ON p.map_point_id = mp.id JOIN point_sources ps ON ps.point_id = p.id
+      JOIN ord o ON o.submission_id = ps.submission_id
+      WHERE mp.consultation_id = ${consultationId} GROUP BY mp.id)
+    SELECT o.k, (SELECT count(*) FROM firsts f WHERE f.k = o.k)::int AS new_q
+    FROM ord o ORDER BY o.k`);
+  let known = 0;
+  return r.map((x) => ({ k: x.k, newQuestions: x.new_q, known: (known += x.new_q) }));
+}
+
 /** What the machine did in this run — counts from the recorded judgments. */
 export async function loadMachineWork(db: Db, consultationId: string) {
   const j = await rows<{ family: string; n: number }>(db, sql`

@@ -49,7 +49,43 @@ const FLAG: Record<string, string> = {
   fact_value_uncertain: "Tatsache oder Wertung unsicher",
 };
 
+/** Above this many camp members, the list names who takes a position and counts the rest. */
+const LIST_ALL_UP_TO = 15;
+
 function VoteList({ votes, side, name }: { votes: OrgVote[]; side: "a" | "b"; name: string }) {
+  if (votes.length > LIST_ALL_UP_TO) {
+    const by = (value: number) => votes.filter((v) => v.value === value);
+    // Organisations by name, private persons only counted.
+    const who = (vs: OrgVote[]) => {
+      const orgs = vs.filter((v) => v.org.type !== "PRIVATE").map((v) => v.org.short);
+      const people = vs.length - orgs.length;
+      return [...orgs, ...(people ? [`${people} ${people === 1 ? "Privatperson" : "Privatpersonen"}`] : [])].join(", ");
+    };
+    const agree = by(1);
+    const disagree = by(-1);
+    const silent = votes.length - agree.length - disagree.length;
+    return (
+      <div className={`lk-voices lk-side-${side}`} style={{ display: "block", marginBottom: "0.6rem" }}>
+        <strong className="small">{name}</strong>
+        <ul className="votelist votelist-compact">
+          <li>
+            <i className="lk-dot lk-dot-agree" aria-hidden />
+            <span>{agree.length} stimmen zu</span>
+            <span className="muted">{who(agree)}</span>
+          </li>
+          <li>
+            <i className="lk-dot lk-dot-disagree" aria-hidden />
+            <span>{disagree.length} lehnen ab</span>
+            <span className="muted">{who(disagree)}</span>
+          </li>
+          <li>
+            <i className="lk-dot lk-dot-silent" aria-hidden />
+            <span>{silent} äußern sich nicht</span>
+          </li>
+        </ul>
+      </div>
+    );
+  }
   return (
     <div className={`lk-voices lk-side-${side}`} style={{ display: "block", marginBottom: "0.6rem" }}>
       <strong className="small">{name}</strong>

@@ -148,6 +148,7 @@ export function VoteResult({
 
   // Organisations: same position on the questions both answered; few shared questions count for less.
   const orgScores = data.orgs
+    .filter((o: VoteOrg) => !o.private)
     .map((o: VoteOrg) => {
       const s: Score = { n: 0, k: 0 };
       for (const p of answered) {

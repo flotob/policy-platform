@@ -98,8 +98,9 @@ function voteIndex(votes: VoteRow[]): Map<string, Map<string, number>> {
 
 function agreementsOf(org: Org, orgs: Org[], idx: Map<string, Map<string, number>>): Agreement[] {
   const mine = org.participantId ? idx.get(org.participantId) : undefined;
+  // Comparison partners are organisations: "closest to Privatperson 143" tells a reader nothing.
   return orgs
-    .filter((o) => o.submissionId !== org.submissionId)
+    .filter((o) => o.submissionId !== org.submissionId && o.type !== "PRIVATE")
     .map((other) => {
       const theirs = other.participantId ? idx.get(other.participantId) : undefined;
       let same = 0;

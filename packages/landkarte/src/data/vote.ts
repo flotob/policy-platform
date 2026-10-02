@@ -43,6 +43,8 @@ export interface VoteOrg {
   name: string;
   short: string;
   side: "a" | "b" | null;
+  /** A private person: counts in the camps, never offered as "closest organisation". */
+  private: boolean;
 }
 
 export interface VoteCamp {
@@ -124,6 +126,7 @@ export async function loadVoteData(db: Db, consultationId: string): Promise<Vote
       name: o.name,
       short: o.short,
       side: o.camp == null ? null : (sideOf.get(o.camp) ?? null),
+      private: o.type === "PRIVATE",
     })),
     measures,
   };

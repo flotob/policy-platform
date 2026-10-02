@@ -14,3 +14,9 @@
   .sat-row { grid-template-columns: 1fr auto; }
   .sat-bar { grid-column: 1 / -1; order: 3; }
 }
+
+/* Saturation curve (many statements) */
+.sat-curve { display: block; width: 100%; max-width: 640px; height: auto; margin: 1rem 0 0.75rem; }
+.sat-axis { stroke: var(--rule-strong); stroke-width: 1; }
+.sat-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.sat-tick { font-family: var(--sans); font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; }
