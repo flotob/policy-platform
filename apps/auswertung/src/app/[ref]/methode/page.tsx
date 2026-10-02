@@ -137,12 +137,18 @@ export default async function Methode({ params }: { params: Promise<{ ref: strin
             Jede Stellungnahme wird in einzelne Argumente zerlegt, {nf.format(o.stats.points)} insgesamt. Wo die automatische Prüfung ein Argument beanstandet,
             bessert eine maschinelle Redaktion nach: {work.edits.split ?? 0}-mal geteilt, {work.edits.rewrite ?? 0}-mal umformuliert.
           </p>
+          {o.stats.undecomposed > 0 ? (
+            <p className="row-text">
+              Noch nicht zerlegt sind {o.stats.undecomposed} kurze Stellungnahmen, meist von Privatpersonen: Im Prototyp reichte das Rechenkontingent nicht für
+              alle. Ihre Argumente fehlen auf der Karte; wie sie zu den Streitfragen stehen, ist trotzdem aus ihrem Text abgeleitet.
+            </p>
+          ) : null}
         </Row>
         <Row margin={<span>Jev (TypeSafe), {nf.format(work.jevJudgments)} Einzelentscheidungen, jede mit Wahrscheinlichkeit gespeichert</span>}>
           <p className="row-title">Ordnen</p>
           <p className="row-text">
-            Jev prüft jedes Argument (Tatsache oder Wertung, welche kritische Frage), erkennt dasselbe Argument in verschiedenen Stellungnahmen, ordnet es einer
-            {o.draft.kind === "law" ? "Maßnahme des Gesetzentwurfs" : "Handlungsfeld des Strategieentwurfs"} zu, findet Verbindungen zwischen Argumenten und leitet aus jedem Text ab, wie die Organisation zu jeder Streitfrage steht.
+            Jev prüft jedes Argument (Tatsache oder Wertung, welche kritische Frage), erkennt dasselbe Argument in verschiedenen Stellungnahmen, ordnet es{" "}
+            {o.draft.kind === "law" ? "einer Maßnahme des Gesetzentwurfs" : "einem Handlungsfeld des Strategieentwurfs"} zu, findet Verbindungen zwischen Argumenten und leitet aus jedem Text ab, wie die Organisation zu jeder Streitfrage steht.
           </p>
         </Row>
         <Row margin={<span>Jev</span>}>

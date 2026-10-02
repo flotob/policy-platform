@@ -185,6 +185,8 @@ export async function loadOverview(db: Db, ref: string): Promise<Overview | null
     await rows<Row>(db, sql`
       SELECT
         (SELECT count(*) FROM points WHERE consultation_id = ${c.id} AND status = 'released')::int AS points,
+        (SELECT count(*) FROM submissions s WHERE s.consultation_id = ${c.id} AND s.text IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM extractions e WHERE e.submission_id = s.id))::int AS undecomposed,
         (SELECT count(*) FROM map_points WHERE consultation_id = ${c.id} AND typ <> 'luecke')::int AS map_points,
         (SELECT count(*) FROM points WHERE consultation_id = ${c.id} AND status = 'released' AND kind <> 'gap' AND map_point_id IS NULL)::int AS singles,
         (SELECT count(*) FROM map_point_votes v JOIN map_points m ON m.id = v.map_point_id WHERE m.consultation_id = ${c.id})::int AS votes,
@@ -205,6 +207,7 @@ export async function loadOverview(db: Db, ref: string): Promise<Overview | null
     stats: {
       statements: orgs.length,
       privatePersons: orgs.filter((x) => x.type === "PRIVATE").length,
+      undecomposed: st.undecomposed as number,
       chars,
       pages: Math.round(chars / 2500),
       points: st.points as number,

@@ -67,6 +67,8 @@ export interface Overview {
     statements: number;
     /** Statements by private persons ("Privatperson N"). */
     privatePersons: number;
+    /** Statements not (yet) decomposed into arguments; their stances are still inferred from the text. */
+    undecomposed: number;
     chars: number;
     /** Rough page count of the statements (2,500 characters per page). */
     pages: number;

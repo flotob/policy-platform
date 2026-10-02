@@ -76,6 +76,9 @@ export default async function Organisationen({ params }: { params: Promise<{ ref
         margin={
           <>
             <div>Haltungen sind aus dem Text der Stellungnahmen abgeleitet (Jev), nicht abgestimmt.</div>
+            {o.stats.undecomposed > 0 ? (
+              <div>{o.stats.undecomposed} kurze Stellungnahmen sind noch nicht in Argumente zerlegt; ihre Haltungen sind trotzdem abgeleitet.</div>
+            ) : null}
             <div>Eine Seite: rund 2.500 Zeichen.</div>
           </>
         }
