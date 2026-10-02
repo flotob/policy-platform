@@ -1,0 +1,19 @@
+# Auswertung — the ministry app (read-only). No migrator: the database is
+# restored from a dump (see apps/auswertung/README.md); this container only serves.
+
+FROM node:22-alpine AS builder
+RUN corepack enable
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @policy/auswertung build
+
+FROM node:22-alpine AS runner
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=builder /app/apps/auswertung/.next/standalone ./
+COPY --from=builder /app/apps/auswertung/.next/static ./apps/auswertung/.next/static
+COPY --from=builder /app/apps/auswertung/public ./apps/auswertung/public
+EXPOSE 3000
+ENV PORT=3000 HOSTNAME=0.0.0.0
+CMD ["node", "apps/auswertung/server.js"]

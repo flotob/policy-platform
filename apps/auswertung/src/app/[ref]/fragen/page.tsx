@@ -1,6 +1,7 @@
 import { nf } from "@policy/landkarte";
 
 import { AskBox } from "@/components/AskBox";
+import { askEnabled } from "@/lib/features";
 import { overview } from "@/lib/load";
 
 import "./styles.css";
@@ -45,6 +46,9 @@ export default async function Fragen({ params }: { params: Promise<{ ref: string
         </p>
       </header>
 
+      {!askEnabled() ? (
+        <p className="prose">In dieser Fassung ist die Frage-Funktion abgeschaltet: Jede Frage startet ein Sprachmodell.</p>
+      ) : (
       <AskBox
         base={base}
         examples={examples}
@@ -65,6 +69,7 @@ export default async function Fragen({ params }: { params: Promise<{ ref: string
           </>
         }
       />
+      )}
     </>
   );
 }

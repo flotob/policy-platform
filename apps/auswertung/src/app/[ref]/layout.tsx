@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { PathNav, type PathItem } from "@/components/PathNav";
+import { askEnabled } from "@/lib/features";
 import { overview } from "@/lib/load";
 
 export default async function ConsultationLayout({ children, params }: { children: ReactNode; params: Promise<{ ref: string }> }) {
@@ -20,7 +21,7 @@ export default async function ConsultationLayout({ children, params }: { childre
     { href: `${base}/gutachten`, label: "Gutachten-Agenda", group: "Werkzeuge" },
     { href: `${base}/organisationen`, label: "Organisationen" },
     { href: `${base}/abstimmen`, label: "Wo stehen Sie?" },
-    { href: `${base}/fragen`, label: "Frag die Landkarte" },
+    ...(askEnabled() ? [{ href: `${base}/fragen`, label: "Frag die Landkarte" }] : []),
     { href: `${base}/bericht`, label: "Bericht zum Drucken" },
     { href: `${base}/methode`, label: "Wie die Karte entsteht" },
   ];

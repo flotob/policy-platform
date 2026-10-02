@@ -16,6 +16,7 @@ import { askMaterial, type AskMaterial, type AskResponse } from "@policy/landkar
 
 import { uncitedSentences } from "@/components/AskBoxText";
 import { getDb } from "@/lib/db";
+import { askEnabled } from "@/lib/features";
 
 import { ANSWER_SCHEMA, NO_ANSWER, SYSTEM, buildPrompt, checkCitations, repairPrompt } from "./prompt";
 
@@ -100,6 +101,7 @@ function respond(m: AskMaterial, question: string, answer: string, started: numb
 export async function POST(req: Request, { params }: { params: Promise<{ ref: string }> }) {
   const started = Date.now();
   const { ref } = await params;
+  if (!askEnabled()) return json({ ok: false, error: "In dieser Fassung ist die Frage-Funktion abgeschaltet." }, 503);
 
   let question = "";
   try {
