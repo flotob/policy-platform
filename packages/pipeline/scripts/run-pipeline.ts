@@ -34,6 +34,8 @@
  *     [--editor-concurrency 4]  --jev: parallel LLM editor calls (refine, duplicate second opinions)
  *     [--jev-concurrency 8]     --jev: parallel Jev requests in assign-measures, relations, map-quotes, map-stances
  *     [--llm-concurrency 6]     --jev: parallel LLM calls in assign-measures (second opinions) and diagnose
+ *     [--economy]               --jev: no LLM second opinions (duplicate checks in canonicalize, unsure
+ *                               measures in assign-measures) — saves most small LLM calls
  *     [--render-out <dir>]  --jev: write the Landkarten here instead of docs/landkarte
  *     [--jev]               judgment stages via Jev (see above)
  *     [--list]              print stage names and exit
@@ -87,12 +89,13 @@ function stages(consultation: string, limit: string, concurrency: string, jev: b
     const editors = arg("editor-concurrency") ? ["--editor-concurrency", arg("editor-concurrency")!] : [];
     const jevPar = arg("jev-concurrency") ? ["--concurrency", arg("jev-concurrency")!] : [];
     const llmPar = arg("llm-concurrency");
+    const economy = has("economy");
     const out = arg("render-out") ? ["--out", arg("render-out")!] : [];
     return [
       { name: "extract", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "extract", "--concurrency", concurrency, ...editors, ...subs] },
-      { name: "canonicalize", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "canonicalize", ...editors, ...subs] },
+      { name: "canonicalize", cwd: pipelineDir, script: p("extract.ts"), args: [...c, "--phase", "canonicalize", ...editors, ...subs, ...(economy ? ["--no-duplicate-checks"] : [])] },
       { name: "measures", cwd: pipelineDir, script: p("propose-measures-bill.ts"), args: c },
-      { name: "assign-measures", cwd: pipelineDir, script: p("assign-measures.ts"), args: [...c, ...jevPar, ...(llmPar ? ["--llm-concurrency", llmPar] : [])] },
+      { name: "assign-measures", cwd: pipelineDir, script: p("assign-measures.ts"), args: [...c, ...jevPar, ...(llmPar ? ["--llm-concurrency", llmPar] : []), ...(economy ? ["--no-second-opinion"] : [])] },
       { name: "relations", cwd: pipelineDir, script: p("relations.ts"), args: [...c, ...jevPar] },
       { name: "condense", cwd: pipelineDir, script: p("condense.ts"), args: c },
       { name: "map-quotes", cwd: pipelineDir, script: p("jev-quotes.ts"), args: [...c, "--what", "landkarte", "--apply", ...jevPar] },
@@ -228,7 +231,7 @@ async function main() {
     database: `${dbUrl.hostname}:${dbUrl.port}${dbUrl.pathname}`,
     code: { commit: git("rev-parse HEAD"), branch: git("rev-parse --abbrev-ref HEAD"), uncommittedChanges: dirty },
     models: { llm: process.env.LLM_MODEL ?? "claude-sonnet-5-5", jev: process.env.TYPESAFE_DEFAULT_MODEL ?? "jev-latest", jevConcurrency: Number(process.env.JEV_CONCURRENCY ?? 16) },
-    options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, editorConcurrency: arg("editor-concurrency") ?? null, jevConcurrency: arg("jev-concurrency") ?? null, llmConcurrency: arg("llm-concurrency") ?? null, from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
+    options: { jev, concurrency, limit, submissions: arg("submissions") ?? null, editorConcurrency: arg("editor-concurrency") ?? null, jevConcurrency: arg("jev-concurrency") ?? null, llmConcurrency: arg("llm-concurrency") ?? null, economy: has("economy"), from: from ?? null, until: until ?? null, only: only ?? null, renderOut: arg("render-out") ?? null },
     node: process.version,
     startedAt: startedAt.toISOString(),
     endedAt: null as string | null,

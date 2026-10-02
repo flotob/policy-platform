@@ -9,6 +9,8 @@
  * Usage:
  *   DATABASE_URL=... TYPESAFE_API_KEY=... tsx scripts/assign-measures.ts --consultation <ref>
  *     [--concurrency 8] [--overwrite]
+ *     [--no-second-opinion]   economy: where Jev is unsure, its best guess stands
+ *                             (recorded as acceptedUnsure; no LLM call)
  */
 
 import { createDb, sql } from "@policy/db";
@@ -40,6 +42,7 @@ async function main() {
   const ref = arg("consultation");
   if (!ref) throw new Error("--consultation required");
   const overwrite = process.argv.includes("--overwrite");
+  const noSecondOpinion = process.argv.includes("--no-second-opinion");
   const db = createDb(url);
   const cons = await resolveConsultation(db, ref);
 
@@ -92,7 +95,8 @@ async function main() {
     async (p, answers, provenance) => {
       const a = answers.measure as { choice: string; confidence: number };
       const m = decideMeasure(measures, a);
-      const pending = a.confidence < MEASURE_SECOND_OPINION_BELOW;
+      const unsureJev = a.confidence < MEASURE_SECOND_OPINION_BELOW;
+      const pending = unsureJev && !noSecondOpinion;
       await saveJudgment(db, {
         tenantId: cons.tenantId,
         consultationId: cons.id,
@@ -101,7 +105,7 @@ async function main() {
         family: MEASURE_FAMILY,
         provenance,
         answers,
-        decided: { measure: m, confidence: a.confidence, pendingSecondOpinion: pending },
+        decided: { measure: m, confidence: a.confidence, pendingSecondOpinion: pending, ...(unsureJev && noSecondOpinion ? { acceptedUnsure: true } : {}) },
       });
       // An unsure assignment is NOT saved yet: the point stays open until the
       // LLM has decided — a crash or failed call leaves it for the next run.
