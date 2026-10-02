@@ -85,6 +85,24 @@ export async function loadOrgs(db: Db, consultationId: string, analysis: Analysi
   });
 }
 
+/** Groups beyond the two largest camps, larger first. */
+export function otherCampsOf(analysis: AnalysisResult | null, orgs: Org[]): Omit<Camp, "side">[] {
+  if (!analysis) return [];
+  return Object.entries(analysis.clustering.groupSizes)
+    .map(([g, n]) => ({ group: Number(g), size: n }))
+    .sort((x, y) => y.size - x.size || x.group - y.group)
+    .slice(2)
+    .map((c) => ({
+      group: c.group,
+      size: c.size,
+      name: analysis.campNames?.[String(c.group)]?.name ?? `Gruppe ${c.group + 1}`,
+      summary: analysis.campNames?.[String(c.group)]?.summary ?? null,
+      orgs: orgs.filter((o) => o.camp === c.group).map((o) => o.name),
+      named: orgs.filter((o) => o.camp === c.group && o.type !== "PRIVATE").map((o) => o.name),
+      people: orgs.filter((o) => o.camp === c.group && o.type === "PRIVATE").length,
+    }));
+}
+
 /** Camps, larger first ("a" = larger). */
 export function campsOf(analysis: AnalysisResult | null, orgs: Org[]): Camp[] {
   if (!analysis) return [];
@@ -203,6 +221,7 @@ export async function loadOverview(db: Db, ref: string): Promise<Overview | null
     draft: await draftOf(db, c.id),
     orgs,
     camps,
+    otherCamps: otherCampsOf(analysis, orgs),
     measures,
     stats: {
       statements: orgs.length,

@@ -179,7 +179,7 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
       </section>
 
       <section>
-        <h2>Die beiden Lager</h2>
+        <h2>{o.otherCamps.length ? "Die Lager" : "Die beiden Lager"}</h2>
         <p className="prose">
           Wer ähnlich Stellung nimmt, bildet ein Lager. Gerechnet wird das aus den Voten zu allen Streitfragen, nicht aus Verbandszugehörigkeit.
         </p>
@@ -204,7 +204,24 @@ export default async function Lagebild({ params }: { params: Promise<{ ref: stri
             <p className="row-title">{c.name}</p>
             {c.summary ? <p className="row-text">{c.summary}</p> : null}
             <p className="small muted" style={{ marginTop: "0.4rem" }}>
-              {membersText(c, (n) => n)}
+              {membersText(c, (n) => n, 15)}
+            </p>
+          </Row>
+        ))}
+        {o.otherCamps.map((c) => (
+          <Row
+            key={c.group}
+            margin={
+              <>
+                <div>{sendersText({ statements: c.size, privatePersons: c.people })}</div>
+                <div className="muted">Kleinere dritte Gruppe: Die Diagnosen vergleichen die beiden großen Lager, diese Gruppe fließt dort nicht ein.</div>
+              </>
+            }
+          >
+            <p className="row-title">{c.name}</p>
+            {c.summary ? <p className="row-text">{c.summary}</p> : null}
+            <p className="small muted" style={{ marginTop: "0.4rem" }}>
+              {membersText(c, (n) => n, 15)}
             </p>
           </Row>
         ))}

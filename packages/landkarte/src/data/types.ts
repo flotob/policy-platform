@@ -62,6 +62,8 @@ export interface Overview {
   draft: { kind: "law" | "strategy"; title: string };
   orgs: Org[];
   camps: Camp[];
+  /** Smaller groups beyond the two largest camps (k > 2): named and shown, not part of the diagnoses. */
+  otherCamps: Omit<Camp, "side">[];
   measures: MeasureSummary[];
   stats: {
     statements: number;

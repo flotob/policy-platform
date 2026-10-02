@@ -166,11 +166,11 @@ export function namesText(names: string[], max = 6): string {
 }
 
 /** A camp's members in a sentence: organisations by name, private persons counted. */
-export function membersText(camp: { named: string[]; people: number }, short: (name: string) => string = shortOrg): string {
-  const names = camp.named.map(short).join(", ");
-  if (!camp.people) return names;
-  const people = `${nf.format(camp.people)} ${camp.people === 1 ? "Privatperson" : "Privatpersonen"}`;
-  return names ? `${names} und ${people}` : people;
+export function membersText(camp: { named: string[]; people: number }, short: (name: string) => string = shortOrg, max = Infinity): string {
+  const parts = camp.named.slice(0, max).map(short);
+  if (camp.named.length > max) parts.push(`${nf.format(camp.named.length - max)} weitere Organisationen`);
+  if (camp.people) parts.push(`${nf.format(camp.people)} ${camp.people === 1 ? "Privatperson" : "Privatpersonen"}`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} und ${parts.at(-1)}` : (parts[0] ?? "");
 }
 
 /** Who wrote in: "11 Organisationen" or "232 Organisationen und 255 Privatpersonen". */

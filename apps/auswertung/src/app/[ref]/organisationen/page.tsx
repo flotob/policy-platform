@@ -51,9 +51,10 @@ export default async function Organisationen({ params }: { params: Promise<{ ref
   const base = `/${o.ref}`;
   const list = await loadOrganisations(getDb(), o);
   const privateCount = o.orgs.filter((x) => x.type === "PRIVATE").length;
+  const known = new Set([...o.camps, ...o.otherCamps].map((c) => c.group));
   const groups = [
-    ...o.camps.map((c) => ({ camp: c, items: list.filter((s) => s.camp?.group === c.group) })),
-    { camp: null, items: list.filter((s) => !s.camp) },
+    ...[...o.camps, ...o.otherCamps].map((c) => ({ camp: c, items: list.filter((s) => s.org.camp === c.group) })),
+    { camp: null, items: list.filter((s) => s.org.camp == null || !known.has(s.org.camp)) },
   ].filter((g) => g.items.length > 0);
 
   return (
