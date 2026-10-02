@@ -167,6 +167,20 @@ async function weigh(
   pts: Pt[],
   subs: Sub[],
 ): Promise<{ weights: Map<string, Weight>; stats: StageStats }> {
+  // Weights saved by an earlier run whose proposal failed later are reused (same
+  // points, same panel) — a rerun does not pay for them twice.
+  const saved = new Map<string, Weight>();
+  if (pts.length) {
+    const r = await db.execute(sql`
+      SELECT subject_id, decided FROM judgments
+      WHERE consultation_id = ${cons.id} AND subject_kind = 'point' AND family = ${POINT_STANCE_FAMILY}
+        AND subject_id IN (${sql.join(pts.map((p) => sql`${p.id}`), sql`, `)})`);
+    for (const row of r.rows as { subject_id: string; decided: Weight }[]) saved.set(row.subject_id, row.decided);
+  }
+  if (pts.length && pts.every((p) => saved.has(p.id))) {
+    console.log(`    ${scope}: weights reused from the previous run (${pts.length} points)`);
+    return { weights: saved, stats: { ok: 0, failed: 0, tokens: 0, latencies: [], wallMs: 0 } };
+  }
   const reqs: { sub: Sub; window: number; text: string; pts: Pt[] }[] = [];
   for (const sub of subs) {
     chunkText(sub.text, 20_000).forEach((text, window) => {
