@@ -87,3 +87,21 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
   .ws-table .num { text-align: left; }
   .ws-tenant { border-left: 0; padding-left: 0; }
 }
+
+/* Campaign tabs: setup · the argument · the editorial queue. */
+.cp-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 18px; border-bottom: 1px solid var(--line); }
+.cp-tabs a { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; text-decoration: none; color: var(--ink-2); font-weight: 600; font-size: 15px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.cp-tabs a:hover { color: var(--ink); }
+.cp-tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--ink); }
+.badge { display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 12px; }
+.cp-head { border-bottom: 0; padding-bottom: 0; }
+
+/* What the machine is doing for this campaign. */
+.machine { margin-top: 16px; padding: 10px 14px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--agree); font-size: 14px; display: grid; gap: 8px; }
+.machine.busy { border-left-color: var(--ga); }
+.machine .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ga); margin-right: 8px; vertical-align: 1px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .machine .pulse { animation: none; } }
+.machine-fail { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--danger); }
+.machine-fail p { flex: 1 1 320px; }
+.cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }

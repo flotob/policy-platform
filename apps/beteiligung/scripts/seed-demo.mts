@@ -4,10 +4,37 @@
  * everywhere. Idempotent: updates the campaign if it exists.
  *
  * Usage (from apps/beteiligung):
- *   DATABASE_URL=… tsx scripts/seed-demo.mts [--member <email>]
- *     --member  make an existing staff account an initiator of Musterstadt
+ *   DATABASE_URL=… tsx scripts/seed-demo.mts [--member <email>] [--statements] [--reset-analysis]
+ *     --member          make an existing staff account an initiator of Musterstadt
+ *     --statements      upload the seven fictional statements in demo/stellungnahmen
+ *                       and queue the machine's work (skeleton + one decomposition each)
+ *     --reset-analysis  forget everything the machine and the editors did on the demo
+ *                       (nodes, moves, jobs, texts) — the uploads stay
+ *     --keep-texts      with --reset-analysis: keep the extracted texts and the cached
+ *                       model outputs, so the rerun costs one skeleton call and the Jev judgments
  */
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import pg from "pg";
+
+/** Fictional senders of the demo statements (file name prefix → sender, kind). */
+const SENDERS: Record<string, [string, string]> = {
+  "01": ["Stadtwerke Musterstadt GmbH", "unternehmen"],
+  "02": ["Handwerkskammer Musterstadt-Land", "verband"],
+  "03": ["Haus & Grund Musterstadt e. V.", "verband"],
+  "04": ["Umweltverband Musterstadt e. V.", "verband"],
+  "05": ["Mieterverein Musterstadt", "verband"],
+  "06": ["Bürgerin aus der Weststadt", "privat"],
+  "07": ["Bürger aus der Altstadt", "privat"],
+};
+const MIME: Record<string, string> = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  txt: "text/plain",
+};
 
 const TENANT = { slug: "musterstadt", name: "Stadt Musterstadt" };
 const CAMPAIGN = {
@@ -43,6 +70,9 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL is not set");
 const memberIdx = process.argv.indexOf("--member");
 const member = memberIdx > 0 ? process.argv[memberIdx + 1] : undefined;
+const withStatements = process.argv.includes("--statements");
+const resetAnalysis = process.argv.includes("--reset-analysis");
+const keepTexts = process.argv.includes("--keep-texts");
 
 const db = new pg.Client({ connectionString: url });
 await db.connect();
@@ -81,8 +111,57 @@ try {
       [u.rows[0].id, tenantId],
     );
   }
+  const consultationId = (await db.query(`SELECT consultation_id FROM campaigns WHERE id = $1`, [campaignId])).rows[0].consultation_id as string;
+  if (resetAnalysis) {
+    // Only the fictional demo is ever reset (campaigns.fictional) — FK order: judgments, moves, nodes, texts.
+    await db.query(`DELETE FROM judgments WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`DELETE FROM moves WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`UPDATE map_points SET merged_into = NULL WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`DELETE FROM map_points WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);
+    if (!keepTexts) {
+      await db.query(`UPDATE campaign_files SET submission_id = NULL WHERE campaign_id = $1`, [campaignId]);
+      await db.query(`DELETE FROM extractions WHERE consultation_id = $1`, [consultationId]);
+      await db.query(`DELETE FROM submissions WHERE consultation_id = $1`, [consultationId]);
+    }
+    await db.query(`UPDATE campaigns SET state = 'vorbereitung' WHERE id = $1 AND fictional`, [campaignId]);
+  }
+  let uploaded = 0;
+  if (withStatements) {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), "..", "demo", "stellungnahmen");
+    for (const name of readdirSync(dir).sort()) {
+      const [sender, kind] = SENDERS[name.slice(0, 2)] ?? [null, null];
+      if (!sender) continue;
+      const bytes = readFileSync(join(dir, name));
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      const r = await db.query(
+        `INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type)
+         VALUES ($1, $2, 'stellungnahme', $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`,
+        [tenantId, campaignId, name, MIME[name.split(".").pop()!] ?? null, bytes.length, sha, bytes, sender, kind],
+      );
+      uploaded += r.rows.length;
+    }
+    // The machine's work, in order: the skeleton first, then every statement not yet read.
+    await db.query(
+      `INSERT INTO campaign_jobs (tenant_id, campaign_id, kind) SELECT $1, $2, 'skelett'
+       WHERE NOT EXISTS (SELECT 1 FROM map_points WHERE consultation_id = $3 AND rolle = 'schluss' AND status IN ('draft', 'released'))
+         AND NOT EXISTS (SELECT 1 FROM campaign_jobs WHERE campaign_id = $2 AND kind = 'skelett' AND state IN ('wartet', 'laeuft'))`,
+      [tenantId, campaignId, consultationId],
+    );
+    await db.query(
+      `INSERT INTO campaign_jobs (tenant_id, campaign_id, kind, file_id)
+       SELECT $1, $2, 'zerlegen', f.id FROM campaign_files f
+       WHERE f.campaign_id = $2 AND f.role = 'stellungnahme' AND (f.submission_id IS NULL OR $3)
+         AND NOT EXISTS (SELECT 1 FROM campaign_jobs j WHERE j.file_id = f.id AND j.state IN ('wartet', 'laeuft'))
+       ORDER BY f.filename`,
+      [tenantId, campaignId, resetAnalysis],
+    );
+  }
   await db.query("COMMIT");
-  console.log(`demo campaign ${TENANT.slug}/${CAMPAIGN.slug} → ${campaignId}${member ? ` · ${member} is initiator` : ""}`);
+  console.log(
+    `demo campaign ${TENANT.slug}/${CAMPAIGN.slug} → ${campaignId}${member ? ` · ${member} is initiator` : ""}` +
+      `${resetAnalysis ? " · analysis reset" : ""}${withStatements ? ` · ${uploaded} statements uploaded, jobs queued` : ""}`,
+  );
 } catch (e) {
   await db.query("ROLLBACK");
   throw e;

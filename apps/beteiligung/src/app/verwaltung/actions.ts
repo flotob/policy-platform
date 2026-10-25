@@ -8,6 +8,8 @@ import { redirect } from "next/navigation";
 
 import { freeSlug, getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
+import { enqueue } from "@/lib/kern";
+import { openingCheck } from "@/lib/redaktion";
 import { DEFAULT_PARAMS, STEPS, type CampaignParams, type CampaignState, type EditorialMode } from "@/lib/params";
 import { requireInitiator } from "@/lib/session";
 import { slugify } from "@/lib/slug";
@@ -134,6 +136,7 @@ export async function uploadFile(id: string, _prev: ActionState, form: FormData)
   if (role === "stellungnahme" && !sender) return { error: "Von wem stammt die Stellungnahme? Der Absender erscheint später bei jedem Zitat.", values: valuesOf(form) };
   const bytes = Buffer.from(await file.arrayBuffer());
   const sha = createHash("sha256").update(bytes).digest("hex");
+  if (campaign.state !== "entwurf" && campaign.state !== "vorbereitung") return { error: "Nach dem Freischalten kommen Stellungnahmen über die Beteiligung herein." };
   const r = await getDb().execute(sql`
     INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, uploaded_by)
     VALUES (${staff.tenant.id}, ${campaign.id}, ${role}, ${file.name}, ${file.type || null}, ${file.size}, ${sha}, ${bytes},
@@ -141,22 +144,38 @@ export async function uploadFile(id: string, _prev: ActionState, form: FormData)
     ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
   if (r.rows.length === 0) return { error: "Diese Datei liegt schon vor." };
   await audit(staff.tenant.id, staff.user.id, "campaign.upload", campaign.id, { filename: file.name, role, size: file.size, sha256: sha });
-  revalidatePath(`/verwaltung/${id}`);
-  return { ok: `„${file.name}“ hochgeladen.` };
+  // In preparation the machine reads a new statement right away (E4 → Z1–Z5).
+  const reading = campaign.state === "vorbereitung" && role === "stellungnahme";
+  if (reading) await enqueue(staff.tenant.id, campaign.id, "zerlegen", (r.rows[0] as { id: string }).id);
+  revalidatePath(`/verwaltung/${id}`, "layout");
+  return { ok: `„${file.name}“ hochgeladen.${reading ? " Die Maschine liest sie jetzt." : ""}` };
 }
 
 export async function deleteFile(id: string, fileId: string): Promise<void> {
   const { staff, campaign } = await own(id);
-  const r = await getDb().execute(sql`DELETE FROM campaign_files WHERE id = ${fileId} AND campaign_id = ${campaign.id} RETURNING filename`);
+  // A statement the machine has read stays: its moves are evidence in the editors' queue.
+  const r = await getDb().execute(sql`
+    DELETE FROM campaign_files WHERE id = ${fileId} AND campaign_id = ${campaign.id} AND submission_id IS NULL RETURNING filename`);
   if (r.rows.length) await audit(staff.tenant.id, staff.user.id, "campaign.delete_file", campaign.id, { filename: (r.rows[0] as { filename: string }).filename });
-  revalidatePath(`/verwaltung/${id}`);
+  revalidatePath(`/verwaltung/${id}`, "layout");
 }
 
-/** State changes the workspace offers now; opening the participation needs released points (milestone 2). */
+/** State changes by button; opening the participation has its own action with its own checks. */
 const NEXT: Partial<Record<CampaignState, CampaignState[]>> = {
   entwurf: ["vorbereitung"],
   vorbereitung: ["entwurf"],
 };
+
+/** The machine's work for a campaign entering preparation: the skeleton first, then every statement not yet read. */
+async function queueAnalysis(tenantId: string, campaignId: string, consultationId: string) {
+  const db = getDb();
+  const sk = await db.execute(sql`
+    SELECT 1 FROM map_points WHERE consultation_id = ${consultationId} AND rolle = 'schluss' AND status IN ('draft', 'released') LIMIT 1`);
+  if (!sk.rows.length) await enqueue(tenantId, campaignId, "skelett");
+  const unread = await db.execute(sql`
+    SELECT id FROM campaign_files WHERE campaign_id = ${campaignId} AND role = 'stellungnahme' AND submission_id IS NULL ORDER BY created_at, filename`);
+  for (const f of unread.rows as { id: string }[]) await enqueue(tenantId, campaignId, "zerlegen", f.id);
+}
 
 export async function setState(id: string, to: CampaignState): Promise<void> {
   const { staff, campaign } = await own(id);
@@ -166,6 +185,42 @@ export async function setState(id: string, to: CampaignState): Promise<void> {
   }
   await getDb().execute(sql`UPDATE campaigns SET state = ${to}, updated_at = now() WHERE id = ${campaign.id}`);
   await audit(staff.tenant.id, staff.user.id, "campaign.state", campaign.id, { from: campaign.state, to });
-  revalidatePath(`/verwaltung/${id}`);
-  redirect(`/verwaltung/${id}`);
+  if (to === "vorbereitung") await queueAnalysis(staff.tenant.id, campaign.id, campaign.consultationId);
+  revalidatePath(`/verwaltung/${id}`, "layout");
+  redirect(`/verwaltung/${id}${to === "vorbereitung" ? "/punkte" : ""}`);
+}
+
+/** E6: open the participation — only with a decided skeleton, the measure itself and every step carried by a released claim. */
+export async function openCampaign(id: string): Promise<void> {
+  const { staff, campaign } = await own(id);
+  if (campaign.state !== "vorbereitung") redirect(`/verwaltung/${id}`);
+  const c = await openingCheck(campaign.consultationId);
+  if (!(c.hasSkeleton && c.skeletonOpen === 0 && c.rootReleased && c.stepsCovered === 4)) redirect(`/verwaltung/${id}#freischalten`);
+  await getDb().execute(sql`UPDATE campaigns SET state = 'offen', updated_at = now() WHERE id = ${campaign.id}`);
+  await audit(staff.tenant.id, staff.user.id, "campaign.state", campaign.id, { from: campaign.state, to: "offen", released: c.released });
+  revalidatePath(`/verwaltung/${id}`, "layout");
+  revalidatePath(`/${staff.tenant.slug}/${campaign.slug}`);
+  redirect(`/verwaltung/${id}#freischalten`);
+}
+
+/** A failed job gets another go (e.g. after the database or the model was away). */
+export async function retryJob(id: string, jobId: string): Promise<void> {
+  const { staff, campaign } = await own(id);
+  await getDb().execute(sql`
+    UPDATE campaign_jobs SET state = 'wartet', attempts = 0, error = NULL, finished_at = NULL
+    WHERE id = ${jobId} AND campaign_id = ${campaign.id} AND state = 'fehler'`);
+  await audit(staff.tenant.id, staff.user.id, "campaign.job_retry", campaign.id, { job: jobId });
+  revalidatePath(`/verwaltung/${id}`, "layout");
+}
+
+/** E2 again: a new skeleton from a changed justification — only while none of it is released. */
+export async function reproposeSkeleton(id: string): Promise<void> {
+  const { staff, campaign } = await own(id);
+  const c = await openingCheck(campaign.consultationId);
+  if (c.skeletonReleased === 0 && !c.rootReleased) {
+    await enqueue(staff.tenant.id, campaign.id, "skelett");
+    await audit(staff.tenant.id, staff.user.id, "campaign.skeleton_repropose", campaign.id, {});
+  }
+  revalidatePath(`/verwaltung/${id}`, "layout");
+  redirect(`/verwaltung/${id}/punkte`);
 }

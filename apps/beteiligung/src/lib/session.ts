@@ -46,3 +46,10 @@ export async function requireInitiator(): Promise<Staff> {
   if (staff.role !== "initiator") redirect("/verwaltung?fehler=rolle");
   return staff;
 }
+
+/** The editorial queue: initiators and editors decide, viewers only look. */
+export async function requireEditor(): Promise<Staff> {
+  const staff = await requireStaff();
+  if (staff.role === "betrachter") redirect("/verwaltung?fehler=rolle");
+  return staff;
+}

@@ -67,9 +67,13 @@ export default async function Einstieg({ params }: { params: Promise<{ gemeinde:
             ))}
           </ul>
           {open ? (
-            <Link href={`/${c.tenant.slug}/${c.slug}/abstimmen`} className="btn pub-cta">
-              Abstimmen starten
-            </Link>
+            // The voting screens come with milestone 3; until then the open campaign announces them.
+            <>
+              <p className="pub-when">Die Beteiligung ist eröffnet. Die Abstimmung startet in Kürze.</p>
+              <button type="button" className="btn pub-cta" disabled>
+                Abstimmen starten
+              </button>
+            </>
           ) : (
             <>
               <p className="pub-when">

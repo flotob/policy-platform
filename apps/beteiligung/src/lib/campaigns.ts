@@ -29,6 +29,9 @@ export interface CampaignFile {
   sender: string | null;
   senderType: string | null;
   createdAt: string;
+  /** Read by the machine (Z1 done), and how many moves it found in it. */
+  read: boolean;
+  moves: number;
 }
 
 type Row = Record<string, unknown>;
@@ -80,8 +83,9 @@ export async function getPublicCampaign(tenantSlug: string, slug: string) {
 
 export async function listFiles(campaignId: string): Promise<CampaignFile[]> {
   const r = await rows(sql`
-    SELECT id, role, filename, size, sender, sender_type, created_at FROM campaign_files
-    WHERE campaign_id = ${campaignId} ORDER BY role, created_at`);
+    SELECT f.id, f.role, f.filename, f.size, f.sender, f.sender_type, f.created_at, f.submission_id,
+      (SELECT count(*) FROM moves m WHERE m.submission_id = f.submission_id)::int AS moves
+    FROM campaign_files f WHERE f.campaign_id = ${campaignId} ORDER BY f.role, f.created_at, f.filename`);
   return r.map((x) => ({
     id: x.id as string,
     role: x.role as CampaignFile["role"],
@@ -90,6 +94,8 @@ export async function listFiles(campaignId: string): Promise<CampaignFile[]> {
     sender: (x.sender as string | null) ?? null,
     senderType: (x.sender_type as string | null) ?? null,
     createdAt: String(x.created_at),
+    read: !!x.submission_id,
+    moves: Number(x.moves ?? 0),
   }));
 }
 

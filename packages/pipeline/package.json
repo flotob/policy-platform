@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./prompts": "./src/prompts.ts"
+    "./prompts": "./src/prompts.ts",
+    "./kern": "./src/kern/index.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -17,6 +18,8 @@
   "dependencies": {
     "@policy/db": "workspace:*",
     "@policy/llm": "workspace:*",
+    "mammoth": "^1.13.0",
+    "unpdf": "^1.9.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
