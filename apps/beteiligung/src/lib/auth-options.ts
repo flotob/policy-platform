@@ -9,6 +9,19 @@ import type { BetterAuthOptions } from "better-auth";
  */
 export const authOptions = {
   appName: "Landkarte des Streits",
+  // No screen uses these, and on a shared demo account they would let one visitor lock out the others.
+  disabledPaths: [
+    "/change-password",
+    "/set-password",
+    "/change-email",
+    "/update-user",
+    "/delete-user",
+    "/revoke-session",
+    "/revoke-sessions",
+    "/revoke-other-sessions",
+    "/link-social",
+    "/unlink-account",
+  ],
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,

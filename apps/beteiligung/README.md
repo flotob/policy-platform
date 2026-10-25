@@ -34,6 +34,9 @@ The language model runs through the Agent SDK on the local Claude login (dev onl
 production sets `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_OAUTH_TOKEN`). `KERN_WORKER=0`
 starts the server without the worker. `SIGNUP_OPEN=1` allows new municipalities to sign up
 (set locally; off on the server). `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day.
+`DEMO_LOGIN=1` puts a read-only demo login ("Beispiel ansehen") for Musterstadt on the login
+page (role betrachter; public credentials, created at startup; `DEMO_LOGIN_EMAIL/PASSWORD/TENANT`
+override). Better Auth's account-changing endpoints are off, so no visitor can lock the others out.
 
 ## Deployment (https://beteiligung.saskana.org)
 

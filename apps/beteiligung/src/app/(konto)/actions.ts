@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
 import { signupOpen } from "@/lib/auth-options";
+import { demoLogin } from "@/lib/demo-login";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { RESERVED, slugify } from "@/lib/slug";
@@ -83,4 +84,12 @@ export async function login(_prev: FormState, form: FormData): Promise<FormState
 export async function logout(): Promise<void> {
   await auth.api.signOut({ headers: await headers() });
   redirect("/");
+}
+
+/** One click into the read-only demo account (the credentials are on the login page anyway). */
+export async function loginDemo(): Promise<void> {
+  const d = demoLogin();
+  if (!d) redirect("/anmelden");
+  await auth.api.signInEmail({ body: { email: d.email, password: d.password }, headers: await headers() });
+  redirect("/verwaltung");
 }

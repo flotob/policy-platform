@@ -33,6 +33,13 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
           </div>
         </div>
       </header>
+      {staff.role === "betrachter" ? (
+        <div className="ws-viewer">
+          <div className="wrap small">
+            Sie sehen sich die Verwaltung von {staff.tenant.name} nur an. Ändern, freigeben und hochladen können hier nur Verwaltung und Redaktion.
+          </div>
+        </div>
+      ) : null}
       <main className="wrap ws-main">{children}</main>
     </>
   );
