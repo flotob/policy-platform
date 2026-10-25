@@ -12,6 +12,10 @@ export { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 export type Db = ReturnType<typeof createDb>;
 
 export function createDb(connectionString: string) {
-  const pool = new pg.Pool({ connectionString });
+  return createDbFromPool(new pg.Pool({ connectionString }));
+}
+
+/** One pool shared with other clients (e.g. the auth library in apps/beteiligung). */
+export function createDbFromPool(pool: pg.Pool) {
   return drizzle(pool, { schema });
 }

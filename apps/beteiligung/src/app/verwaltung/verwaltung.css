@@ -1,0 +1,89 @@
+/* Staff workspace: quiet, dense enough to work in, one primary action per screen. */
+.ws-head { border-bottom: 1px solid var(--line); background: var(--panel); }
+.ws-head-in { display: flex; align-items: center; gap: 20px; min-height: 60px; flex-wrap: wrap; padding-block: 8px; }
+.ws-tenant { font-weight: 600; padding-left: 20px; border-left: 1px solid var(--line); }
+.ws-user { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.ws-main { padding-block: 36px 72px; }
+
+.ws-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
+.ws-title h1, .ws-h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(28px, 3.4vw, 36px); line-height: 1.12; }
+.ws-title p { margin-top: 4px; }
+.ws-narrow { max-width: 720px; }
+.ws-intro { margin-top: 10px; max-width: 60ch; }
+.crumbs { font-size: 14px; margin-bottom: 8px; color: var(--ink-2); }
+.crumbs a { color: inherit; }
+
+.ws-empty { background: var(--panel); border: 1px dashed var(--line-2); border-radius: 12px; padding: 32px; display: grid; gap: 12px; justify-items: start; }
+.ws-empty h2 { font-family: var(--serif); font-size: 22px; }
+.ws-empty p { max-width: 60ch; }
+
+.ws-table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ws-table th { text-align: left; font-size: 13px; font-weight: 600; color: var(--ink-2); padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.ws-table td { padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ws-table tr:last-child td { border-bottom: 0; }
+.ws-table .num { text-align: right; }
+.ws-link { font-family: var(--serif); font-size: 18px; font-weight: 600; text-decoration: none; }
+.ws-link:hover { text-decoration: underline; }
+.ws-q { display: block; margin-top: 2px; }
+
+.state { display: inline-block; font-size: 13px; font-weight: 600; padding: 2px 9px; border-radius: 5px; background: var(--line); color: var(--ink-2); white-space: nowrap; }
+.state-vorbereitung { background: var(--warn-soft); color: var(--warn); }
+.state-offen { background: var(--agree-soft); color: var(--agree); }
+.state-auswertung, .state-bericht { background: color-mix(in srgb, var(--ga) 16%, var(--panel)); color: var(--ga); }
+.state-veroeffentlicht { background: var(--ink); color: var(--panel); }
+.tag { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--ink-2); margin-left: 6px; white-space: nowrap; }
+
+/* Forms in the workspace */
+.ws-form { margin-top: 20px; }
+.form-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+.form-status { font-size: 14px; }
+.form-status.ok { color: var(--agree); }
+.field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 20px; }
+.textarea.tall { min-height: 180px; }
+fieldset.plain { border: 0; padding: 0; margin: 0 0 22px; display: grid; gap: 10px; }
+fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; padding: 0; }
+.steps-edit { border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px 4px; margin: 0 0 20px; background: var(--bg); }
+.steps-edit legend { font-weight: 600; font-size: 15px; padding: 0 6px; }
+.steps-edit > .hint { display: block; margin-bottom: 18px; font-size: 13px; color: var(--ink-2); max-width: 64ch; }
+.step-no { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--panel); font-size: 12px; margin-right: 6px; }
+
+/* Campaign page: section nav left, sections right. */
+.cp-head { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+.cp-q { font-size: 20px; margin-top: 8px; color: var(--ink-2); max-width: 46ch; }
+.cp-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.cp-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 40px; margin-top: 28px; }
+.cp-nav { position: sticky; top: 20px; align-self: start; display: grid; gap: 2px; font-size: 14px; }
+.cp-nav a { text-decoration: none; color: var(--ink-2); padding: 6px 10px; border-radius: 6px; }
+.cp-nav a:hover { background: var(--panel); color: var(--ink); }
+.cp-sections { min-width: 0; max-width: 760px; }
+.cp-section { padding-bottom: 36px; margin-bottom: 36px; border-bottom: 1px solid var(--line); scroll-margin-top: 20px; }
+.cp-section:last-child { border-bottom: 0; }
+.cp-section h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; }
+.cp-lead { margin-top: 10px; max-width: 64ch; }
+.cp-back { margin-top: 18px; }
+
+.file-list { list-style: none; margin: 16px 0 8px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.file-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.file-list li:first-child { border-top: 0; }
+.file-list .tag { margin-left: 0; }
+.file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.upload-form { border-top: 1px solid var(--line); padding-top: 16px; }
+
+.checklist { list-style: none; margin: 14px 0 18px; padding: 0; display: grid; gap: 8px; }
+.checklist li { display: flex; gap: 10px; align-items: baseline; color: var(--ink-2); }
+.checklist li.done { color: var(--ink); }
+.tick { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--line-2); font-size: 11px; font-weight: 700; color: var(--panel); }
+.checklist li.done .tick { background: var(--agree); border-color: var(--agree); }
+
+@media (max-width: 860px) {
+  .cp-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .cp-nav { position: static; display: flex; flex-wrap: wrap; gap: 6px; }
+  .cp-nav a { border: 1px solid var(--line); }
+  .field-row { grid-template-columns: minmax(0, 1fr); }
+  .ws-table thead { display: none; }
+  .ws-table, .ws-table tbody, .ws-table tr, .ws-table td { display: block; }
+  .ws-table td { border-bottom: 0; padding: 6px 16px; }
+  .ws-table tr { border-bottom: 1px solid var(--line); padding-block: 8px; }
+  .ws-table .num { text-align: left; }
+  .ws-tenant { border-left: 0; padding-left: 0; }
+}

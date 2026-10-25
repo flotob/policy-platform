@@ -1,0 +1,46 @@
+/* Public campaign pages: the town's question first, the way in beside it. */
+.pub-fiction { background: var(--warn-soft); color: var(--warn); font-size: 14px; font-weight: 600; padding-block: 8px; }
+.pub-head { padding-block: 22px 0; }
+.pub-town { font-weight: 600; text-decoration: none; color: var(--ink-2); }
+.pub-town:hover { color: var(--ink); text-decoration: underline; }
+.pub-main {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+  gap: 32px 56px;
+  padding-block: 28px 40px;
+  align-items: start;
+}
+.pub-intro h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(32px, 4.6vw, 52px); line-height: 1.06; letter-spacing: -0.012em; max-width: 18ch; }
+.pub-lead { margin-top: 22px; font-size: 16px; color: var(--ink-2); }
+.pub-measure { margin: 10px 0 0; padding: 16px 20px; border-left: 3px solid var(--ink); background: var(--panel); font-family: var(--serif); font-size: 20px; line-height: 1.45; border-radius: 0 8px 8px 0; max-width: 40em; }
+.pub-summary { margin-top: 18px; font-family: var(--serif); font-size: 18px; line-height: 1.6; max-width: 40em; }
+
+.pub-join { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 22px 22px 18px; position: sticky; top: 20px; }
+.pub-join h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
+.pub-how { list-style: none; margin: 12px 0 18px; padding: 0; display: grid; gap: 10px; }
+.pub-how li { font-size: 15px; line-height: 1.5; }
+.pub-when { font-size: 15px; margin-bottom: 12px; }
+.pub-cta { width: 100%; }
+.pub-anon { margin-top: 10px; text-align: center; }
+
+.pub-why { grid-column: 1 / 2; border-top: 1px solid var(--line); padding-top: 28px; }
+.pub-why h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; }
+.pub-why > p { margin-top: 8px; max-width: 60ch; }
+.pub-steps { list-style: none; counter-reset: s; margin: 20px 0 0; padding: 0; display: grid; gap: 18px; }
+.pub-steps li { counter-increment: s; display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 12px; }
+.pub-steps li::before { content: counter(s); grid-row: span 2; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--ink); font-weight: 600; font-size: 13px; }
+.pub-steps h3 { font-size: 16px; font-weight: 600; }
+.pub-steps p { margin-top: 2px; font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 60ch; }
+
+.pub-town-page { display: block; max-width: 760px; }
+.pub-town-page h1 { font-family: var(--serif); font-size: clamp(30px, 4vw, 42px); font-weight: 600; }
+.pub-list { list-style: none; margin: 24px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.pub-list li { display: flex; justify-content: space-between; gap: 16px; padding-block: 14px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.pub-list a { font-family: var(--serif); font-size: 19px; font-weight: 600; text-decoration: none; }
+.pub-list a:hover { text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .pub-main { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .pub-join { position: static; }
+  .pub-why { grid-column: auto; }
+}
