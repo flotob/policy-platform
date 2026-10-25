@@ -5,3 +5,7 @@ node_modules
 blobs
 *.log
 .env
+**/.env*.local
+.deploy-secrets.local
+**/.eval
+**/.turbo

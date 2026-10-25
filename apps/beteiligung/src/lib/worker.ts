@@ -19,6 +19,12 @@ import { getDb } from "./db";
 import { kernCampaign, kernDeps } from "./kern";
 
 const POLL_MS = 3000;
+/**
+ * At most this many jobs start per day (each calls the language model):
+ * MAX_LLM_JOBS_PER_DAY on a public server, so a flood at door 2 cannot run up
+ * the bill. Beyond it, jobs wait. Unset = no limit (local).
+ */
+const MAX_PER_DAY = Number(process.env.MAX_LLM_JOBS_PER_DAY ?? 0) || Infinity;
 const STALE_MIN = 20;
 const MAX_ATTEMPTS = 3;
 
@@ -26,12 +32,23 @@ type Row = Record<string, unknown>;
 
 const log = (m: string) => console.log(`[kern] ${m}`);
 
+let capped = false;
+
 async function claim(): Promise<Row | null> {
   const db = getDb();
   await db.execute(sql`
     UPDATE campaign_jobs SET state = CASE WHEN attempts >= ${MAX_ATTEMPTS} THEN 'fehler' ELSE 'wartet' END,
       error = COALESCE(error, 'unterbrochen')
     WHERE state = 'laeuft' AND started_at < now() - make_interval(mins => ${STALE_MIN})`);
+  if (Number.isFinite(MAX_PER_DAY)) {
+    const today = await db.execute(sql`SELECT count(*)::int AS n FROM campaign_jobs WHERE started_at > now() - interval '1 day'`);
+    if (Number((today.rows[0] as Row).n) >= MAX_PER_DAY) {
+      if (!capped) log(`daily limit of ${MAX_PER_DAY} jobs reached — waiting`);
+      capped = true;
+      return null;
+    }
+    capped = false;
+  }
   const r = await db.execute(sql`
     UPDATE campaign_jobs SET state = 'laeuft', attempts = attempts + 1, started_at = now(), error = NULL
     WHERE id = (SELECT id FROM campaign_jobs WHERE state = 'wartet' ORDER BY created_at, kind <> 'skelett' FOR UPDATE SKIP LOCKED LIMIT 1)

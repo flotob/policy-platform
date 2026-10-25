@@ -1,0 +1,23 @@
+# Beteiligung — the municipal app. A full workspace image rather than Next's
+# standalone output: the Agent SDK starts Claude as a platform binary (an
+# optional dependency) and the PDF/DOCX readers bring their own files, which
+# file tracing would miss. No migrator: the database is restored from a dump
+# (apps/beteiligung/README.md). The machine's worker runs in this process.
+# Claude: CLAUDE_CODE_OAUTH_TOKEN (subscription) or ANTHROPIC_API_KEY in the
+# environment; Jev: TYPESAFE_API_KEY.
+
+FROM node:22-bookworm-slim
+RUN corepack enable
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile
+# Placeholders for the build only (the pool connects on first query, which the build never makes); the real values come from Coolify.
+RUN DATABASE_URL=postgres://build:build@localhost:5432/build BETTER_AUTH_SECRET=build-only BETTER_AUTH_URL=http://localhost:3000 \
+    NODE_OPTIONS=--max-old-space-size=1536 pnpm --filter @policy/beteiligung build
+# The CLI keeps its settings under $HOME; the app writes its build cache.
+RUN chown -R node:node /app/apps/beteiligung/.next
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 HOME=/home/node
+USER node
+WORKDIR /app/apps/beteiligung
+EXPOSE 3000
+CMD ["node_modules/.bin/next", "start", "-p", "3000", "-H", "0.0.0.0"]

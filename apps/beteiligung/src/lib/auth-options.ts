@@ -14,6 +14,8 @@ export const authOptions = {
     minPasswordLength: 10,
     // No mail provider yet: accounts work without confirming the address.
     requireEmailVerification: false,
+    // New accounts only where SIGNUP_OPEN=1 (local); on the public server only existing accounts log in.
+    disableSignUp: process.env.SIGNUP_OPEN !== "1",
   },
   user: {
     modelName: "auth_user",
@@ -50,3 +52,6 @@ export const authOptions = {
     fields: { expiresAt: "expires_at", createdAt: "created_at", updatedAt: "updated_at" },
   },
 } satisfies BetterAuthOptions;
+
+/** Can new municipalities sign up here? Off unless SIGNUP_OPEN=1 — a public server would otherwise run the machine for anyone. */
+export const signupOpen = () => process.env.SIGNUP_OPEN === "1";

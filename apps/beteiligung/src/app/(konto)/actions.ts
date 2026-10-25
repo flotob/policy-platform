@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { signupOpen } from "@/lib/auth-options";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { RESERVED, slugify } from "@/lib/slug";
@@ -39,6 +40,7 @@ async function createMunicipality(userId: string, name: string): Promise<void> {
 
 export async function register(_prev: FormState, form: FormData): Promise<FormState> {
   const values = { name: field(form, "name"), email: field(form, "email"), kommune: field(form, "kommune") };
+  if (!signupOpen()) return { error: "Neue Kommunen werden hier derzeit nur auf Anfrage freigeschaltet.", values };
   const password = String(form.get("password") ?? "");
   const session = await getSession();
 

@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/SiteHeader";
+import { signupOpen } from "@/lib/auth-options";
 import { getSession, getStaff } from "@/lib/session";
 
 import { RegisterForm } from "../AccountForms";
@@ -22,7 +24,15 @@ export default async function Registrieren() {
             schalten die Beteiligung frei, wenn alles bereit ist. Bis dahin sieht niemand außerhalb Ihrer Verwaltung etwas.
           </p>
         </div>
-        <RegisterForm loggedIn={loggedIn} />
+        {signupOpen() ? (
+          <RegisterForm loggedIn={loggedIn} />
+        ) : (
+          <div className="acc-form">
+            <p className="notice">
+              Neue Kommunen schalten wir derzeit auf Anfrage frei. Wenn Ihre Verwaltung schon ein Konto hat, <Link href="/anmelden">melden Sie sich an</Link>.
+            </p>
+          </div>
+        )}
       </main>
     </>
   );

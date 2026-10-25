@@ -32,7 +32,20 @@ tsx scripts/auth-sql.mts                    # SQL Better Auth needs (copied into
 
 The language model runs through the Agent SDK on the local Claude login (dev only;
 production sets `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_OAUTH_TOKEN`). `KERN_WORKER=0`
-starts the server without the worker.
+starts the server without the worker. `SIGNUP_OPEN=1` allows new municipalities to sign up
+(set locally; off on the server). `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day.
+
+## Deployment (https://beteiligung.saskana.org)
+
+Coolify app `beteiligung` on the Hetzner box, `Dockerfile.beteiligung` (full workspace image —
+the Agent SDK's Claude binary and the PDF readers survive; build-only placeholders for the
+database URL), branch `app/beteiligung`, port 3000. Database `beteiligung` in the shared
+Postgres container (restored from a `policy_probe` dump; `policy` and `auswertung` untouched).
+Env: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TYPESAFE_API_KEY`,
+`JEV_CONCURRENCY`, `MAX_LLM_JOBS_PER_DAY`, `CLAUDE_CODE_OAUTH_TOKEN` (set by Florian in
+Coolify). Staff logins on the server are in `platform/.deploy-secrets.local`. Data update:
+`docker exec platform-postgres-1 pg_dump -Fc -U policy policy_probe` → scp → `docker cp` into
+the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-owner`.
 
 ## Surfaces
 
