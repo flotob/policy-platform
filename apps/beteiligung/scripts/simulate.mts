@@ -26,13 +26,26 @@ function rng(seed: number) {
   };
 }
 
-/** Probability of agreeing, per camp, from what the statement is (a rough stand-in for real opinion). */
-function lean(n: { rolle: string; typ: string; richtung: string | null }): [number, number] {
+/**
+ * Probability of agreeing, per camp, from what the statement is — a rough
+ * stand-in for real opinion, shaped like Stephan's example: the facts are
+ * mostly shared, the values split, a few fact attacks stay disputed, the
+ * skills shortage worries both camps, weak objections fail in both.
+ */
+function lean(n: { rolle: string; typ: string; richtung: string | null; text: string }): [number, number] {
   if (n.rolle === "schluss") return [0.86, 0.22];
-  if (n.rolle === "praemisse") return n.typ === "W" ? [0.82, 0.2] : [0.84, 0.62];
-  if (n.typ === "verfahren") return n.richtung === "greift_an" ? [0.62, 0.8] : [0.78, 0.76];
-  if (n.richtung === "stuetzt") return n.typ === "W" ? [0.8, 0.28] : [0.76, 0.55];
-  return n.typ === "W" ? [0.16, 0.82] : [0.34, 0.68];
+  if (n.typ === "W") {
+    if (n.rolle === "beitrag" && n.richtung === "greift_an") return /eigenen Dächer/i.test(n.text) ? [0.12, 0.35] : [0.16, 0.82];
+    return [0.84, 0.22];
+  }
+  if (n.typ === "verfahren") return n.richtung === "greift_an" ? [0.62, 0.8] : [0.8, 0.77];
+  if (n.richtung === "greift_an") {
+    if (/Handwerk|Fachkr|Personal|Betriebe|Wartezeit/i.test(n.text)) return [0.8, 0.79];
+    if (/Denkmal|eigenen Dächer|Wartung/i.test(n.text)) return [0.14, 0.3];
+    return [0.26, 0.7];
+  }
+  if (n.rolle === "praemisse" && /Mehrkosten|Eingriff/i.test(n.text)) return [0.8, 0.4];
+  return [0.86, 0.72];
 }
 
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
@@ -52,7 +65,7 @@ try {
   if (!remove) {
     const nodes = (
       await db.query(
-        `SELECT id, rolle, typ, richtung, version FROM map_points WHERE consultation_id = $1 AND rolle IS NOT NULL AND status = 'released' ORDER BY ord`,
+        `SELECT id, rolle, typ, richtung, version, text FROM map_points WHERE consultation_id = $1 AND rolle IS NOT NULL AND status = 'released' ORDER BY ord`,
         [c.consultation_id],
       )
     ).rows;

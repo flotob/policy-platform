@@ -19,7 +19,8 @@ JEV_CONCURRENCY=4
 pnpm --filter @policy/beteiligung dev      # http://localhost:3300 (needs dangerouslyDisableSandbox); starts the worker
 tsx scripts/seed-demo.mts [--member <email>] [--statements] [--reset-analysis [--keep-texts]]
                                             # Musterstadt Solarpflicht demo (fictional) + its 7 fictional statements
-tsx scripts/open-demo.mts                   # open the demo: skeleton + recommended points released as "demo"
+tsx scripts/open-demo.mts                   # open the demo: skeleton + recommended points released as "demo";
+                                            #   after an evaluation: drops results + reports, opens again
 tsx scripts/simulate.mts [--participants 300] [--remove]   # simulated voters, fictional demo only, marked everywhere
 tsx scripts/drain.mts                       # run queued machine work once without the server
 tsx scripts/auth-sql.mts                    # SQL Better Auth needs (copied into migration 0015)
@@ -47,6 +48,11 @@ starts the server without the worker.
 | `/[gemeinde]/[verfahren]/stellungnahme` | citizens | Door 3: a full statement, as a private person or for an organisation |
 | `/[gemeinde]/[verfahren]/laufzettel/[token]` | citizens | Tracking slip: what became of each argument, machine vs. editors, "Das meint mein Punkt nicht" |
 | `/verwaltung/[id]/lagebild` | staff | Live picture: participation, camps (Polis math), saturation, thin statements, unasked questions |
+| `/verwaltung/[id]/auswertung` | staff | While open: the results page as it stands (live) + "Beteiligung schließen" (B13). Closed: the stored result (W9), camp names (machine proposes, editors confirm), "Bericht schreiben lassen", reopen while no report is released |
+| `/verwaltung/[id]/bericht` | editors | R1 sentence list, R2 text with the sentence IDs per paragraph, R3 check (rules + Jev reader per paragraph), release / reject with a reason (R4), publish (R5, initiator), earlier versions |
+| `/[gemeinde]/[verfahren]/ergebnis` | everyone | The published results page in Stephan's design: Meinungsraum, Nach Befund / Nach Argument, detail with camp profiles, quotes, source chain to the original paragraph, gaps, method, open data |
+| `/[gemeinde]/[verfahren]/bericht` | everyone | The released report (prints cleanly), with the sentence list it was written from |
+| `/[gemeinde]/[verfahren]/daten/[datei]` | everyone | Open export: `abstimmungsmatrix.csv`, `aussagen.json`, `beitraege.json`, `protokoll.json`, `ergebnis.json` |
 
 ## Decisions (Florian, 2026-10-25)
 
@@ -113,12 +119,35 @@ uploads read at once; tracking slip per contribution with "Was genau geändert w
 author's objection back into the queue; derived votes (assumption 3) recomputed from the moves
 (`kern/votes.ts`); live picture for the town. Migration 0017.
 
-Next: M4 results page in Stephan's design (Meinungsraum, Nach Befund / Nach Argument, source
-chain) + report → M5 hardening.
+Milestone 4 (evaluation and report) done. Closing the participation (B13) freezes the votes;
+the result object is computed once more and stored unchangeable (W9, `campaign_results`, with
+the hashes of matrix and graph). The evaluation is code, no AI (`kern/befund.ts`, tested):
+
+| Rule | From | To |
+|---|---|---|
+| a camp holds a position | ≥ 3 votes in the camp, share ≥ bridgeThreshold, significant (Polis test) | carries / rejects |
+| profile | all camps carry · all reject · some do · none | getragen · abgelehnt · trennt · unentschieden |
+| finding ("Nach Befund") | getragen (+ agreeing contributions that want opposite things for the measure → Scheinkonsens) · abgelehnt · trennt T · trennt W/V · unentschieden (T with proof → klärbar) | Brücke / Vorsicht · Brücke · klärbar · Streit · offen |
+| attack status ("Nach Argument") | every camp backs the thesis · every camp the attack · some camps, fact · some camps, value · none | abgewehrt · hält · klärbar · hält · offen (klärbar with proof) |
+| step verdict | value attack holds or a value premise of the town not carried → fällt; fact/design attack holds or hidden in an agreement → wackelt | hält · wackelt · fällt |
+| W5 per camp pair | the measure + premises; facts and values that divide | Brücke der Gründe / der Ergebnisse · Wertkonflikt · Scheinfaktenstreit · gemischt |
+| W6, W7 | questions without objection or answer; questions spoken to from one side; evidence by class at fact statements | gaps, evidence balance |
+
+Words come from fixed templates (`kern/befund-text.ts`), shared by the results page and the
+report. The report (`kern/bericht.ts`): R1 sentence list with IDs (templates), R2 the language
+model writes paragraphs that name their sentence IDs, R3 rules (every paragraph traceable,
+every sentence rendered, no number or statement not in its sentences) plus Jev as an
+independent reader (fidelity, direction, strength per paragraph, < 50 % fails); on failure R2
+once more with the objections. The editors release or reject with a reason (a new version
+reads it); changing camp names withdraws an unreleased report. Migration 0018.
+
+Next: M5 hardening.
 
 Known limits: no email yet (no verification or password reset); one municipality per
 account (first membership); colleagues cannot be invited yet; one worker for all
 municipalities (a long job makes others wait); no OCR for scanned PDFs; Q1 (agreement
-machine vs. editors) is recorded but not shown yet; camps are named A/B (naming comes with the
-results page); a citizen who clears cookies is a new pseudonym (limited per connection, not
-prevented — invitation codes are the strict mode).
+machine vs. editors) is recorded but not shown yet; a citizen who clears cookies is a new
+pseudonym (limited per connection, not prevented — invitation codes are the strict mode);
+closing needs enough participants for camps (no result without camps); the Scheinkonsens rule
+needs contributions whose direction differs (door-2 confirmations carry no direction); the
+demo's voters are simulated (`scripts/simulate.mts`, marked on every page and in the report).

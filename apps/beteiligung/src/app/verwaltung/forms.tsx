@@ -6,7 +6,7 @@ import { EDITORIAL_MODES, STEPS, type CampaignParams, type EditorialMode, type S
 
 import { createCampaign, generateInvites, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
 
-function Status({ state, pending }: { state: ActionState; pending: boolean }) {
+export function Status({ state, pending }: { state: ActionState; pending: boolean }) {
   if (pending) return <span className="form-status muted">Wird gespeichert …</span>;
   if (state.error)
     return (

@@ -36,6 +36,7 @@ export default async function Einstieg({
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const open = c.state === "offen";
+  const closed = c.state === "auswertung" || c.state === "bericht" || c.state === "veroeffentlicht";
   const doors = c.params.doors;
   const base = `/${c.tenant.slug}/${c.slug}`;
   const [stats, me] = await Promise.all([participation(c), open ? getParticipant(c) : null]);
@@ -68,21 +69,33 @@ export default async function Einstieg({
         </section>
 
         <aside className="pub-join" aria-labelledby="mitmachen">
-          <h2 id="mitmachen">So machst du mit</h2>
-          <ul className="pub-how">
-            {how.map((h) => (
-              <li key={h.title}>
-                <strong>{h.title}.</strong> {h.text}
-              </li>
-            ))}
-          </ul>
+          <h2 id="mitmachen">{closed ? (c.state === "veroeffentlicht" ? "Das Ergebnis" : "Die Beteiligung ist geschlossen") : "So machst du mit"}</h2>
+          {closed ? null : (
+            <ul className="pub-how">
+              {how.map((h) => (
+                <li key={h.title}>
+                  <strong>{h.title}.</strong> {h.text}
+                </li>
+              ))}
+            </ul>
+          )}
           {hinweis ? <p className="notice small pub-hint">{hinweis}</p> : null}
-          {!open ? (
+          {c.state === "veroeffentlicht" ? (
+            <>
+              <p className="pub-when">Die Beteiligung ist abgeschlossen. Ergebnis und Bericht sind öffentlich.</p>
+              <Link href={`${base}/ergebnis`} className="btn pub-cta">
+                Ergebnis ansehen
+              </Link>
+              <div className="pub-doors">
+                <Link href={`${base}/bericht`}>Bericht lesen</Link>
+              </div>
+            </>
+          ) : !open ? (
             <>
               <p className="pub-when">
                 {c.state === "vorbereitung"
                   ? `${start ? `Die Beteiligung beginnt am ${start}.` : "Die Beteiligung beginnt in Kürze."}${end ? ` Sie läuft bis spätestens ${end}.` : ""}`
-                  : "Die Beteiligung ist geschlossen. Die Auswertung folgt."}
+                  : "Die Beteiligung ist geschlossen. Die Auswertung folgt; danach stehen hier Ergebnis und Bericht."}
               </p>
               <button type="button" className="btn pub-cta" disabled>
                 Abstimmen starten
@@ -102,7 +115,7 @@ export default async function Einstieg({
               </div>
             </>
           )}
-          <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>
+          {c.state === "veroeffentlicht" ? null : <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>}
         </aside>
 
         {STEPS.some((s) => c.steps[s.key]) ? (

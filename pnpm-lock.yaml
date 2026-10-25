@@ -275,6 +275,9 @@ importers:
       '@policy/llm':
         specifier: workspace:*
         version: link:../llm
+      '@policy/math':
+        specifier: workspace:*
+        version: link:../math
       mammoth:
         specifier: ^1.13.0
         version: 1.13.0

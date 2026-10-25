@@ -3,6 +3,8 @@
  * the machine recommends are released — recorded as "demo", not as a person
  * of the editorial team — so the doors can be tried at once. Points the
  * machine had doubts about stay in the queue. Run after seed-demo's jobs.
+ * Opening again after an evaluation drops the demo's results and reports
+ * (milestone 4), so it can be closed, evaluated and reported once more.
  *
  * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/open-demo.mts
  */
@@ -23,7 +25,13 @@ const nodes = await rows(sql`
     AND (rolle <> 'beitrag' OR review->>'verdict' = 'release') ORDER BY ord`);
 for (const n of nodes) await releaseNode(db, { tenantId: c.tenant_id as string, nodeId: n.id as string, actor: "demo" });
 await syncDerivedVotes(db, c.consultation_id as string);
+await db.execute(sql`DELETE FROM campaign_reports WHERE campaign_id = ${c.id as string}`);
+await db.execute(sql`DELETE FROM campaign_results WHERE campaign_id = ${c.id as string}`);
+const [prev] = await rows(sql`SELECT state FROM campaigns WHERE id = ${c.id as string}`);
 await db.execute(sql`UPDATE campaigns SET state = 'offen', updated_at = now() WHERE id = ${c.id as string}`);
+await db.execute(sql`
+  INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
+  VALUES (${c.tenant_id as string}, 'demo', 'campaign.state', 'campaign', ${c.id as string}, ${JSON.stringify({ from: prev!.state, to: "offen" })})`);
 const [left] = await rows(sql`SELECT count(*)::int AS n FROM map_points WHERE consultation_id = ${c.consultation_id as string} AND status = 'draft'`);
 console.log(`demo open: ${nodes.length} points released, ${left!.n} left in the editorial queue`);
 process.exit(0);

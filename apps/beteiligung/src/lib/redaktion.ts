@@ -121,7 +121,7 @@ const MOVE_SELECT = sql`
   LEFT JOIN campaign_files f ON f.submission_id = s.id`;
 
 /** The paragraph(s) holding a quote, at most ~600 characters on each side. */
-function paragraphAround(text: string, start: number, end: number): Move["context"] {
+export function paragraphAround(text: string, start: number, end: number): Move["context"] {
   const MAX = 600;
   let from = text.lastIndexOf("\n\n", start);
   from = from < 0 ? 0 : from + 2;
@@ -225,7 +225,7 @@ export async function countQueue(consultationId: string): Promise<number> {
 
 export interface Job {
   id: string;
-  kind: "skelett" | "zerlegen";
+  kind: "skelett" | "zerlegen" | "kurzaussage" | "lagernamen" | "bericht";
   state: "wartet" | "laeuft" | "fertig" | "fehler";
   filename: string | null;
   sender: string | null;

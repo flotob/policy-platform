@@ -18,9 +18,9 @@
 .camp { display: inline-flex; gap: 6px; align-items: baseline; margin-right: 10px; font-weight: 600; }
 .camp-A { --camp: var(--ga); }
 .camp-B { --camp: var(--gb); }
-.camp-C { --camp: var(--warn); }
-.camp-D { --camp: var(--ink-3); }
-.camp-E { --camp: var(--ink-2); }
+.camp-C { --camp: var(--gc); }
+.camp-D { --camp: var(--gd); }
+.camp-E { --camp: var(--ge); }
 .camp { color: var(--camp); }
 .profile { display: grid; gap: 3px; }
 .profile-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 44px; gap: 8px; align-items: center; }

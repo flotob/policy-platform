@@ -37,16 +37,26 @@ export async function kernDeps(log: (m: string) => void): Promise<KernDeps> {
   return { db: getDb(), llm, judge, log };
 }
 
-export type JobKind = "skelett" | "zerlegen" | "kurzaussage";
+export type JobKind = "skelett" | "zerlegen" | "kurzaussage" | "lagernamen" | "bericht";
 
-export async function enqueue(tenantId: string, campaignId: string, kind: JobKind, fileId: string | null = null, submissionId: string | null = null) {
+export async function enqueue(
+  tenantId: string,
+  campaignId: string,
+  kind: JobKind,
+  fileId: string | null = null,
+  submissionId: string | null = null,
+  target: { resultId?: string; reportId?: string } = {},
+) {
+  const resultId = target.resultId ?? null;
+  const reportId = target.reportId ?? null;
   // One open job per task: a second click does not queue the same work twice.
   await getDb().execute(sql`
-    INSERT INTO campaign_jobs (tenant_id, campaign_id, kind, file_id, submission_id)
-    SELECT ${tenantId}, ${campaignId}, ${kind}, ${fileId}, ${submissionId}
+    INSERT INTO campaign_jobs (tenant_id, campaign_id, kind, file_id, submission_id, result_id, report_id)
+    SELECT ${tenantId}, ${campaignId}, ${kind}, ${fileId}, ${submissionId}, ${resultId}, ${reportId}
     WHERE NOT EXISTS (
       SELECT 1 FROM campaign_jobs WHERE campaign_id = ${campaignId} AND kind = ${kind}
         AND file_id IS NOT DISTINCT FROM ${fileId}::uuid AND submission_id IS NOT DISTINCT FROM ${submissionId}::uuid
+        AND result_id IS NOT DISTINCT FROM ${resultId}::uuid AND report_id IS NOT DISTINCT FROM ${reportId}::uuid
         AND state IN ('wartet', 'laeuft'))`);
 }
 

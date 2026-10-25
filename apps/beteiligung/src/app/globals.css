@@ -19,6 +19,10 @@
   --warn-soft: #fbf1da;
   --ga: #3e6f94;
   --gb: #8e6aa3;
+  /* A third to fifth camp, should the math find them. */
+  --gc: #a35d74;
+  --gd: #4f8a91;
+  --ge: #7a6a4f;
   --focus: #2b5fb3;
   --danger: #a3361d;
   --serif: var(--font-serif), Georgia, "Times New Roman", serif;
@@ -29,14 +33,14 @@
   :root:not([data-theme="light"]) {
     --bg: #121715; --panel: #1b2220; --ink: #eceeec; --ink-2: #b5beb9; --ink-3: #8e9994; --line: #2c3633; --line-2: #3b4743;
     --agree: #4fbf98; --agree-soft: #1c3a30; --disagree: #e07a5c; --disagree-soft: #43271f; --pass: #4a5551;
-    --warn: #e2b55b; --warn-soft: #3a2e14; --ga: #7fb1da; --gb: #c3a3d8; --focus: #7fa7f0; --danger: #ef8c6f;
+    --warn: #e2b55b; --warn-soft: #3a2e14; --ga: #7fb1da; --gb: #c3a3d8; --gc: #e0a0b5; --gd: #93c6cb; --ge: #c9b48f; --focus: #7fa7f0; --danger: #ef8c6f;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #121715; --panel: #1b2220; --ink: #eceeec; --ink-2: #b5beb9; --ink-3: #8e9994; --line: #2c3633; --line-2: #3b4743;
   --agree: #4fbf98; --agree-soft: #1c3a30; --disagree: #e07a5c; --disagree-soft: #43271f; --pass: #4a5551;
-  --warn: #e2b55b; --warn-soft: #3a2e14; --ga: #7fb1da; --gb: #c3a3d8; --focus: #7fa7f0; --danger: #ef8c6f;
+  --warn: #e2b55b; --warn-soft: #3a2e14; --ga: #7fb1da; --gb: #c3a3d8; --gc: #e0a0b5; --gd: #93c6cb; --ge: #c9b48f; --focus: #7fa7f0; --danger: #ef8c6f;
   color-scheme: dark;
 }
 

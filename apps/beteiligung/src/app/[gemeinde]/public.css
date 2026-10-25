@@ -50,3 +50,14 @@
 .pub-doors a { font-weight: 600; }
 .pub-hint { margin-bottom: 12px; }
 .pub-join .door-form { margin-top: 0; padding: 0; border: 0; background: transparent; }
+
+/* Results page and report (R5): the results page as wide as the page header. */
+.pub-erg { max-width: 1180px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
+.pub-report { max-width: 760px; padding-block: 24px 64px; }
+.pub-report-kind { font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.pub-report h1 { font-family: var(--serif); font-size: clamp(28px, 4vw, 40px); line-height: 1.12; margin-top: 6px; }
+.pub-report-meta { color: var(--ink-2); margin-top: 8px; }
+.pub-report .pub-measure { margin-top: 18px; }
+.pub-report-how { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; color: var(--ink-2); font-size: 14.5px; }
+.pub-report-how h2 { font-family: var(--serif); font-size: 19px; color: var(--ink); }
+.pub-report-how summary { cursor: pointer; font-weight: 600; color: var(--ink); margin-bottom: 8px; }

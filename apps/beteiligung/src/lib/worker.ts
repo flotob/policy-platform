@@ -10,8 +10,10 @@
  */
 
 import { sql } from "@policy/db";
-import { decomposeFile, decomposeShort, machineDecides, proposeSkeleton, syncDerivedVotes } from "@policy/pipeline/kern";
+import { audit, decomposeFile, decomposeShort, machineDecides, proposeCampNames, proposeSkeleton, syncDerivedVotes, writeAndCheck } from "@policy/pipeline/kern";
 
+import { getResult, setCampNames } from "./auswertung";
+import { getReport, namingOf } from "./bericht";
 import { getCampaign } from "./campaigns";
 import { getDb } from "./db";
 import { kernCampaign, kernDeps } from "./kern";
@@ -48,6 +50,26 @@ export async function runJob(job: Row): Promise<void> {
   let result: unknown;
   if (job.kind === "skelett") {
     result = await proposeSkeleton(deps, c);
+  } else if (job.kind === "lagernamen") {
+    // The machine proposes; the editors confirm. A confirmed naming is never overwritten.
+    const saved = await getResult(campaign.id, job.result_id as string);
+    if (!saved) throw Object.assign(new Error("Das Ergebnis gibt es nicht mehr."), { fatal: true });
+    const proposal = await proposeCampNames(deps.llm, saved.result, campaign.measure);
+    const current = namingOf(saved.campNames);
+    await setCampNames(saved.id, current?.confirmedBy ? { ...current, proposal } : { ...proposal, proposal, confirmedBy: null, confirmedAt: null });
+    await audit(db, { tenantId: campaign.tenantId, actor: "ki:lagernamen", action: "result.camp_names_proposed", subjectKind: "campaign_result", subjectId: saved.id, payload: proposal });
+    result = proposal;
+  } else if (job.kind === "bericht") {
+    // R2 → R3, once more with the objections if the check fails (writeAndCheck).
+    const report = await getReport(campaign.id, job.report_id as string);
+    if (!report) throw Object.assign(new Error("Den Bericht gibt es nicht mehr."), { fatal: true });
+    if (report.state !== "liste" && report.state !== "durchgefallen") throw Object.assign(new Error("Diese Fassung ist schon geprüft."), { fatal: true });
+    const { text, checks } = await writeAndCheck(deps, report.sentences, { town: c.context.town, measure: campaign.measure }, report.feedback ? [`Die Redaktion: ${report.feedback}`] : []);
+    const state = checks.passed ? "geprueft" : "durchgefallen";
+    await db.execute(sql`
+      UPDATE campaign_reports SET text = ${JSON.stringify(text)}, checks = ${JSON.stringify(checks)}, state = ${state}, updated_at = now() WHERE id = ${report.id}`);
+    await audit(db, { tenantId: campaign.tenantId, actor: "ki:bericht", action: `report.${state}`, subjectKind: "campaign_report", subjectId: report.id, payload: { attempts: checks.attempts, rules: checks.rules.length, flagged: checks.reader.filter((x) => !x.pass).length } });
+    result = { state, attempts: checks.attempts, paragraphs: text.length };
   } else {
     result =
       job.kind === "kurzaussage" ? await decomposeShort(deps, c, job.submission_id as string) : await decomposeFile(deps, c, job.file_id as string);

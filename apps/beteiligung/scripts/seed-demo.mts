@@ -121,6 +121,8 @@ try {
     await db.query(`DELETE FROM judgments WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM moves WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM campaign_invites WHERE campaign_id = $1`, [campaignId]);
+    await db.query(`DELETE FROM campaign_reports WHERE campaign_id = $1`, [campaignId]);
+    await db.query(`DELETE FROM campaign_results WHERE campaign_id = $1`, [campaignId]);
     await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);
     const uploads = await db.query(`DELETE FROM campaign_files WHERE campaign_id = $1 AND participant_id IS NOT NULL RETURNING submission_id`, [campaignId]);
     const fromDoors = await db.query(

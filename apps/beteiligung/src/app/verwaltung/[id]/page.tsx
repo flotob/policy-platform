@@ -195,10 +195,26 @@ export default async function CampaignPage({ params, searchParams }: { params: P
                 </div>
               ) : null}
             </>
+          ) : campaign.state === "offen" ? (
+            <>
+              <p className="cp-lead">Die Beteiligung ist freigeschaltet. Neue Beiträge landen in der Redaktion. Schließen können Sie sie unter Auswertung.</p>
+              <p className="cp-back">
+                <Link href={publicPath} className="btn btn-quiet">
+                  Öffentliche Seite ansehen
+                </Link>
+              </p>
+            </>
           ) : (
             <>
-              <p className="cp-lead">Die Beteiligung ist freigeschaltet. Neue Beiträge landen in der Redaktion.</p>
+              <p className="cp-lead">
+                {campaign.state === "veroeffentlicht"
+                  ? "Die Beteiligung ist abgeschlossen; Bericht und Ergebnis sind veröffentlicht."
+                  : "Die Beteiligung ist geschlossen. Ergebnis und Bericht entstehen unter Auswertung und Bericht."}
+              </p>
               <p className="cp-back">
+                <Link href={`/verwaltung/${campaign.id}/${campaign.state === "auswertung" ? "auswertung" : "bericht"}`} className="btn btn-quiet">
+                  {campaign.state === "auswertung" ? "Zur Auswertung" : "Zum Bericht"}
+                </Link>{" "}
                 <Link href={publicPath} className="btn btn-quiet">
                   Öffentliche Seite ansehen
                 </Link>

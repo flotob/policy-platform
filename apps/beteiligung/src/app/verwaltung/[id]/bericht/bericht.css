@@ -1,0 +1,28 @@
+/* The report in the workspace: the text beside its check. */
+.rp-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.rp-state { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--line); color: var(--ink-2); }
+.rp-state.rp-geprueft, .rp-state.rp-freigegeben, .rp-state.rp-veroeffentlicht { background: var(--agree-soft); color: var(--agree); }
+.rp-state.rp-durchgefallen, .rp-state.rp-zurueckgewiesen { background: var(--disagree-soft); color: var(--disagree); }
+.rp-state.rp-liste, .rp-state.rp-text { background: var(--warn-soft); color: var(--warn); }
+.rp-actions { display: grid; gap: 14px; margin-top: 16px; justify-items: start; }
+.rp-links { display: flex; gap: 10px; flex-wrap: wrap; }
+.reject-form { width: 100%; max-width: 640px; }
+.rp-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 340px); gap: 36px; align-items: start; }
+.rp-cols aside { position: sticky; top: 12px; }
+.rp-check { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; font-size: 14px; }
+.rp-check h3 { font-size: 13px; font-weight: 600; margin-top: 6px; }
+.rp-check ul { margin: 0; padding-left: 18px; color: var(--disagree); }
+.rp-reader { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rp-reader th { text-align: left; font-weight: 600; color: var(--ink-3); font-size: 11.5px; padding: 4px 6px 4px 0; }
+.rp-reader td { padding: 3px 6px 3px 0; border-top: 1px solid var(--line); }
+.rp-reader tr.bad td { color: var(--disagree); font-weight: 600; }
+.rp-sentences { margin-top: 28px; max-width: 860px; }
+.rp-sentences summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+.rp-sentences > p { margin-bottom: 10px; }
+.rp-older { margin-top: 24px; font-size: 14px; color: var(--ink-2); }
+.rp-older h3 { font-size: 14px; margin-bottom: 6px; }
+.rp-older ul { margin: 0; padding-left: 18px; }
+@media (max-width: 900px) {
+  .rp-cols { grid-template-columns: 1fr; }
+  .rp-cols aside { position: static; order: -1; }
+}

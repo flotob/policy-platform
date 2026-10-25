@@ -189,6 +189,11 @@ export default async function Redaktion({
         <strong>{EDITORIAL_MODES[mode].label}.</strong> <span className="muted">{EDITORIAL_MODES[mode].text}</span>{" "}
         {staff.role === "initiator" ? <Link href={`/verwaltung/${id}#ablauf`}>Arbeitsweise ändern</Link> : null}
       </p>
+      {["auswertung", "bericht", "veroeffentlicht"].includes(campaign.state) ? (
+        <p className="notice small">
+          Die Beteiligung ist geschlossen. Was Sie jetzt noch freigeben, kommt nicht mehr zur Abstimmung und nicht ins gespeicherte Ergebnis.
+        </p>
+      ) : null}
 
       <div className="rd-grid">
         <aside className={`rd-list${node || move ? " has-current" : ""}`} aria-label="Warteschlange">

@@ -1,0 +1,17 @@
+/* The evaluation in the workspace: three short panels (result, camp names,
+   report), then the results page as citizens will see it. */
+.au { margin-top: 24px; }
+.au-panel { max-width: 860px; padding-bottom: 24px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+.au-panel h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.au-lead { max-width: 75ch; color: var(--ink-2); }
+.au-panel .checklist { margin-top: 14px; }
+.au-panel .notice { margin-top: 12px; }
+.au-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+.au-preview { margin-top: 8px; border-top: 3px solid var(--ink); padding-top: 10px; }
+.au-label { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+
+.camp-names { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 14px; }
+.camp-name { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 8px; padding: 10px 14px 4px; margin: 0; background: var(--panel); min-width: 0; }
+.camp-name legend { font-weight: 600; padding: 0 4px; color: var(--c); }
+.camp-name.c0 { --c: var(--ga); } .camp-name.c1 { --c: var(--gb); } .camp-name.c2 { --c: var(--gc); } .camp-name.c3 { --c: var(--gd); } .camp-name.c4 { --c: var(--ge); }
+.camp-names .form-foot { grid-column: 1 / -1; }

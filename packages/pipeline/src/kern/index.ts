@@ -7,3 +7,6 @@ export * from "./text.ts";
 export { textSimilarity } from "../jev-match.ts";
 export * from "./short.ts";
 export * from "./votes.ts";
+export * from "./befund.ts";
+export * from "./befund-text.ts";
+export * from "./bericht.ts";
