@@ -269,3 +269,13 @@ export async function openingCheck(consultationId: string) {
   const hasSkeleton = count((x) => x.rolle === "schluss" && (x.status === "draft" || x.status === "released")) > 0;
   return { hasSkeleton, skeletonOpen, skeletonReleased, rootReleased, stepsCovered, released, waiting };
 }
+
+/** Start-skeleton claims still open that the machine recommends releasing and that carry no personal data. */
+export async function skeletonRecommended(consultationId: string): Promise<string[]> {
+  const x = await rows(sql`
+    SELECT id FROM map_points
+    WHERE consultation_id = ${consultationId} AND rolle IN ('schluss', 'praemisse') AND status = 'draft'
+      AND review->>'verdict' = 'release' AND NOT COALESCE(review->'flags', '[]'::jsonb) ? 'personal_data'
+    ORDER BY CASE rolle WHEN 'schluss' THEN 0 ELSE 1 END, ord`);
+  return x.map((n) => n.id as string);
+}

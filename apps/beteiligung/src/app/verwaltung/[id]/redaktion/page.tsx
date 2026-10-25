@@ -18,6 +18,7 @@ import {
   reassignMoveAction,
   rejectNodeAction,
   releaseNodeAction,
+  releaseRecommendedSkeleton,
 } from "./actions";
 import { NodeEditor } from "./NodeEditor";
 import "../redaktion.css";
@@ -129,6 +130,7 @@ export default async function Redaktion({
   const mode = campaign.params.editorialMode;
   const [queue, all] = await Promise.all([loadQueue(campaign.consultationId), listNodes(campaign.consultationId)]);
   const total = queueSize(queue);
+  const recommended = queue.skeleton.filter((n) => n.review?.verdict === "release" && !n.review.flags.includes("personal_data")).length;
 
   let node: Node | null = null;
   let move: Move | null = null;
@@ -209,6 +211,18 @@ export default async function Redaktion({
                   <h2>
                     {r.title} <span className="num muted">{r.items.length}</span>
                   </h2>
+                  {r.title === "Startgerüst" && canDecide && mode !== "mensch" && recommended > 0 ? (
+                    <form action={releaseRecommendedSkeleton.bind(null, id)} className="rd-bulk">
+                      <button type="submit" className="btn btn-small">
+                        Wie empfohlen freigeben ({recommended})
+                      </button>
+                      <span className="small muted">
+                        {recommended === r.items.length
+                          ? "Die Maschine hat an keinem Punkt Zweifel."
+                          : `${r.items.length - recommended} ${r.items.length - recommended === 1 ? "Punkt prüfen" : "Punkte prüfen"} Sie danach einzeln.`}
+                      </span>
+                    </form>
+                  ) : null}
                   <ol>
                     {r.items.map((it) => (
                       <li key={it.href}>

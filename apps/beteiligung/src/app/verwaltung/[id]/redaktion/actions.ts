@@ -18,7 +18,7 @@ import { redirect } from "next/navigation";
 import { getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { QUESTIONS, STEPS } from "@/lib/params";
-import { getNode } from "@/lib/redaktion";
+import { getNode, skeletonRecommended } from "@/lib/redaktion";
 import { requireEditor } from "@/lib/session";
 import { REJECT, type RejectKey } from "@/lib/vocab";
 
@@ -79,6 +79,30 @@ export async function releaseNodeAction(id: string, nodeId: string, form: FormDa
   const back = `punkt=${nodeId}`;
   if (typeof edits === "string") redirect(`${base}?${back}&fehler=${encodeURIComponent(edits)}`);
   await decide(x, back, () => releaseNode(db, { tenantId: campaign.tenantId, nodeId, actor, edits }));
+}
+
+/**
+ * The start skeleton in one click: every claim of the town the machine finds
+ * clean (recommendation "release", no personal data) is released by the person
+ * clicking — the skeleton speaks for the town, so a person releases it, but
+ * need not click seventeen times. What the machine doubts stays for one by one.
+ * Only where the machine's recommendation counts (assistiert, ki).
+ */
+export async function releaseRecommendedSkeleton(id: string): Promise<void> {
+  const x = await ctx(id);
+  const { campaign, actor, db, base } = x;
+  if (campaign.params.editorialMode === "mensch") redirect(base);
+  const nodes = await skeletonRecommended(campaign.consultationId);
+  await decide(x, "", async () => {
+    for (const n of nodes) {
+      try {
+        await releaseNode(db, { tenantId: campaign.tenantId, nodeId: n, actor });
+      } catch (e) {
+        // Decided meanwhile by a colleague: skip, keep going.
+        if (!(e instanceof DecisionError)) throw e;
+      }
+    }
+  });
 }
 
 export async function editNodeAction(id: string, nodeId: string, form: FormData): Promise<void> {
