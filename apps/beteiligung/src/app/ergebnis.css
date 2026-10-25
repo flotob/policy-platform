@@ -26,7 +26,8 @@
 /* Two columns */
 .erg-app { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 22px; }
 .erg-list { min-width: 0; }
-.erg-stage { min-width: 0; position: sticky; top: env(safe-area-inset-top, 0px); padding-top: 10px; }
+/* The right column is often taller than the window: it scrolls on its own, so the list and the detail never wait for each other. */
+.erg-stage { min-width: 0; position: sticky; top: env(safe-area-inset-top, 0px); padding-top: 10px; max-height: 100dvh; overflow-y: auto; scrollbar-width: thin; scrollbar-gutter: stable; }
 
 /* View switch */
 .erg .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
@@ -213,6 +214,7 @@
   .erg-app { grid-template-columns: 1fr; gap: 0; }
   .erg-stage { position: fixed; left: 0; right: 0; bottom: 0; top: auto; max-height: 88vh; overflow: auto; background: var(--panel); border-top: 1px solid var(--line-2); border-radius: 14px 14px 0 0; padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); transform: translateY(100%); transition: transform 0.3s ease; z-index: 30; box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.18); }
   .erg-stage.open { transform: translateY(0); }
+  .erg-stage { scrollbar-gutter: auto; }
   .erg .map, .erg .detail { border: 0; padding-left: 0; padding-right: 0; border-radius: 0; }
   .erg .detail { border-top: 1px solid var(--line); margin-top: 4px; }
   .erg .closeb { display: flex; justify-content: center; padding: 2px 0 6px; width: 100%; }

@@ -140,10 +140,9 @@ export function ResultView(props: ResultViewProps) {
   const select = (nr: number, open = true) => {
     setSel(nr);
     window.history.replaceState(null, "", `#a${nr}`);
-    if (open && window.innerWidth <= 900) {
-      setSheet(true);
-      if (stageRef.current) stageRef.current.scrollTop = 0;
-    }
+    // The right column scrolls on its own: a new statement starts at its top, with the opinion space in view.
+    if (stageRef.current) stageRef.current.scrollTop = 0;
+    if (open && window.innerWidth <= 900) setSheet(true);
   };
 
   // ———— The opinion space ————
