@@ -105,11 +105,7 @@ export async function within(kind: "vote" | "short" | "upload", participantId: s
 }
 
 /** A tracking-slip token: short, unambiguous to read out, unguessable. */
-export function trackingToken(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const bytes = randomBytes(12);
-  return [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
-}
+export { trackingToken } from "./tuer2";
 
 /** Invitation codes: printed once, kept only as hashes. */
 export function inviteCode(): { code: string; hash: string } {

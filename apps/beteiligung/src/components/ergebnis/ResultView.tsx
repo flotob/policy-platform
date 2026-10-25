@@ -697,7 +697,14 @@ export function ResultView(props: ResultViewProps) {
             <div className="meta">
               {source.q.source?.kind === "organisation"
                 ? `Markiert ist die Stelle, die zur Aussage ${source.s.nr} führt.`
-                : `Pseudonymisiert. Zuordnung zur Aussage ${source.s.nr} von der Maschine vorgeschlagen, von der Redaktion entschieden.`}
+                : `Pseudonymisiert. ${
+                    {
+                      verfasser: `Die Maschine hat die Aussage ${source.s.nr} vorgeschlagen, die Person hat bestätigt: „Ja, das meine ich.“`,
+                      regel: `Automatisch der Aussage ${source.s.nr} zugeordnet; die Redaktion prüft Stichproben.`,
+                      maschine: `Von der Maschine der Aussage ${source.s.nr} zugeordnet; die Redaktion prüft Stichproben.`,
+                      redaktion: `Zuordnung zur Aussage ${source.s.nr} von der Maschine vorgeschlagen, von der Redaktion entschieden.`,
+                    }[source.q.confirmedBy ?? "redaktion"]
+                  }`}
             </div>
             <div className="doc">
               {source.q.source?.before ? <p>{source.q.source.before}</p> : null}
@@ -706,6 +713,8 @@ export function ResultView(props: ResultViewProps) {
             </div>
             {source.q.source?.kind === "organisation" ? (
               <p className="hint">Der Text davor und danach steht mit, damit man prüfen kann, ob das Zitat den Text fair wiedergibt.</p>
+            ) : source.q.source?.kind === "kurzaussage" ? (
+              <p className="hint">So ist der eigene Punkt eingegangen, ganz und unverändert.</p>
             ) : (
               <p className="hint">Bei Privatpersonen zeigen wir nur die zitierte Stelle, nie den Text darum herum.</p>
             )}

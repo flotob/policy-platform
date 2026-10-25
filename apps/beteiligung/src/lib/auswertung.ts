@@ -57,7 +57,7 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
       SELECT id, ord, text, typ, rolle, schritt, frage, richtung, version FROM map_points
       WHERE consultation_id = ${c.consultationId} AND rolle IS NOT NULL AND status = 'released'`),
     rows(sql`
-      SELECT m.id, m.map_point_id, m.stance, m.richtung, m.schritt, m.frage, m.beleg, m.aussage, m.quote, m.span_start, m.span_end,
+      SELECT m.id, m.map_point_id, m.stance, m.richtung, m.schritt, m.frage, m.beleg, m.aussage, m.quote, m.span_start, m.span_end, m.flags, m.decided_by,
              s.participant_id, s.door, s.author_org, s.author_type, s.text AS source_text, COALESCE(s.submitted_at, s.created_at) AS at, f.filename
       FROM moves m JOIN map_points p ON p.id = m.map_point_id AND p.status = 'released'
       JOIN submissions s ON s.id = m.submission_id LEFT JOIN campaign_files f ON f.submission_id = s.id
@@ -112,6 +112,8 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
         participant: (m.participant_id as string | null) ?? null,
         sender: sender(m),
         source: source(m),
+        personal: ((m.flags as string[] | null) ?? []).includes("personal_data"),
+        decidedBy: (m.decided_by as string | null) ?? null,
       }),
     ),
     votes: votes.map((v) => ({ participant: v.participant_id as string, node: v.map_point_id as string, value: Number(v.value) as -1 | 0 | 1 })),

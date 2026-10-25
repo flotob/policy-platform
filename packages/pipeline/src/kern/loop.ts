@@ -306,6 +306,9 @@ interface Submission {
  * match it, route it, store it — and open a proposed node for a new claim.
  * `notNode`: a node the author already said is not what they mean (door 2,
  * "Nein, das ist etwas anderes") — the move never lands there on its own.
+ * `personal`: the text names or describes a private person (door 2's check):
+ * the move never attaches by itself, its node is not recommended for release,
+ * and its quote is never shown in public (befund.ts).
  */
 async function processMove(
   deps: KernDeps,
@@ -315,7 +318,7 @@ async function processMove(
   ord: number,
   nodes: MatchNode[],
   result: DecomposeResult,
-  opts: { notNode?: string | null } = {},
+  opts: { notNode?: string | null; personal?: boolean } = {},
 ): Promise<void> {
   const { db } = deps;
   const random = deps.random ?? Math.random;
@@ -325,6 +328,7 @@ async function processMove(
     return;
   }
   const { fields, flags } = checkFields(c.context, z);
+  if (opts.personal) flags.push("personal_data");
   const moveId = randomUUID();
   let match: MoveMatch | null = null;
   const shortlisted = shortlistNodes(fields, nodes);
@@ -345,6 +349,8 @@ async function processMove(
   let r = route(match, c.params.matchThreshold);
   // The author rejected this node: the claim gets a proposal of its own, with the node as the comparison.
   if (opts.notNode && match?.node === opts.notNode && (r === "auto" || r === "unsicher" || r === "gegenteil")) r = "praezisierung";
+  // Personal data stays with people: no automatic attachment.
+  if (opts.personal && r === "auto") r = "unsicher";
   result.routes[r] = (result.routes[r] ?? 0) + 1;
 
   let newNode: string | null = null;
@@ -394,6 +400,12 @@ async function processMove(
     result.newNodes++;
     nodes.push({ id: newNode, text: fields.aussage, einwand: fields.einwand, schritt: fields.schritt });
     await saveReview(deps, c, newNode, fields.aussage, [sub.text.slice(span.start, span.end)]);
+    if (opts.personal) {
+      await db.execute(sql`
+        UPDATE map_points SET review = jsonb_set(jsonb_set(COALESCE(review, '{}'::jsonb), '{flags}',
+          (COALESCE(review->'flags', '[]'::jsonb) - 'personal_data') || '["personal_data"]'::jsonb), '{verdict}', '"review"'::jsonb)
+        WHERE id = ${newNode}`);
+    }
   }
 }
 
@@ -434,6 +446,9 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
  * short statement through the same loop — one or two moves, a proposed node
  * for the editors. The node the author rejected is never its home.
  */
+/** Door 2's check: at or above this the short text counts as naming a private person. */
+export const PERSONAL_FROM = 0.5;
+
 export async function decomposeShort(deps: KernDeps, c: KernCampaign, submissionId: string): Promise<DecomposeResult> {
   const { db } = deps;
   const r = await db.execute(sql`
@@ -446,8 +461,9 @@ export async function decomposeShort(deps: KernDeps, c: KernCampaign, submission
   if (existing.rows.length) return result; // resumed: already read
   const check = await db.execute(sql`
     SELECT decided FROM judgments WHERE subject_kind = 'submission' AND subject_id = ${sub.id} AND family = ${KERN_SHORT_FAMILY}`);
-  const rejected = ((check.rows[0] as Row | undefined)?.decided as { node?: string | null; answer?: string } | undefined) ?? undefined;
+  const rejected = ((check.rows[0] as Row | undefined)?.decided as { node?: string | null; answer?: string; pPersonal?: number } | undefined) ?? undefined;
   const notNode = rejected?.answer === "nein" ? (rejected.node ?? null) : null;
+  const personal = (rejected?.pPersonal ?? 0) >= PERSONAL_FROM;
 
   const system = movesSystem(c.context);
   const prompt = shortPrompt(sub.text);
@@ -458,7 +474,7 @@ export async function decomposeShort(deps: KernDeps, c: KernCampaign, submission
   for (const [i, z] of zuege.entries()) {
     // A short text is quoted whole when the model's excerpt cannot be found in it.
     const zz = locateQuote(sub.text, z.zitat) ? z : { ...z, zitat: sub.text };
-    await processMove(deps, c, sub, zz, i, nodes, result, { notNode });
+    await processMove(deps, c, sub, zz, i, nodes, result, { notNode, personal });
   }
   await audit(db, { tenantId: c.tenantId, actor: "ki", action: "kern.decompose_short", subjectKind: "submission", subjectId: sub.id, payload: result });
   deps.log(`short statement ${sub.id}: ${JSON.stringify(result)}`);

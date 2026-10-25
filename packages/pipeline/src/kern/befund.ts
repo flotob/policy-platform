@@ -80,6 +80,10 @@ export interface MoveIn {
   participant: string | null;
   sender: string;
   source: SourceIn | null;
+  /** Names or describes a private person: counts as a vote, never shown as a quote. */
+  personal?: boolean;
+  /** Who attached it: the author at door 2 ("teilnehmer"), the rule ("regel"), the machine ("ki…"), the editors (anyone else). */
+  decidedBy?: string | null;
 }
 
 export interface VoteIn {
@@ -159,6 +163,8 @@ export interface Quote {
   person: number | null;
   camp: number | null;
   source: SourceIn | null;
+  /** Who decided that the quote belongs to this statement. */
+  confirmedBy?: "verfasser" | "regel" | "maschine" | "redaktion";
 }
 
 export interface StatementOut {
@@ -552,7 +558,8 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       }
     }
 
-    const quotes: Quote[] = [...ms]
+    const quotes: Quote[] = ms
+      .filter((m) => !m.personal)
       .sort((a, b) => b.stance - a.stance || Number(!!b.source && b.source.kind === "organisation") - Number(!!a.source && a.source.kind === "organisation"))
       .map((m) => ({
         move: m.id,
@@ -565,6 +572,8 @@ export function evaluate(input: EvaluateInput): Ergebnis {
         person: personOf(m.participant),
         camp: m.participant ? (campOf.get(m.participant) ?? null) : null,
         source: m.source,
+        confirmedBy:
+          m.decidedBy === "teilnehmer" ? "verfasser" : m.decidedBy === "regel" ? "regel" : m.decidedBy?.startsWith("ki") ? "maschine" : "redaktion",
       }));
 
     return {

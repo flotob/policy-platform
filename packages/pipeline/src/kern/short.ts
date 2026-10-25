@@ -14,10 +14,11 @@ import { choice, noul, type JevJudge, type JudgeProvenance } from "@policy/llm";
 import { z } from "zod";
 
 import { trigrams } from "../jev-match.ts";
+import type { Richtung } from "./prompts.ts";
 import { decideMatch, matchRequest, type MatchNode, type MoveMatch } from "./match.ts";
 import { moveOutput, type KernContext } from "./prompts.ts";
 
-export const KERN_SHORT_FAMILY = "kern-short.v1";
+export const KERN_SHORT_FAMILY = "kern-short.v2";
 /** Up to this many nodes are compared in one request; beyond, Jev first picks the step. */
 const ONE_CALL = 24;
 const STEP_SHORTLIST = 14;
@@ -47,6 +48,8 @@ export interface ShortCheck {
   node: string | null;
   /** +1: the citizen says the same; -1: the citizen says the opposite. */
   stance: 1 | -1;
+  /** What the text wants for the measure (stuetzt = for it, greift_an = against it), null when unclear. */
+  aim: "stuetzt" | "greift_an" | null;
   pArgument: number;
   pPersonal: number;
   match: MoveMatch | null;
@@ -64,7 +67,24 @@ const argumentQuestions = () => ({
     true: "Personal data about a private person, or a personal attack.",
     false: "No private person is identifiable or attacked.",
   }),
+  // What the text wants for the measure — about the statement, not the person: a hardship clause asked
+  // for by an opponent still argues for making the measure work. Needed to see a false consensus
+  // (Stephan's "Übergangsfristen": the same yes, once to make the duty work, once to let it die).
+  aim: choice("What does `statement` argue for, with regard to the measure?", {
+    dafuer: "For the measure: it should come, or it should be made workable — e.g. a hardship clause, a transition period so that the trades can prepare, support for builders.",
+    dagegen: "Against the measure: it should not come, or it should be weakened, emptied or delayed until it no longer matters — e.g. transition periods so long that the duty settles itself.",
+    offen: "No direction for or against the measure can be recognised.",
+  }),
 });
+
+/** Below this the aim counts as unknown. */
+const AIM_FROM = 0.6;
+
+function aimOf(answers: Record<string, unknown>): Richtung | null {
+  const a = answers.aim as { choice: string; confidence: number } | undefined;
+  if (!a || a.confidence < AIM_FROM) return null;
+  return a.choice === "dafuer" ? "stuetzt" : a.choice === "dagegen" ? "greift_an" : null;
+}
 
 function dice(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
@@ -107,7 +127,7 @@ export async function checkShortStatement(
     if ((first.answers.argument as { noul: number }).noul < ARGUMENT_FROM) {
       const a = first.answers as unknown as Record<string, { noul: number }>;
       return {
-        check: { outcome: "kein_argument", node: null, stance: 1, pArgument: a.argument!.noul, pPersonal: a.personal!.noul, match: null },
+        check: { outcome: "kein_argument", node: null, stance: 1, aim: aimOf(first.answers), pArgument: a.argument!.noul, pPersonal: a.personal!.noul, match: null },
         answers,
         provenance,
       };
@@ -129,10 +149,11 @@ export async function checkShortStatement(
   const pPersonal = a.personal!.noul;
   const match = keys.length ? decideMatch(second.answers, keys, shortlisted) : null;
 
+  const aim = aimOf(answers);
   let check: ShortCheck;
-  if (pArgument < ARGUMENT_FROM) check = { outcome: "kein_argument", node: null, stance: 1, pArgument, pPersonal, match };
-  else if (match?.outcome === "treffer") check = { outcome: "gleich", node: match.node, stance: 1, pArgument, pPersonal, match };
-  else if (match?.outcome === "gegenteil") check = { outcome: "gegenteil", node: match.node, stance: -1, pArgument, pPersonal, match };
-  else check = { outcome: "neu", node: null, stance: 1, pArgument, pPersonal, match };
+  if (pArgument < ARGUMENT_FROM) check = { outcome: "kein_argument", node: null, stance: 1, aim, pArgument, pPersonal, match };
+  else if (match?.outcome === "treffer") check = { outcome: "gleich", node: match.node, stance: 1, aim, pArgument, pPersonal, match };
+  else if (match?.outcome === "gegenteil") check = { outcome: "gegenteil", node: match.node, stance: -1, aim, pArgument, pPersonal, match };
+  else check = { outcome: "neu", node: null, stance: 1, aim, pArgument, pPersonal, match };
   return { check, answers, provenance };
 }

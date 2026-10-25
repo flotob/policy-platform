@@ -40,7 +40,7 @@ export async function participationStats(c: Campaign): Promise<Participation> {
       (SELECT count(*) FROM participants WHERE consultation_id = ${c.consultationId} AND via = 'simulation')::int AS simulated,
       (SELECT count(*) FROM map_points WHERE consultation_id = ${c.consultationId} AND rolle IS NOT NULL AND status = 'released')::int AS statements,
       (SELECT count(*) FROM submissions WHERE consultation_id = ${c.consultationId} AND door = 'statement')::int AS short_points,
-      (SELECT count(*) FROM judgments WHERE consultation_id = ${c.consultationId} AND family = 'kern-short.v1' AND decided->>'answer' = 'ja')::int AS short_confirmed,
+      (SELECT count(*) FROM judgments WHERE consultation_id = ${c.consultationId} AND family LIKE 'kern-short.%' AND decided->>'answer' = 'ja')::int AS short_confirmed,
       (SELECT count(*) FROM campaign_files WHERE campaign_id = ${c.id} AND participant_id IS NOT NULL)::int AS uploads`);
   return {
     voters: Number(x!.voters),

@@ -58,7 +58,7 @@ const CAMPAIGN = {
     doors: { abstimmen: true, kurzaussage: true, stellungnahme: true },
     start: "2026-11-16",
     end: "2026-12-18",
-    saturationWindow: 100,
+    saturationWindow: 15,
     matchThreshold: 0.8,
     sampleRate: 0.1,
     bridgeThreshold: 0.6,

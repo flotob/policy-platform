@@ -102,6 +102,7 @@ describe("evaluate", () => {
       { id: "m2", node: "frist", stance: 1, richtung: "greift_an", schritt: "eingriff", frage: "wert", beleg: "keine", aussage: "Fristen so lang, dass sich die Pflicht erledigt.", quote: "Fristen ja, bis sich das Thema erledigt hat.", participant: "p20", sender: "Privatperson", source: null },
       { id: "m3", node: "fact", stance: -1, richtung: "greift_an", schritt: "lage", frage: "lage", beleg: "behauptung", aussage: "Die Netze sind voll.", quote: "Der Strom kommt gar nicht ins Netz.", participant: "p21", sender: "Privatperson", source: null },
       { id: "m4", node: "fact", stance: 1, richtung: "stuetzt", schritt: "lage", frage: "lage", beleg: "messdaten", aussage: "Die Netze sind ausgelegt.", quote: "6,5 Kilowatt je Wohneinheit.", participant: null, sender: "Stadtwerke", source: null },
+      { id: "m5", node: "speicher", stance: 1, richtung: "stuetzt", schritt: "wirkung", frage: "wirkung", beleg: "keine", aussage: "Speicher helfen.", quote: "Mein Nachbar Herr X in der Y-Straße hat einen Speicher.", participant: "p02", sender: "Privatperson", source: null, personal: true },
     ],
     votes,
     participants,
@@ -150,6 +151,10 @@ describe("evaluate", () => {
   it("diagnoses a clear value conflict with the value statements as its core", () => {
     expect(r.diagnoses[0]?.art).toBe("wertkonflikt");
     expect(r.core).toContain(by("value").nr);
+  });
+  it("never shows a quote that names a private person, but counts it", () => {
+    expect(by("speicher").quotes).toHaveLength(0);
+    expect(by("speicher").evidence.dafuer).toEqual({ keine: 1 });
   });
   it("counts evidence by class", () => {
     expect(by("fact").evidence).toEqual({ dafuer: { messdaten: 1 }, dagegen: { behauptung: 1 } });

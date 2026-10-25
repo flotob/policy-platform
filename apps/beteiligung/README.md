@@ -21,7 +21,11 @@ tsx scripts/seed-demo.mts [--member <email>] [--statements] [--reset-analysis [-
                                             # Musterstadt Solarpflicht demo (fictional) + its 7 fictional statements
 tsx scripts/open-demo.mts                   # open the demo: skeleton + recommended points released as "demo";
                                             #   after an evaluation: drops results + reports, opens again
-tsx scripts/simulate.mts [--participants 300] [--remove]   # simulated voters, fictional demo only, marked everywhere
+tsx scripts/simulate.mts [--participants 300] [--remove] [--top-up]   # simulated voters, fictional demo only, marked everywhere;
+                                            #   --top-up: votes on statements none of them has seen (new points)
+tsx scripts/demo-tuer2.mts --phase 1|2 [--dry]   # 49 own points through door 2 (demo/kurzaussagen.json: Stephan's
+                                            #   11 short quotes + 38 written for the example), from simulated people of the
+                                            #   matching camp; their answer is scripted; phase 1, editors, phase 2
 tsx scripts/drain.mts                       # run queued machine work once without the server
 tsx scripts/auth-sql.mts                    # SQL Better Auth needs (copied into migration 0015)
 ```
@@ -141,6 +145,17 @@ independent reader (fidelity, direction, strength per paragraph, < 50 % fails); 
 once more with the objections. The editors release or reject with a reason (a new version
 reads it); changing camp names withdraws an unreleased report. Migration 0018.
 
+Door 2 after M4: the quick check also asks what the text wants for the measure (`aim`, Jev,
+`kern-short.v2`), so a confirmed point carries the author's direction (the false-consensus rule
+needs it); a text the check finds personal (≥ 0.5) never attaches by itself, its proposed point
+is not recommended for release, and its quote never appears in public or in the export (still
+a vote). The core of door 2 lives in `src/lib/tuer2.ts`, shared by the website and the demo script.
+
+Demo recipe (fictional Musterstadt, `policy_probe`): `seed-demo --reset-analysis --statements` →
+jobs → `open-demo` → `simulate` → `demo-tuer2 --phase 1` → jobs → `open-demo` (editors' one-click
+defaults; personal data and "please check" stay in the queue) → `demo-tuer2 --phase 2` → jobs →
+`open-demo` → `simulate --top-up` → close, names, report, release, publish in the workspace.
+
 Next: M5 hardening.
 
 Known limits: no email yet (no verification or password reset); one municipality per
@@ -149,5 +164,7 @@ municipalities (a long job makes others wait); no OCR for scanned PDFs; Q1 (agre
 machine vs. editors) is recorded but not shown yet; a citizen who clears cookies is a new
 pseudonym (limited per connection, not prevented — invitation codes are the strict mode);
 closing needs enough participants for camps (no result without camps); the Scheinkonsens rule
-needs contributions whose direction differs (door-2 confirmations carry no direction); the
-demo's voters are simulated (`scripts/simulate.mts`, marked on every page and in the report).
+needs agreeing contributions whose direction differs — in the demo the Fristen dispute is
+explicit instead (an own statement), so none appears; the quick check's "no argument" filter is
+noisy (lets "So ein Schwachsinn!!!" through, stops a real point now and then — the citizen can
+send anyway); the demo's voters are simulated (`scripts/simulate.mts`, marked on every page and in the report).

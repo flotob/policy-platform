@@ -3,15 +3,16 @@
 import { createHash } from "node:crypto";
 
 import { sql } from "@policy/db";
-import { checkShortStatement, extractFileText, KERN_SHORT_FAMILY, syncDerivedVotes, UnreadableFile, type ShortCheck } from "@policy/pipeline/kern";
+import { extractFileText, syncDerivedVotes, UnreadableFile } from "@policy/pipeline/kern";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { castVote } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
-import { enqueue, kernCampaign, kernDeps, releasedNodes } from "@/lib/kern";
+import { enqueue } from "@/lib/kern";
 import { ensureParticipant, LIMITS, ParticipationError, trackingToken, within } from "@/lib/teilnahme";
+import { answerShort as answerShortCore, runShortCheck, shortByToken, storeShort } from "@/lib/tuer2";
 
 type Row = Record<string, unknown>;
 
@@ -78,41 +79,10 @@ export async function submitShort(gemeinde: string, verfahren: string, _prev: Do
   }
   if (!(await within("short", p.id))) return { error: "Du hast in der letzten Stunde schon mehrere Punkte geschickt. Bitte später wieder.", values };
 
-  const db = getDb();
-  const token = trackingToken();
-  const s = await db.execute(sql`
-    INSERT INTO submissions (tenant_id, consultation_id, door, author_type, language, source_system, text, submitted_at, participant_id, tracking_token)
-    VALUES (${c.tenantId}, ${c.consultationId}, 'statement', 'privat', 'de', 'beteiligung', ${text}, now(), ${p.id}, ${token}) RETURNING id`);
-  const submissionId = (s.rows[0] as Row).id as string;
-
-  const kc = kernCampaign(c, c.tenant.name);
-  const deps = await kernDeps((m) => console.log(`[tuer2] ${m}`));
-  let check: ShortCheck;
-  try {
-    const r = await checkShortStatement(deps.judge, kc.context, text, await releasedNodes(c.consultationId));
-    check = r.check;
-    await db.execute(sql`
-      INSERT INTO judgments (tenant_id, consultation_id, subject_kind, subject_id, family, model, request_id, answers, decided)
-      VALUES (${c.tenantId}, ${c.consultationId}, 'submission', ${submissionId}, ${KERN_SHORT_FAMILY}, ${r.provenance.at(-1)?.model ?? "jev"},
-              ${r.provenance.at(-1)?.requestId ?? null}, ${JSON.stringify(r.answers)}, ${JSON.stringify({ ...check, answer: "offen" })})`);
-  } catch (e) {
-    // The quick check is a convenience: without it, the point goes to the editors as it is.
-    console.error("[tuer2] check failed", e);
-    check = { outcome: "neu", node: null, stance: 1, pArgument: 1, pPersonal: 0, match: null };
-  }
-  if (check.outcome === "neu") {
-    await enqueue(c.tenantId, c.id, "kurzaussage", null, submissionId);
-    redirect(`${base}/laufzettel/${token}`);
-  }
+  const run = await runShortCheck(c, text);
+  const { token } = await storeShort(c, p.id, text, run);
+  if (run.check.outcome === "neu") redirect(`${base}/laufzettel/${token}`);
   redirect(`${base}/punkt/${token}`);
-}
-
-async function shortByToken(c: { consultationId: string }, token: string) {
-  const r = await getDb().execute(sql`
-    SELECT s.id, s.participant_id, s.text, j.decided FROM submissions s
-    LEFT JOIN judgments j ON j.subject_kind = 'submission' AND j.subject_id = s.id::text AND j.family = ${KERN_SHORT_FAMILY}
-    WHERE s.consultation_id = ${c.consultationId} AND s.tracking_token = ${token} AND s.door = 'statement'`);
-  return (r.rows[0] as Row | undefined) ?? null;
 }
 
 /**
@@ -125,37 +95,7 @@ export async function answerShort(gemeinde: string, verfahren: string, token: st
   // The tracking-slip token is the key: whoever holds the link answers for the point.
   const s = await shortByToken(c, token);
   if (!s) redirect(base);
-  const decided = (s.decided ?? {}) as ShortCheck & { answer?: string };
-  if (decided.answer && decided.answer !== "offen") redirect(`${base}/laufzettel/${token}`);
-  const db = getDb();
-  const text = s.text as string;
-  if (answer === "ja" && decided.node) {
-    await db.transaction(async (tx) => {
-      const n = await tx.execute(sql`
-        SELECT id, text, label, typ, schritt, frage, richtung, einwand FROM map_points
-        WHERE id = ${decided.node} AND consultation_id = ${c.consultationId} AND status = 'released'`);
-      const node = n.rows[0] as Row | undefined;
-      if (!node) return;
-      await tx.execute(sql`
-        INSERT INTO moves (tenant_id, consultation_id, submission_id, ord, quote, span_start, span_end, kern, aussage, label, typ, schritt,
-                           frage, richtung, einwand, beleg, match, route, state, map_point_id, stance, decided_by, decided_at, decision)
-        VALUES (${c.tenantId}, ${c.consultationId}, ${s.id as string}, 0, ${text}, 0, ${text.length}, ${text}, ${node.text as string},
-                ${node.label as string}, ${node.typ === "W" || node.typ === "T" || node.typ === "verfahren" ? (node.typ as string) : "W"},
-                ${(node.schritt as string | null) ?? null}, ${(node.frage as string | null) ?? null}, ${(node.richtung as string | null) ?? null},
-                ${(node.einwand as string | null) ?? null}, 'keine', ${JSON.stringify(decided.match)}, ${decided.stance === -1 ? "gegenteil" : "auto"},
-                'verknuepft', ${node.id as string},
-                ${decided.stance}, 'teilnehmer', now(), ${JSON.stringify({ action: "vom_verfasser_bestaetigt" })})`);
-      await tx.execute(sql`
-        UPDATE judgments SET decided = decided || '{"answer":"ja"}'::jsonb
-        WHERE subject_kind = 'submission' AND subject_id = ${s.id as string} AND family = ${KERN_SHORT_FAMILY}`);
-    });
-    await syncDerivedVotes(db, c.consultationId);
-  } else {
-    await db.execute(sql`
-      UPDATE judgments SET decided = decided || ${JSON.stringify({ answer: "nein" })}::jsonb
-      WHERE subject_kind = 'submission' AND subject_id = ${s.id as string} AND family = ${KERN_SHORT_FAMILY}`);
-    await enqueue(c.tenantId, c.id, "kurzaussage", null, s.id as string);
-  }
+  await answerShortCore(c, s, answer);
   redirect(`${base}/laufzettel/${token}`);
 }
 
