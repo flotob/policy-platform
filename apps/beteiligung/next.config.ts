@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // Served with next start from a full workspace image (Dockerfile.beteiligung), not standalone.
   transpilePackages: ["@policy/db", "@policy/landkarte", "@policy/llm", "@policy/math", "@policy/pipeline"],
   // The Agent SDK spawns the Claude CLI; the PDF/DOCX readers ship their own workers — keep them out of the bundle.
   serverExternalPackages: ["@anthropic-ai/claude-agent-sdk", "unpdf", "mammoth"],
