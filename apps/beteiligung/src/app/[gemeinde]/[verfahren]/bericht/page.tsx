@@ -29,7 +29,7 @@ export default async function Bericht({ params }: { params: Promise<{ gemeinde: 
   const period = await periodOf(c);
   const { report } = bundle;
   return (
-    <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
       <main className="wrap pub-report">
         <p className="pub-report-kind">Bericht über die Beteiligung{c.fictional ? " · Beispiel mit erfundenen Inhalten" : ""}</p>
         <h1>{c.title}</h1>

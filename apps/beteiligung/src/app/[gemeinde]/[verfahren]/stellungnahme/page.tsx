@@ -18,7 +18,7 @@ export default async function Stellungnahme({ params }: { params: Promise<{ geme
   if (c.state !== "offen" || !c.params.doors.stellungnahme) redirect(`/${c.tenant.slug}/${c.slug}`);
   const me = await getParticipant(c);
   return (
-    <PublicFrame town={c.tenant} campaign={c} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={c} back>
       <main className="wrap door">
         <p className="door-kicker">{c.question}</p>
         <h1 className="serif">Stellungnahme einreichen</h1>

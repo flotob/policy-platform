@@ -268,7 +268,7 @@ export default async function Laufzettel({
   const confirmed = (s.decided as { answer?: string } | null)?.answer === "ja";
 
   return (
-    <PublicFrame town={c.tenant} campaign={c} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={c} back>
       <AutoRefresh active={busy} everyMs={5000} />
       <main className="wrap door slip">
         <div className="slip-head">

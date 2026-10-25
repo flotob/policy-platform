@@ -78,7 +78,7 @@ export default async function Abstimmen({
   const these = next?.schritt ? c.steps[next.schritt as keyof typeof c.steps] : null;
 
   return (
-    <PublicFrame town={c.tenant} campaign={c} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={c} back>
       <main className="wrap deck">
         {next ? (
           <>

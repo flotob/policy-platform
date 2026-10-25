@@ -54,7 +54,7 @@ export default async function Einstieg({
   ].filter((x): x is { title: string; text: string } => x !== null);
 
   return (
-    <PublicFrame town={c.tenant} fictional={c.fictional}>
+    <PublicFrame town={c.tenant}>
       <main className="wrap pub-main">
         <section className="pub-intro">
           <h1>{c.question}</h1>

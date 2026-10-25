@@ -1,5 +1,4 @@
 /* Public campaign pages: the town's question first, the way in beside it. */
-.pub-fiction { background: var(--warn-soft); color: var(--warn); font-size: 14px; font-weight: 600; padding-block: 8px; }
 .pub-head { padding-block: 22px 0; }
 .pub-town { font-weight: 600; text-decoration: none; color: var(--ink-2); }
 .pub-town:hover { color: var(--ink); text-decoration: underline; }

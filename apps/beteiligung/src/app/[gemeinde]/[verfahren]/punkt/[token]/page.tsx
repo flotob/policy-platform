@@ -36,7 +36,7 @@ export default async function PunktGeprueft({ params }: { params: Promise<{ geme
   const no = answerShort.bind(null, c.tenant.slug, c.slug, token, "nein");
 
   return (
-    <PublicFrame town={c.tenant} campaign={c} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={c} back>
       <main className="wrap door">
         <p className="door-kicker">Dein Punkt</p>
         <blockquote className="door-quote">„{row.text}“</blockquote>

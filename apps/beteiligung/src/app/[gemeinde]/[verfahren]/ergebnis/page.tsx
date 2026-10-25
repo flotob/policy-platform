@@ -25,7 +25,7 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
   const base = `/${c.tenant.slug}/${c.slug}`;
   const period = await periodOf(c);
   return (
-    <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} fictional={c.fictional} back>
+    <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
       <main className="pub-erg">
         <ResultView
           r={bundle.result}
