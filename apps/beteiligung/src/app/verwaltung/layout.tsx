@@ -13,14 +13,16 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
     <>
       <header className="ws-head">
         <div className="wrap ws-head-in">
-          <Link href="/verwaltung" className="wordmark">
+          <Link href="/" className="wordmark" title="Zur Startseite">
             <span className="wordmark-mark" aria-hidden>
               <i className="ga" />
               <i className="gb" />
             </span>
             Landkarte des Streits
           </Link>
-          <span className="ws-tenant">{staff.tenant.name}</span>
+          <Link href="/verwaltung" className="ws-tenant" title="Ihre Verfahren">
+            {staff.tenant.name}
+          </Link>
           <div className="ws-user">
             <span className="muted small">{staff.user.name}</span>
             <form action={logout}>

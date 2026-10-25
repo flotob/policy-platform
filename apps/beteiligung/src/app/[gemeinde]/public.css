@@ -1,5 +1,7 @@
 /* Public campaign pages: the town's question first, the way in beside it. */
-.pub-head { padding-block: 22px 0; }
+.pub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap; padding-block: 16px 0; }
+.pub-mark { font-size: 17px; }
+.pub-crumbs { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; }
 .pub-town { font-weight: 600; text-decoration: none; color: var(--ink-2); }
 .pub-town:hover { color: var(--ink); text-decoration: underline; }
 .pub-main {
@@ -31,7 +33,9 @@
 .pub-steps h3 { font-size: 16px; font-weight: 600; }
 .pub-steps p { margin-top: 2px; font-family: var(--serif); font-size: 17px; line-height: 1.55; color: var(--ink-2); max-width: 60ch; }
 
-.pub-town-page { display: block; max-width: 760px; }
+/* Reading pages keep the header's left edge; the text column stays narrow. */
+.pub-town-page { display: block; }
+.pub-town-page > * { max-width: 760px; }
 .pub-town-page h1 { font-family: var(--serif); font-size: clamp(30px, 4vw, 42px); font-weight: 600; }
 .pub-list { list-style: none; margin: 24px 0 0; padding: 0; border-top: 1px solid var(--line); }
 .pub-list li { display: flex; justify-content: space-between; gap: 16px; padding-block: 14px; border-bottom: 1px solid var(--line); align-items: baseline; }
@@ -52,7 +56,8 @@
 
 /* Results page and report (R5): the results page as wide as the page header. */
 .pub-erg { max-width: 1180px; margin: 0 auto; padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); }
-.pub-report { max-width: 760px; padding-block: 24px 64px; }
+.pub-report { padding-block: 24px 64px; }
+.pub-report > * { max-width: 760px; }
 .pub-report-kind { font-size: 13px; font-weight: 600; color: var(--ink-3); }
 .pub-report h1 { font-family: var(--serif); font-size: clamp(28px, 4vw, 40px); line-height: 1.12; margin-top: 6px; }
 .pub-report-meta { color: var(--ink-2); margin-top: 8px; }

@@ -2,6 +2,7 @@ import { sql } from "@policy/db";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PublicFrame } from "@/components/PublicFrame";
 import { getDb } from "@/lib/db";
 import { STATES, type CampaignState } from "@/lib/params";
 import { RESERVED } from "@/lib/slug";
@@ -13,14 +14,14 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
   const { gemeinde } = await params;
   if (RESERVED.has(gemeinde)) notFound();
   const db = getDb();
-  const t = (await db.execute(sql`SELECT id, name FROM tenants WHERE slug = ${gemeinde}`)).rows[0] as { id: string; name: string } | undefined;
+  const t = (await db.execute(sql`SELECT id, name, slug FROM tenants WHERE slug = ${gemeinde}`)).rows[0] as { id: string; name: string; slug: string } | undefined;
   if (!t) notFound();
   const campaigns = (
     await db.execute(sql`
       SELECT slug, title, question, state FROM campaigns WHERE tenant_id = ${t.id} AND state <> 'entwurf' ORDER BY updated_at DESC`)
   ).rows as { slug: string; title: string; question: string; state: CampaignState }[];
   return (
-    <div className="pub">
+    <PublicFrame town={t}>
       <main className="wrap pub-main pub-town-page">
         <h1>{t.name}</h1>
         <p className="pub-lead">Beteiligungen, zu denen die Stadt einlädt.</p>
@@ -37,6 +38,6 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
           <p className="muted">Gerade läuft keine Beteiligung.</p>
         )}
       </main>
-    </div>
+    </PublicFrame>
   );
 }
