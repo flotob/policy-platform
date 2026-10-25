@@ -169,7 +169,7 @@ export default async function Redaktion({
         href: `${base}?beitrag=${m.id}`,
         current: move?.id === m.id,
         title: m.sender,
-        meta: m.route === "gegenteil" ? "Gegenteil eines Punkts?" : "Gleicher Punkt?",
+        meta: m.decision?.einspruch ? "Einspruch des Verfassers" : m.route === "gegenteil" ? "Gegenteil eines Punkts?" : "Gleicher Punkt?",
       })),
     },
     {
@@ -381,7 +381,9 @@ export default async function Redaktion({
               <p className="rd-kind">
                 {isSample
                   ? `Stichprobe · ${move.decidedBy === "regel" ? "automatisch zugeordnet" : actorName(move.decidedBy)}`
-                  : move.route === "gegenteil"
+                  : move.decision?.einspruch
+                    ? "Einspruch · Der Verfasser sagt: „Das meint mein Punkt nicht.“"
+                    : move.route === "gegenteil"
                     ? "Unsichere Zuordnung · Gegenteil eines Punkts?"
                     : "Unsichere Zuordnung · Gleicher Punkt?"}
               </p>
@@ -391,13 +393,19 @@ export default async function Redaktion({
               ) : assigned ? (
                 <div className="rd-assign">
                   <p className="small muted">
-                    {move.stance === -1 ? "Die Maschine ordnet ihn als Widerspruch zu diesem Punkt:" : "Die Maschine ordnet ihn diesem Punkt zu:"}
+                    {move.decision?.einspruch
+                      ? "Bisher gehört er zu diesem Punkt. Der Verfasser sagt, das meine er nicht:"
+                      : move.stance === -1
+                        ? "Die Maschine ordnet ihn als Widerspruch zu diesem Punkt:"
+                        : "Die Maschine ordnet ihn diesem Punkt zu:"}
                   </p>
                   <p className="rd-text serif">{assigned.text}</p>
                   <p className="small muted">
                     {stepLabel(assigned.schritt)}
-                    {assigned.frage ? ` · ${questionLabel(assigned.frage)}` : ""} ·{" "}
-                    die Maschine ist {certainty(move.stance === -1 ? (move.match?.pOpposite ?? 0) : (move.match?.pSame ?? 0))}
+                    {assigned.frage ? ` · ${questionLabel(assigned.frage)}` : ""}
+                    {move.decision?.einspruch
+                      ? ""
+                      : ` · die Maschine ist ${certainty(move.stance === -1 ? (move.match?.pOpposite ?? 0) : (move.match?.pSame ?? 0))}`}
                   </p>
                 </div>
               ) : null}

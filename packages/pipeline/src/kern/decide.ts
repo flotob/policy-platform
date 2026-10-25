@@ -122,8 +122,12 @@ export async function releaseNode(db: Db, a: { tenantId: string; nodeId: string;
   });
 }
 
-/** Change a released node's wording or fields while the procedure is in preparation (no votes yet). */
-export async function editNode(db: Db, a: { tenantId: string; nodeId: string; actor: string; edits: Partial<NodeFields> }) {
+/**
+ * Change a released node's wording or fields. Under vote (`newVersion`), a
+ * changed wording is a new version (A2): votes stay with the wording they
+ * were cast on, and everyone is asked again.
+ */
+export async function editNode(db: Db, a: { tenantId: string; nodeId: string; actor: string; edits: Partial<NodeFields>; newVersion?: boolean }) {
   await db.transaction(async (tx) => {
     const node = await lockNode(tx, a.tenantId, a.nodeId);
     if (node.status !== "released") throw new DecisionError("Nur freigegebene Punkte lassen sich hier ändern.");
@@ -132,9 +136,17 @@ export async function editNode(db: Db, a: { tenantId: string; nodeId: string; ac
     if (f.text.trim().length < 8) throw new DecisionError("Die Aussage ist zu kurz.");
     await tx.execute(sql`
       UPDATE map_points SET text = ${f.text.trim()}, label = ${f.label.trim().slice(0, 60)}, typ = ${f.typ}, schritt = ${f.schritt},
-        frage = ${f.frage}, richtung = ${f.richtung}, einwand = ${f.einwand}
+        frage = ${f.frage}, richtung = ${f.richtung}, einwand = ${f.einwand},
+        version = version + ${a.newVersion && f.text.trim() !== before.text ? 1 : 0}
       WHERE id = ${a.nodeId}`);
-    await audit(tx, { tenantId: a.tenantId, actor: a.actor, action: "kern.node.edit", subjectKind: "map_point", subjectId: a.nodeId, payload: { before, after: f } });
+    await audit(tx, {
+      tenantId: a.tenantId,
+      actor: a.actor,
+      action: "kern.node.edit",
+      subjectKind: "map_point",
+      subjectId: a.nodeId,
+      payload: { before, after: f, newVersion: !!a.newVersion && f.text.trim() !== before.text },
+    });
   });
 }
 

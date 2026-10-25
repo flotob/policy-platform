@@ -43,6 +43,7 @@ import {
   type StepKey,
 } from "./prompts.ts";
 import { KERN_REVIEW_FAMILY, reviewNode, type NodeReview } from "./review.ts";
+import { KERN_SHORT_FAMILY, shortMovesJsonSchema, shortMovesOutput, shortPrompt } from "./short.ts";
 import { extractFileText } from "./text.ts";
 
 export type EditorialMode = "mensch" | "assistiert" | "ki";
@@ -242,23 +243,49 @@ async function windowOutput(
   return parsed.zuege;
 }
 
+/**
+ * The participant behind an uploaded statement: the one who uploaded it at
+ * door 3, or — for the statements the town brought in (E4) — the sender as
+ * a participant of its own (assumption 3: senders are participants).
+ */
+async function participantForFile(tx: Pick<Db, "execute">, c: KernCampaign, f: Row): Promise<string> {
+  if (f.participant_id) return f.participant_id as string;
+  const r = await tx.execute(sql`
+    INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
+    VALUES (${c.tenantId}, ${c.consultationId}, ${`datei:${f.id as string}`}, ${(f.sender as string | null) ?? null},
+            ${(f.sender_type as string | null) ?? null}, 'de', 'datei')
+    ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = excluded.author_org RETURNING id`);
+  return (r.rows[0] as Row).id as string;
+}
+
 /** Z1: the file's text as a submission (once; offsets point into it forever). */
-async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string) {
+async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string): Promise<Submission> {
   const { db } = deps;
   const r = await db.execute(sql`
-    SELECT f.id, f.filename, f.mime, f.content, f.sender, f.sender_type, f.created_at, f.submission_id, s.text
+    SELECT f.id, f.filename, f.mime, f.content, f.sender, f.sender_type, f.created_at, f.submission_id, f.participant_id, s.text,
+      s.participant_id AS s_participant
     FROM campaign_files f LEFT JOIN submissions s ON s.id = f.submission_id
     WHERE f.id = ${fileId} AND f.campaign_id = ${c.id}`);
   const f = r.rows[0] as Row | undefined;
   if (!f) throw new Error("Die Datei gibt es nicht mehr.");
   const sender = (f.sender as string | null) ?? null;
   const senderType = (f.sender_type as string | null) ?? null;
-  if (f.submission_id) return { id: f.submission_id as string, text: f.text as string, sender, senderType };
+  if (f.submission_id) {
+    // Read before senders became participants: attach one now.
+    if (!f.s_participant) {
+      const pid = await participantForFile(db, c, f);
+      await db.execute(sql`UPDATE submissions SET participant_id = ${pid} WHERE id = ${f.submission_id as string}`);
+    }
+    return { id: f.submission_id as string, text: f.text as string, sender, senderType };
+  }
   const text = await extractFileText(new Uint8Array(f.content as Buffer), f.filename as string, (f.mime as string | null) ?? null);
   const id = await db.transaction(async (tx) => {
+    const participant = await participantForFile(tx, c, f);
     const s = await tx.execute(sql`
-      INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text, submitted_at)
-      VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${sender}, ${senderType}, 'de', 'beteiligung', ${fileId}, ${text}, ${f.created_at as string})
+      INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text,
+                               submitted_at, participant_id)
+      VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${sender}, ${senderType}, 'de', 'beteiligung', ${fileId}, ${text},
+              ${f.created_at as string}, ${participant})
       RETURNING id`);
     const sid = (s.rows[0] as Row).id as string;
     await tx.execute(sql`UPDATE campaign_files SET submission_id = ${sid} WHERE id = ${fileId}`);
@@ -267,9 +294,111 @@ async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string) {
   return { id, text, sender, senderType };
 }
 
-export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: string): Promise<DecomposeResult> {
+interface Submission {
+  id: string;
+  text: string;
+  sender: string | null;
+  senderType: string | null;
+}
+
+/**
+ * Z3–Z5 and Z8 for one proposed move: locate its quote, check its fields,
+ * match it, route it, store it — and open a proposed node for a new claim.
+ * `notNode`: a node the author already said is not what they mean (door 2,
+ * "Nein, das ist etwas anderes") — the move never lands there on its own.
+ */
+async function processMove(
+  deps: KernDeps,
+  c: KernCampaign,
+  sub: Submission,
+  z: MoveOutput,
+  ord: number,
+  nodes: MatchNode[],
+  result: DecomposeResult,
+  opts: { notNode?: string | null } = {},
+): Promise<void> {
   const { db } = deps;
   const random = deps.random ?? Math.random;
+  const span = locateQuote(sub.text, z.zitat);
+  if (!span) {
+    result.quoteMissing++;
+    return;
+  }
+  const { fields, flags } = checkFields(c.context, z);
+  const moveId = randomUUID();
+  let match: MoveMatch | null = null;
+  const shortlisted = shortlistNodes(fields, nodes);
+  const judged = await matchMove(deps.judge, { town: c.context.town, measure: c.context.measure }, fields, shortlisted);
+  if (judged) {
+    match = judged.match;
+    await saveJudgment(db, {
+      tenantId: c.tenantId,
+      consultationId: c.consultationId,
+      subjectKind: "move",
+      subjectId: moveId,
+      family: KERN_MATCH_FAMILY,
+      provenance: judged.provenance,
+      answers: judged.answers,
+      decided: match,
+    });
+  }
+  let r = route(match, c.params.matchThreshold);
+  // The author rejected this node: the claim gets a proposal of its own, with the node as the comparison.
+  if (opts.notNode && match?.node === opts.notNode && (r === "auto" || r === "unsicher" || r === "gegenteil")) r = "praezisierung";
+  result.routes[r] = (result.routes[r] ?? 0) + 1;
+
+  let newNode: string | null = null;
+  await db.transaction(async (tx) => {
+    let nodeId = match?.node ?? null;
+    let state: "vorgelegt" | "verknuepft" = "vorgelegt";
+    let sample = false;
+    let decidedBy: string | null = null;
+    let stance: 1 | -1 = 1;
+    if (r === "auto") {
+      const st = await tx.execute(sql`SELECT status FROM map_points WHERE id = ${nodeId}`);
+      if ((st.rows[0] as Row | undefined)?.status === "released") {
+        state = "verknuepft";
+        decidedBy = "regel";
+        sample = random() < c.params.sampleRate;
+      }
+    } else if (r === "gegenteil") {
+      stance = -1;
+    } else if (r === "praezisierung" || r === "neu") {
+      nodeId = await createNode(tx, {
+        tenantId: c.tenantId,
+        consultationId: c.consultationId,
+        rolle: "beitrag",
+        createdBy: "ki",
+        text: fields.aussage,
+        label: fields.label,
+        typ: fields.typ,
+        schritt: fields.schritt,
+        frage: fields.frage,
+        richtung: fields.richtung,
+        einwand: fields.einwand,
+      });
+      newNode = nodeId;
+    }
+    await tx.execute(sql`
+      INSERT INTO moves (id, tenant_id, consultation_id, submission_id, ord, quote, span_start, span_end, kern, aussage, label,
+                         typ, schritt, frage, richtung, einwand, beleg, flags, match, route, sample, state, map_point_id, stance,
+                         decided_by, decided_at, decision)
+      VALUES (${moveId}, ${c.tenantId}, ${c.consultationId}, ${sub.id}, ${ord}, ${sub.text.slice(span.start, span.end)},
+              ${span.start}, ${span.end}, ${fields.kern}, ${fields.aussage}, ${fields.label}, ${fields.typ}, ${fields.schritt},
+              ${fields.frage}, ${fields.richtung}, ${fields.einwand}, ${fields.beleg}, ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(flags)}::jsonb)),
+              ${match ? JSON.stringify(match) : null}, ${r}, ${sample}, ${state}, ${nodeId}, ${stance},
+              ${decidedBy}, ${decidedBy ? new Date().toISOString() : null}, ${decidedBy ? JSON.stringify({ action: "auto" }) : null})`);
+  });
+  result.moves++;
+  if (newNode) {
+    result.newNodes++;
+    nodes.push({ id: newNode, text: fields.aussage, einwand: fields.einwand, schritt: fields.schritt });
+    await saveReview(deps, c, newNode, fields.aussage, [sub.text.slice(span.start, span.end)]);
+  }
+}
+
+export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: string): Promise<DecomposeResult> {
+  const { db } = deps;
   const sub = await submissionFor(deps, c, fileId);
 
   const chunks = chunkText(sub.text);
@@ -286,83 +415,7 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
     const zuege = await windowOutput(deps, c, sub, { text, index, count: chunks.length, start });
     result.proposed += zuege.length;
     deps.log(`window ${index + 1}/${chunks.length}: ${zuege.length} moves proposed`);
-
-    for (const [i, z] of zuege.entries()) {
-      const span = locateQuote(sub.text, z.zitat);
-      if (!span) {
-        result.quoteMissing++;
-        continue;
-      }
-      const { fields, flags } = checkFields(c.context, z);
-      const moveId = randomUUID();
-      let match: MoveMatch | null = null;
-      const shortlisted = shortlistNodes(fields, nodes);
-      const judged = await matchMove(deps.judge, { town: c.context.town, measure: c.context.measure }, fields, shortlisted);
-      if (judged) {
-        match = judged.match;
-        await saveJudgment(db, {
-          tenantId: c.tenantId,
-          consultationId: c.consultationId,
-          subjectKind: "move",
-          subjectId: moveId,
-          family: KERN_MATCH_FAMILY,
-          provenance: judged.provenance,
-          answers: judged.answers,
-          decided: match,
-        });
-      }
-      const r = route(match, c.params.matchThreshold);
-      result.routes[r] = (result.routes[r] ?? 0) + 1;
-
-      let newNode: string | null = null;
-      await db.transaction(async (tx) => {
-        let nodeId = match?.node ?? null;
-        let state: "vorgelegt" | "verknuepft" = "vorgelegt";
-        let sample = false;
-        let decidedBy: string | null = null;
-        let stance: 1 | -1 = 1;
-        if (r === "auto") {
-          const st = await tx.execute(sql`SELECT status FROM map_points WHERE id = ${nodeId}`);
-          if ((st.rows[0] as Row | undefined)?.status === "released") {
-            state = "verknuepft";
-            decidedBy = "regel";
-            sample = random() < c.params.sampleRate;
-          }
-        } else if (r === "gegenteil") {
-          stance = -1;
-        } else if (r === "praezisierung" || r === "neu") {
-          nodeId = await createNode(tx, {
-            tenantId: c.tenantId,
-            consultationId: c.consultationId,
-            rolle: "beitrag",
-            createdBy: "ki",
-            text: fields.aussage,
-            label: fields.label,
-            typ: fields.typ,
-            schritt: fields.schritt,
-            frage: fields.frage,
-            richtung: fields.richtung,
-            einwand: fields.einwand,
-          });
-          newNode = nodeId;
-        }
-        await tx.execute(sql`
-          INSERT INTO moves (id, tenant_id, consultation_id, submission_id, ord, quote, span_start, span_end, kern, aussage, label,
-                             typ, schritt, frage, richtung, einwand, beleg, flags, match, route, sample, state, map_point_id, stance,
-                             decided_by, decided_at, decision)
-          VALUES (${moveId}, ${c.tenantId}, ${c.consultationId}, ${sub.id}, ${index * 1000 + i}, ${sub.text.slice(span.start, span.end)},
-                  ${span.start}, ${span.end}, ${fields.kern}, ${fields.aussage}, ${fields.label}, ${fields.typ}, ${fields.schritt},
-                  ${fields.frage}, ${fields.richtung}, ${fields.einwand}, ${fields.beleg}, ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(flags)}::jsonb)),
-                  ${match ? JSON.stringify(match) : null}, ${r}, ${sample}, ${state}, ${nodeId}, ${stance},
-                  ${decidedBy}, ${decidedBy ? new Date().toISOString() : null}, ${decidedBy ? JSON.stringify({ action: "auto" }) : null})`);
-      });
-      result.moves++;
-      if (newNode) {
-        result.newNodes++;
-        nodes.push({ id: newNode, text: fields.aussage, einwand: fields.einwand, schritt: fields.schritt });
-        await saveReview(deps, c, newNode, fields.aussage, [sub.text.slice(span.start, span.end)]);
-      }
-    }
+    for (const [i, z] of zuege.entries()) await processMove(deps, c, sub, z, index * 1000 + i, nodes, result);
   }
   await audit(db, {
     tenantId: c.tenantId,
@@ -373,6 +426,42 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
     payload: { file: fileId, ...result },
   });
   deps.log(`decomposed ${fileId}: ${JSON.stringify(result)}`);
+  return result;
+}
+
+/**
+ * Door 2 after "Nein, das ist etwas anderes" (or nothing similar found): the
+ * short statement through the same loop — one or two moves, a proposed node
+ * for the editors. The node the author rejected is never its home.
+ */
+export async function decomposeShort(deps: KernDeps, c: KernCampaign, submissionId: string): Promise<DecomposeResult> {
+  const { db } = deps;
+  const r = await db.execute(sql`
+    SELECT id, text, author_org, author_type, source_ref FROM submissions WHERE id = ${submissionId} AND consultation_id = ${c.consultationId}`);
+  const s = r.rows[0] as Row | undefined;
+  if (!s) throw new Error("Die Kurzaussage gibt es nicht mehr.");
+  const sub: Submission = { id: s.id as string, text: s.text as string, sender: null, senderType: "privat" };
+  const result: DecomposeResult = { windows: 1, proposed: 0, moves: 0, quoteMissing: 0, routes: {}, newNodes: 0 };
+  const existing = await db.execute(sql`SELECT 1 FROM moves WHERE submission_id = ${sub.id} LIMIT 1`);
+  if (existing.rows.length) return result; // resumed: already read
+  const check = await db.execute(sql`
+    SELECT decided FROM judgments WHERE subject_kind = 'submission' AND subject_id = ${sub.id} AND family = ${KERN_SHORT_FAMILY}`);
+  const rejected = ((check.rows[0] as Row | undefined)?.decided as { node?: string | null; answer?: string } | undefined) ?? undefined;
+  const notNode = rejected?.answer === "nein" ? (rejected.node ?? null) : null;
+
+  const system = movesSystem(c.context);
+  const prompt = shortPrompt(sub.text);
+  const { output } = await deps.llm.generateStructured({ system, prompt, schema: shortMovesJsonSchema });
+  const zuege = shortMovesOutput.parse(output).zuege;
+  result.proposed = zuege.length;
+  const nodes = await campaignNodes(db, c.consultationId);
+  for (const [i, z] of zuege.entries()) {
+    // A short text is quoted whole when the model's excerpt cannot be found in it.
+    const zz = locateQuote(sub.text, z.zitat) ? z : { ...z, zitat: sub.text };
+    await processMove(deps, c, sub, zz, i, nodes, result, { notNode });
+  }
+  await audit(db, { tenantId: c.tenantId, actor: "ki", action: "kern.decompose_short", subjectKind: "submission", subjectId: sub.id, payload: result });
+  deps.log(`short statement ${sub.id}: ${JSON.stringify(result)}`);
   return result;
 }
 

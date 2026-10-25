@@ -88,27 +88,27 @@ export function shortlistNodes(move: { aussage: string; kern: string; schritt: s
   return [...root, ...sameStep, ...anywhere].map((x) => x.n).filter((n) => !seen.has(n.id) && seen.add(n.id));
 }
 
-export async function matchMove(
-  judge: JevJudge,
+type Question = ReturnType<typeof score> | ReturnType<typeof choice> | ReturnType<typeof noul>;
+
+/** The state and questions of one match judgment; `extra` questions ride along in the same request. */
+export function matchRequest(
   context: { town: string; measure: string },
-  move: { aussage: string; kern: string },
+  candidate: { statement: string; claim: string },
   shortlisted: MatchNode[],
-): Promise<{ match: MoveMatch; answers: Record<string, unknown>; provenance: JudgeProvenance } | null> {
-  if (shortlisted.length === 0) return null;
+  extra: Record<string, Question> = {},
+) {
   const keys = shortlisted.map((_, i) => `p${i + 1}`);
   const existing: Record<string, { statement: string; objection: string | null }> = {};
   shortlisted.forEach((n, i) => (existing[keys[i]!] = { statement: n.text, objection: n.einwand }));
-
   const state = {
     context:
       `Public participation procedure of ${context.town} on the measure: "${context.measure}". ` +
       "Each existing point is one statement citizens vote on (agree / disagree). Repeats of a claim must fold into one point; " +
       "distinct claims must stay separate.",
-    candidate: { statement: move.aussage, claim: move.kern },
+    candidate,
     existing,
   };
-
-  const questions: Record<string, ReturnType<typeof score> | ReturnType<typeof choice> | ReturnType<typeof noul>> = {};
+  const questions: Record<string, Question> = { ...extra };
   for (const key of keys) {
     questions[`rel_${key}`] = score(`How does the candidate claim \`candidate\` relate to the existing point \`existing.${key}\`?`, RELATION_LEVELS);
     questions[`opp_${key}`] = noul(
@@ -119,13 +119,17 @@ export async function matchMove(
       },
     );
   }
-  const pickCriteria: Record<string, string> = {};
-  for (const key of keys) pickCriteria[key] = `\`existing.${key}\` makes the same claim as \`candidate\` (same content, same direction).`;
-  pickCriteria.none = "No existing point makes the same claim: the candidate is new, only related, or the opposite of an existing point.";
-  questions.pick = choice("Which existing point, if any, makes the same claim as `candidate`?", pickCriteria);
+  if (keys.length) {
+    const pickCriteria: Record<string, string> = {};
+    for (const key of keys) pickCriteria[key] = `\`existing.${key}\` makes the same claim as \`candidate\` (same content, same direction).`;
+    pickCriteria.none = "No existing point makes the same claim: the candidate is new, only related, or the opposite of an existing point.";
+    questions.pick = choice("Which existing point, if any, makes the same claim as `candidate`?", pickCriteria);
+  }
+  return { state, questions, keys };
+}
 
-  const { answers, provenance } = await judge.judge(state, questions);
-
+/** The policy over the answers: same claim, opposite claim, related, or new. */
+export function decideMatch(answers: Record<string, unknown>, keys: string[], shortlisted: MatchNode[]): MoveMatch {
   const pairs = keys.map((key, i) => {
     const rel = answers[`rel_${key}`] as { probabilities: Record<string, number> };
     const opp = answers[`opp_${key}`] as { noul: number };
@@ -146,23 +150,31 @@ export async function matchMove(
   else [outcome, best] = ["neu", null];
 
   return {
-    match: {
-      outcome,
-      node: best?.node.id ?? null,
-      pSame: bySame.pSame,
-      pOpposite: best?.pOpposite ?? byOpp.pOpposite,
-      pRelated: best?.pRelated ?? byRel.pRelated,
-      pick: pickId,
-      pickConfidence: pick.confidence,
-      shortlist: shortlisted.map((n) => n.id),
-      candidates: [...pairs]
-        .sort((a, b) => b.pSame + b.pOpposite - (a.pSame + a.pOpposite) || b.pRelated - a.pRelated)
-        .slice(0, CANDIDATES)
-        .map((p) => ({ node: p.node.id, pSame: round(p.pSame), pOpposite: round(p.pOpposite), pRelated: round(p.pRelated) })),
-    },
-    answers,
-    provenance,
+    outcome,
+    node: best?.node.id ?? null,
+    pSame: bySame.pSame,
+    pOpposite: best?.pOpposite ?? byOpp.pOpposite,
+    pRelated: best?.pRelated ?? byRel.pRelated,
+    pick: pickId,
+    pickConfidence: pick.confidence,
+    shortlist: shortlisted.map((n) => n.id),
+    candidates: [...pairs]
+      .sort((a, b) => b.pSame + b.pOpposite - (a.pSame + a.pOpposite) || b.pRelated - a.pRelated)
+      .slice(0, CANDIDATES)
+      .map((p) => ({ node: p.node.id, pSame: round(p.pSame), pOpposite: round(p.pOpposite), pRelated: round(p.pRelated) })),
   };
+}
+
+export async function matchMove(
+  judge: JevJudge,
+  context: { town: string; measure: string },
+  move: { aussage: string; kern: string },
+  shortlisted: MatchNode[],
+): Promise<{ match: MoveMatch; answers: Record<string, unknown>; provenance: JudgeProvenance } | null> {
+  if (shortlisted.length === 0) return null;
+  const { state, questions, keys } = matchRequest(context, { statement: move.aussage, claim: move.kern }, shortlisted);
+  const { answers, provenance } = await judge.judge(state, questions);
+  return { match: decideMatch(answers, keys, shortlisted), answers, provenance };
 }
 
 /** Z5: the asymmetry rule — "im Zweifel neu" — as code over the judgment. */

@@ -97,7 +97,7 @@ const NODE_SELECT = sql`
   SELECT p.*,
     (SELECT count(*) FROM moves m WHERE m.map_point_id = p.id AND m.state <> 'verworfen' AND m.stance = 1)::int AS agree,
     (SELECT count(*) FROM moves m WHERE m.map_point_id = p.id AND m.state <> 'verworfen' AND m.stance = -1)::int AS disagree,
-    (SELECT array_agg(DISTINCT COALESCE(s.author_org, 'Ohne Absender')) FROM moves m JOIN submissions s ON s.id = m.submission_id
+    (SELECT array_agg(DISTINCT CASE WHEN s.author_org IS NOT NULL THEN s.author_org WHEN s.door = 'statement' THEN 'Eigener Punkt aus der Beteiligung' WHEN s.author_type = 'privat' THEN 'Privatperson' ELSE 'Ohne Absender' END) FROM moves m JOIN submissions s ON s.id = m.submission_id
       WHERE m.map_point_id = p.id AND m.state <> 'verworfen') AS senders
   FROM map_points p`;
 
@@ -116,7 +116,7 @@ export async function getNode(consultationId: string, id: string): Promise<Node 
 }
 
 const MOVE_SELECT = sql`
-  SELECT m.*, s.author_org, s.author_type, s.text AS source_text, f.filename
+  SELECT m.*, CASE WHEN s.author_org IS NOT NULL THEN s.author_org WHEN s.door = 'statement' THEN 'Eigener Punkt aus der Beteiligung' WHEN s.author_type = 'privat' THEN 'Privatperson' ELSE 'Ohne Absender' END AS sender_name, s.author_type, s.text AS source_text, f.filename
   FROM moves m JOIN submissions s ON s.id = m.submission_id
   LEFT JOIN campaign_files f ON f.submission_id = s.id`;
 
@@ -157,7 +157,7 @@ function toMove(r: Row): Move {
     richtung: r.richtung as Richtung,
     beleg: r.beleg as string,
     flags: (r.flags as string[] | null) ?? [],
-    sender: (r.author_org as string | null) ?? "Ohne Absender",
+    sender: r.sender_name as string,
     senderType: (r.author_type as string | null) ?? null,
     filename: (r.filename as string | null) ?? null,
     match: (r.match as Move["match"]) ?? null,

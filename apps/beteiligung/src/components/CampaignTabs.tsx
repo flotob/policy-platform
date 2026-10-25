@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** Setup · the argument as it stands · the editorial queue. */
-export function CampaignTabs({ id, queue, showWork }: { id: string; queue: number; showWork: boolean }) {
+/** Setup · the live picture (once citizens take part) · the argument as it stands · the editorial queue. */
+export function CampaignTabs({ id, queue, showWork, live }: { id: string; queue: number; showWork: boolean; live: boolean }) {
   const path = usePathname();
   const base = `/verwaltung/${id}`;
   const tabs = [
     { href: base, label: "Einrichtung" },
+    ...(live ? [{ href: `${base}/lagebild`, label: "Lagebild" }] : []),
     ...(showWork
       ? [
           { href: `${base}/punkte`, label: "Begründung und Einwände" },

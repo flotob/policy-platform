@@ -12,6 +12,8 @@
  *                       (nodes, moves, jobs, texts) — the uploads stay
  *     --keep-texts      with --reset-analysis: keep the extracted texts and the cached
  *                       model outputs, so the rerun costs one skeleton call and the Jev judgments
+ *   The reset also removes everything citizens did (votes, own points, uploads, invitation
+ *   codes, simulated voters). Afterwards, once the machine is done: tsx scripts/open-demo.mts
  */
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
@@ -113,9 +115,23 @@ try {
   }
   const consultationId = (await db.query(`SELECT consultation_id FROM campaigns WHERE id = $1`, [campaignId])).rows[0].consultation_id as string;
   if (resetAnalysis) {
-    // Only the fictional demo is ever reset (campaigns.fictional) — FK order: judgments, moves, nodes, texts.
+    // Only the fictional demo is ever reset (campaigns.fictional) — FK order: votes, judgments, moves, nodes,
+    // what citizens sent (door 2/3) and who they were, the town's texts.
+    await db.query(`DELETE FROM map_point_votes WHERE map_point_id IN (SELECT id FROM map_points WHERE consultation_id = $1)`, [consultationId]);
     await db.query(`DELETE FROM judgments WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM moves WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`DELETE FROM campaign_invites WHERE campaign_id = $1`, [campaignId]);
+    await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);
+    const uploads = await db.query(`DELETE FROM campaign_files WHERE campaign_id = $1 AND participant_id IS NOT NULL RETURNING submission_id`, [campaignId]);
+    const fromDoors = await db.query(
+      `SELECT id FROM submissions WHERE consultation_id = $1 AND (door = 'statement' OR id = ANY($2::uuid[]))`,
+      [consultationId, uploads.rows.map((r) => r.submission_id).filter(Boolean)],
+    );
+    const ids = fromDoors.rows.map((r) => r.id);
+    await db.query(`DELETE FROM extractions WHERE submission_id = ANY($1::uuid[])`, [ids]);
+    await db.query(`DELETE FROM submissions WHERE id = ANY($1::uuid[])`, [ids]);
+    await db.query(`UPDATE submissions SET participant_id = NULL WHERE consultation_id = $1`, [consultationId]);
+    await db.query(`DELETE FROM participants WHERE consultation_id = $1`, [consultationId]);
     await db.query(`UPDATE map_points SET merged_into = NULL WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM map_points WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);

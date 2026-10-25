@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getCampaign, listFiles } from "@/lib/campaigns";
+import { getCampaign, inviteCounts, listFiles } from "@/lib/campaigns";
 import { STEPS } from "@/lib/params";
 import { openingCheck } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 
 import { deleteFile, openCampaign, setState } from "../actions";
-import { BasicsForm, JustificationForm, ProcessForm, UploadForm } from "../forms";
+import { BasicsForm, InviteForm, JustificationForm, ProcessForm, UploadForm } from "../forms";
 
 const ROLE = { entwurf: "Entwurf", unterlage: "Unterlage", stellungnahme: "Stellungnahme" } as const;
 const kb = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
@@ -24,7 +24,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
   const { fehler } = await searchParams;
   const campaign = await getCampaign(staff.tenant.id, id);
   if (!campaign) notFound();
-  const [files, open] = await Promise.all([listFiles(campaign.id), openingCheck(campaign.consultationId)]);
+  const [files, open, invites] = await Promise.all([listFiles(campaign.id), openingCheck(campaign.consultationId), inviteCounts(campaign.id)]);
   const editable = staff.role === "initiator";
   const preparing = campaign.state === "entwurf" || campaign.state === "vorbereitung";
   const publicPath = `/${staff.tenant.slug}/${campaign.slug}`;
@@ -85,6 +85,12 @@ export default async function CampaignPage({ params, searchParams }: { params: P
         <section id="ablauf" className="cp-section">
           <h2>Ablauf</h2>
           {editable ? <ProcessForm id={campaign.id} params={campaign.params} /> : null}
+          {editable && campaign.params.access === "einladung" ? (
+            <>
+              <h3 className="cp-h3">Einladungscodes</h3>
+              <InviteForm id={campaign.id} total={invites.total} used={invites.used} />
+            </>
+          ) : null}
         </section>
 
         <section id="unterlagen" className="cp-section">

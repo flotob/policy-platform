@@ -32,7 +32,7 @@ export default async function Punkte({ params, searchParams }: { params: Promise
   const campaign = await getCampaign(staff.tenant.id, id);
   if (!campaign) notFound();
   const [nodes, open] = await Promise.all([listNodes(campaign.consultationId), openingCheck(campaign.consultationId)]);
-  const canEdit = staff.role !== "betrachter" && campaign.state === "vorbereitung";
+  const canEdit = staff.role !== "betrachter" && (campaign.state === "vorbereitung" || campaign.state === "offen");
   const root = nodes.find((n) => n.rolle === "schluss");
   const drafts = nodes.filter((n) => n.status === "draft").length;
 
@@ -63,6 +63,12 @@ export default async function Punkte({ params, searchParams }: { params: Promise
       {canEdit && sp.bearbeiten === n.id && n.status === "released" ? (
         <div className="pt-edit">
           {sp.fehler ? <p className="error">{sp.fehler}</p> : null}
+          {campaign.state === "offen" ? (
+            <p className="notice small">
+              Die Abstimmung läuft. Eine neue Formulierung wird eine neue Fassung: Alle werden noch einmal gefragt, die bisherigen Stimmen bleiben bei
+              der alten Fassung.
+            </p>
+          ) : null}
           <NodeEditor key={n.id} node={n} action={editNodeAction.bind(null, id, n.id)} submitLabel="Änderung speichern" />
           <Link href={`?#p-${n.id}`} className="small">
             Abbrechen
@@ -147,14 +153,21 @@ export default async function Punkte({ params, searchParams }: { params: Promise
             </h3>
             {questions.map((q) => {
               const here = attacks.filter((n) => n.frage === q.key);
+              // A contribution contradicting the town's own claim raises that claim's question too.
+              const contradicted = premises.filter((n) => n.frage === q.key && n.disagree > 0);
               return (
                 <div key={q.key} className="pk-q">
                   <p className="pk-q-h">Prüffrage: {q.label}</p>
+                  {contradicted.map((n) => (
+                    <p key={n.id} className="pk-contra small">
+                      {n.disagree} {n.disagree === 1 ? "Beitrag widerspricht" : "Beiträge widersprechen"} der Aussage der Gemeinde „{n.text}“
+                    </p>
+                  ))}
                   {here.length ? (
                     <ul className="pt-list">{here.map(row)}</ul>
-                  ) : (
+                  ) : !contradicted.length ? (
                     <p className="gap">Diese Prüffrage hat noch niemand gestellt.</p>
-                  )}
+                  ) : null}
                 </div>
               );
             })}

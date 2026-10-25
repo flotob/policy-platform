@@ -1,6 +1,6 @@
 import { sql } from "@policy/db";
 import { JevJudge, type LlmProvider } from "@policy/llm";
-import type { KernCampaign, KernDeps } from "@policy/pipeline/kern";
+import type { KernCampaign, KernDeps, MatchNode } from "@policy/pipeline/kern";
 
 import type { Campaign } from "./campaigns";
 import { getDb } from "./db";
@@ -37,14 +37,27 @@ export async function kernDeps(log: (m: string) => void): Promise<KernDeps> {
   return { db: getDb(), llm, judge, log };
 }
 
-export type JobKind = "skelett" | "zerlegen";
+export type JobKind = "skelett" | "zerlegen" | "kurzaussage";
 
-export async function enqueue(tenantId: string, campaignId: string, kind: JobKind, fileId: string | null = null) {
+export async function enqueue(tenantId: string, campaignId: string, kind: JobKind, fileId: string | null = null, submissionId: string | null = null) {
   // One open job per task: a second click does not queue the same work twice.
   await getDb().execute(sql`
-    INSERT INTO campaign_jobs (tenant_id, campaign_id, kind, file_id)
-    SELECT ${tenantId}, ${campaignId}, ${kind}, ${fileId}
+    INSERT INTO campaign_jobs (tenant_id, campaign_id, kind, file_id, submission_id)
+    SELECT ${tenantId}, ${campaignId}, ${kind}, ${fileId}, ${submissionId}
     WHERE NOT EXISTS (
       SELECT 1 FROM campaign_jobs WHERE campaign_id = ${campaignId} AND kind = ${kind}
-        AND file_id IS NOT DISTINCT FROM ${fileId}::uuid AND state IN ('wartet', 'laeuft'))`);
+        AND file_id IS NOT DISTINCT FROM ${fileId}::uuid AND submission_id IS NOT DISTINCT FROM ${submissionId}::uuid
+        AND state IN ('wartet', 'laeuft'))`);
+}
+
+/** The points under vote, as the door-2 check compares against them. */
+export async function releasedNodes(consultationId: string): Promise<MatchNode[]> {
+  const r = await getDb().execute(sql`
+    SELECT id, text, einwand, schritt FROM map_points WHERE consultation_id = ${consultationId} AND rolle IS NOT NULL AND status = 'released'`);
+  return (r.rows as Record<string, unknown>[]).map((x) => ({
+    id: x.id as string,
+    text: x.text as string,
+    einwand: (x.einwand as string | null) ?? null,
+    schritt: (x.schritt as string | null) ?? null,
+  }));
 }

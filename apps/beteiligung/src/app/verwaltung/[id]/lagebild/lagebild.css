@@ -1,0 +1,35 @@
+/* The live picture: plain numbers, camp bars in the results page's camp colours. */
+.lb { margin-top: 24px; max-width: 1000px; }
+.lb-sec { padding-bottom: 28px; margin-bottom: 28px; border-bottom: 1px solid var(--line); }
+.lb-sec h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+.lb-sec h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.lb-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0; }
+.lb-nums div { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.lb-nums dt { font-size: 13px; color: var(--ink-2); }
+.lb-nums dd { margin: 2px 0 0; font-size: 26px; font-weight: 600; }
+.lb-note { margin-top: 10px; max-width: 80ch; }
+.lb-lead { font-size: 16px; max-width: 80ch; margin-bottom: 14px; }
+.lb-wait { max-width: 70ch; }
+.lb-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
+.lb-two > .lb-sec { border-bottom: 0; }
+.lb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lb-list li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.lb-list p { font-family: var(--serif); font-size: 16px; line-height: 1.4; }
+.camp { display: inline-flex; gap: 6px; align-items: baseline; margin-right: 10px; font-weight: 600; }
+.camp-A { --camp: var(--ga); }
+.camp-B { --camp: var(--gb); }
+.camp-C { --camp: var(--warn); }
+.camp-D { --camp: var(--ink-3); }
+.camp-E { --camp: var(--ink-2); }
+.camp { color: var(--camp); }
+.profile { display: grid; gap: 3px; }
+.profile-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+.profile-l { font-size: 12px; font-weight: 700; color: var(--camp); }
+.profile-bar { height: 7px; background: var(--line); border-radius: 4px; overflow: hidden; }
+.profile-bar i { display: block; height: 100%; background: var(--camp); }
+.lb-strip { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+.lb-strip i { width: 12px; height: 12px; border-radius: 2px; border: 1px solid var(--line-2); }
+.lb-strip i.new { background: var(--agree); border-color: var(--agree); }
+.lb-gaps { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.lb-gaps li { border: 1px dashed color-mix(in srgb, var(--warn) 55%, var(--line)); color: var(--warn); border-radius: 8px; padding: 8px 12px; display: grid; }
+.lb-gaps .muted { color: var(--ink-2); }

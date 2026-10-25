@@ -10,6 +10,7 @@ import { freeSlug, getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue } from "@/lib/kern";
 import { openingCheck } from "@/lib/redaktion";
+import { inviteCode } from "@/lib/teilnahme";
 import { DEFAULT_PARAMS, STEPS, type CampaignParams, type CampaignState, type EditorialMode } from "@/lib/params";
 import { requireInitiator } from "@/lib/session";
 import { slugify } from "@/lib/slug";
@@ -223,4 +224,22 @@ export async function reproposeSkeleton(id: string): Promise<void> {
   }
   revalidatePath(`/verwaltung/${id}`, "layout");
   redirect(`/verwaltung/${id}/punkte`);
+}
+
+/** Invitation codes for access "einladung": shown once for printing, kept only as hashes. */
+export async function generateInvites(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
+  const { staff, campaign } = await own(id);
+  const count = Math.round(Number(field(form, "count")));
+  if (!Number.isFinite(count) || count < 1 || count > 5000) return { error: "Zwischen 1 und 5000 Codes auf einmal." };
+  const codes = Array.from({ length: count }, () => inviteCode());
+  const db = getDb();
+  await db.transaction(async (tx) => {
+    for (const c of codes) {
+      await tx.execute(sql`
+        INSERT INTO campaign_invites (tenant_id, campaign_id, code_hash) VALUES (${staff.tenant.id}, ${campaign.id}, ${c.hash}) ON CONFLICT DO NOTHING`);
+    }
+  });
+  await audit(staff.tenant.id, staff.user.id, "campaign.invites", campaign.id, { count });
+  revalidatePath(`/verwaltung/${id}`);
+  return { ok: codes.map((c) => c.code).join("\n") };
 }

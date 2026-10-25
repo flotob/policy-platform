@@ -1,0 +1,108 @@
+/* The three doors. One statement at a time, set large in the serif: the
+   statement is the screen. Green = stimme zu, rust = lehne ab, as on the
+   results page; skipping is quiet on purpose. */
+
+/* ——— Door 1 ——————————————————————————————————————————————————————————— */
+.deck { max-width: 760px; padding-block: 24px 56px; }
+.deck-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.deck-q { font-size: 14px; color: var(--ink-2); max-width: 46ch; }
+.deck-count { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.deck-progress { height: 3px; background: var(--line); border-radius: 2px; margin: 10px 0 22px; overflow: hidden; }
+.deck-progress i { display: block; height: 100%; background: var(--ink); transition: width 0.3s ease; }
+@media (prefers-reduced-motion: reduce) { .deck-progress i { transition: none; } }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px 30px 26px; }
+.card-typ { display: inline-block; font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line-2); border-radius: 5px; padding: 1px 8px; }
+.card-W .card-typ { border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); color: var(--warn); }
+.card-text { font-family: var(--serif); font-weight: 500; font-size: clamp(24px, 3.4vw, 32px); line-height: 1.28; margin: 16px 0 12px; max-width: 30ch; text-wrap: pretty; }
+.card-ctx { font-size: 14px; color: var(--ink-2); }
+.card-more { margin-top: 12px; font-size: 14px; }
+.card-more summary { cursor: pointer; color: var(--ink-2); }
+.card-more p { margin-top: 8px; max-width: 64ch; line-height: 1.55; }
+.card-more span { font-weight: 600; }
+.card-buttons { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin-top: 26px; }
+.card-buttons form { display: contents; }
+.vote { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 18px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; background: var(--panel); border: 1.5px solid var(--line-2); }
+.vote-dot { width: 12px; height: 12px; border-radius: 50%; }
+.vote-a { border-color: var(--agree); color: var(--agree); }
+.vote-a .vote-dot { background: var(--agree); }
+.vote-a:hover { background: var(--agree-soft); }
+.vote-d { border-color: var(--disagree); color: var(--disagree); }
+.vote-d .vote-dot { background: var(--disagree); }
+.vote-d:hover { background: var(--disagree-soft); }
+.vote-p { border-color: transparent; color: var(--ink-2); font-weight: 500; }
+.vote-p:hover { color: var(--ink); border-color: var(--line-2); }
+.deck-foot { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; margin-top: 18px; }
+.deck-missing { font-weight: 600; text-decoration: none; }
+.deck-missing:hover { text-decoration: underline; }
+.deck-foot .small { max-width: 52ch; }
+
+.deck-done h1 { font-size: clamp(26px, 3.4vw, 34px); font-weight: 600; line-height: 1.2; max-width: 24ch; }
+.deck-done h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; margin: 36px 0 12px; }
+.deck-done-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.done-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.done-list li { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.done-text { font-family: var(--serif); font-size: 17px; line-height: 1.4; }
+.done-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-top: 6px; }
+.mine { font-size: 13px; font-weight: 600; }
+.mine-a { color: var(--agree); }
+.mine-d { color: var(--disagree); }
+.mine-p { color: var(--ink-3); }
+.tally { display: inline-flex; align-items: center; gap: 10px; }
+.tally-bar { display: inline-flex; width: 120px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.tally-bar i { display: block; height: 100%; }
+.tally-bar .a { background: var(--agree); }
+.tally-bar .p { background: var(--pass); }
+.tally-bar .d { background: var(--disagree); }
+
+/* ——— Doors 2 and 3 —————————————————————————————————————————————————————— */
+.door { max-width: 720px; padding-block: 24px 56px; }
+.door h1 { font-size: clamp(28px, 3.6vw, 38px); font-weight: 600; line-height: 1.15; margin: 6px 0 10px; }
+.door-kicker { font-size: 14px; color: var(--ink-2); }
+.door-form { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 20px 16px; }
+.door-form .pub-cta { width: auto; }
+.door-text { font-family: var(--serif); font-size: 19px; line-height: 1.5; min-height: 120px; }
+.code-input { font-variant-numeric: tabular-nums; letter-spacing: 0.08em; text-transform: uppercase; max-width: 220px; }
+.door-quote { margin: 12px 0 0; padding: 4px 0 4px 16px; border-left: 3px solid var(--line-2); font-family: var(--serif); font-size: 21px; line-height: 1.45; }
+.door-quote.small-quote { font-size: 16px; }
+.door-checked { margin-top: 6px; }
+.door-answer { margin-top: 28px; }
+.door-answer h1 { font-size: 24px; }
+.door-answer p { max-width: 60ch; margin-bottom: 10px; }
+.door-match { margin: 6px 0 14px; padding: 14px 18px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--agree); border-radius: 0 10px 10px 0; font-family: var(--serif); font-size: 20px; line-height: 1.4; }
+.door-match.against { border-left-color: var(--disagree); }
+.door-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 12px; }
+
+/* ——— The tracking slip ——————————————————————————————————————————————————— */
+.slip-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+.fate { margin-top: 24px; padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; justify-items: start; }
+.fate h2 { font-size: 24px; font-weight: 600; line-height: 1.2; }
+.fate > p { max-width: 62ch; }
+.fate-point { width: 100%; border-top: 1px solid var(--line); padding-top: 12px; }
+.fate-text { font-size: 20px; line-height: 1.4; margin: 4px 0; }
+.fate-typ { font-weight: 600; }
+.fate-diff { width: 100%; }
+.fate-diff summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.fate-diff table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+.fate-diff th, .fate-diff td { text-align: left; vertical-align: top; padding: 10px 12px; border-top: 1px solid var(--line); }
+.fate-diff thead th { font-size: 13px; font-weight: 600; border-top: 0; }
+.fate-diff thead .ki { color: var(--ga); }
+.fate-diff thead .rd { color: var(--warn); }
+.fate-diff tbody th { font-weight: 600; width: 22%; }
+.fate-diff td.ki { background: color-mix(in srgb, var(--ga) 9%, var(--panel)); }
+.fate-diff td.changed { background: var(--warn-soft); }
+.slip-move { margin-top: 28px; }
+.slip-move .fate { margin-top: 10px; }
+.slip-keep { margin-top: 28px; }
+
+@media (max-width: 640px) {
+  .card { padding: 22px 18px 20px; }
+  .card-buttons { grid-template-columns: 1fr 1fr; }
+  .card-buttons .vote-p { grid-column: 1 / -1; min-height: 40px; }
+  .fate-diff table, .fate-diff tbody, .fate-diff tr, .fate-diff th, .fate-diff td { display: block; width: 100%; }
+  .fate-diff thead { display: none; }
+  .fate-diff tbody th { width: 100%; padding-bottom: 2px; border-top: 1px solid var(--line); }
+  .fate-diff td { border-top: 0; padding-top: 4px; }
+  .fate-diff td.ki::before { content: "Maschine: "; font-weight: 600; color: var(--ga); }
+  .fate-diff td.rd::before { content: "Redaktion: "; font-weight: 600; color: var(--warn); }
+}

@@ -44,3 +44,9 @@
   .pub-join { position: static; }
   .pub-why { grid-column: auto; }
 }
+
+.pub-sep { margin: 0 8px; color: var(--ink-3); }
+.pub-doors { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px; font-size: 15px; }
+.pub-doors a { font-weight: 600; }
+.pub-hint { margin-bottom: 12px; }
+.pub-join .door-form { margin-top: 0; padding: 0; border: 0; background: transparent; }

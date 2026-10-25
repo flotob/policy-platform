@@ -63,6 +63,9 @@ importers:
       '@policy/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@policy/math':
+        specifier: workspace:*
+        version: link:../../packages/math
       '@policy/pipeline':
         specifier: workspace:*
         version: link:../../packages/pipeline

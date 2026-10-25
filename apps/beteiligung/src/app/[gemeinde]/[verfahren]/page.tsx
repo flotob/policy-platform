@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { PublicFrame } from "@/components/PublicFrame";
+import { myVotes, participation } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { STEPS } from "@/lib/params";
+import { getParticipant } from "@/lib/teilnahme";
 
+import { CodeForm } from "./DoorForms";
 import "../public.css";
 
 const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
+const n = (x: number) => x.toLocaleString("de-DE");
 
 export async function generateMetadata({ params }: { params: Promise<{ gemeinde: string; verfahren: string }> }) {
   const { gemeinde, verfahren } = await params;
@@ -19,12 +24,23 @@ export async function generateMetadata({ params }: { params: Promise<{ gemeinde:
  * the question, what the town proposes, how to take part. Citizens are
  * addressed with "du" as in his draft; no account, ever.
  */
-export default async function Einstieg({ params }: { params: Promise<{ gemeinde: string; verfahren: string }> }) {
+export default async function Einstieg({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ gemeinde: string; verfahren: string }>;
+  searchParams: Promise<{ hinweis?: string }>;
+}) {
   const { gemeinde, verfahren } = await params;
+  const { hinweis } = await searchParams;
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const open = c.state === "offen";
   const doors = c.params.doors;
+  const base = `/${c.tenant.slug}/${c.slug}`;
+  const [stats, me] = await Promise.all([participation(c), open ? getParticipant(c) : null]);
+  const mine = me ? (await myVotes(c, me.id)).size : 0;
+  const needsCode = open && c.params.access === "einladung" && !me;
   // A start date already past on a campaign that is not open yet says nothing useful.
   const upcoming = c.params.start && new Date(c.params.start) > new Date() ? new Date(c.params.start) : null;
   const start = upcoming ? day.format(upcoming) : null;
@@ -37,22 +53,16 @@ export default async function Einstieg({ params }: { params: Promise<{ gemeinde:
   ].filter((x): x is { title: string; text: string } => x !== null);
 
   return (
-    <div className="pub">
-      {c.fictional ? (
-        <div className="pub-fiction">
-          <div className="wrap">Ein Beispiel mit erfundenen Inhalten. Musterstadt gibt es nicht.</div>
-        </div>
-      ) : null}
-      <header className="pub-head wrap">
-        <Link href={`/${c.tenant.slug}`} className="pub-town">
-          {c.tenant.name}
-        </Link>
-      </header>
-
+    <PublicFrame town={c.tenant} fictional={c.fictional}>
       <main className="wrap pub-main">
         <section className="pub-intro">
           <h1>{c.question}</h1>
-          <p className="pub-lead">{c.tenant.name} stellt diese Maßnahme zur Diskussion:</p>
+          <p className="pub-lead">
+            {c.tenant.name} stellt diese Maßnahme zur Diskussion.
+            {open && stats.statements
+              ? ` ${n(stats.statements)} Punkte liegen auf dem Tisch${stats.voters ? `, ${n(stats.voters)} ${stats.voters === 1 ? "Mensch hat" : "Menschen haben"} schon abgestimmt` : ""}.`
+              : ""}
+          </p>
           <blockquote className="pub-measure">{c.measure}</blockquote>
           {c.summary ? <p className="pub-summary">{c.summary}</p> : null}
         </section>
@@ -66,23 +76,30 @@ export default async function Einstieg({ params }: { params: Promise<{ gemeinde:
               </li>
             ))}
           </ul>
-          {open ? (
-            // The voting screens come with milestone 3; until then the open campaign announces them.
-            <>
-              <p className="pub-when">Die Beteiligung ist eröffnet. Die Abstimmung startet in Kürze.</p>
-              <button type="button" className="btn pub-cta" disabled>
-                Abstimmen starten
-              </button>
-            </>
-          ) : (
+          {hinweis ? <p className="notice small pub-hint">{hinweis}</p> : null}
+          {!open ? (
             <>
               <p className="pub-when">
-                {start ? `Die Beteiligung beginnt am ${start}.` : "Die Beteiligung beginnt in Kürze."}
-                {end ? ` Sie läuft bis spätestens ${end}.` : ""}
+                {c.state === "vorbereitung"
+                  ? `${start ? `Die Beteiligung beginnt am ${start}.` : "Die Beteiligung beginnt in Kürze."}${end ? ` Sie läuft bis spätestens ${end}.` : ""}`
+                  : "Die Beteiligung ist geschlossen. Die Auswertung folgt."}
               </p>
               <button type="button" className="btn pub-cta" disabled>
                 Abstimmen starten
               </button>
+            </>
+          ) : needsCode ? (
+            <CodeForm gemeinde={c.tenant.slug} verfahren={c.slug} />
+          ) : (
+            <>
+              {end ? <p className="pub-when">Die Beteiligung läuft bis {end}.</p> : null}
+              <Link href={`${base}/abstimmen`} className="btn pub-cta">
+                {mine ? `Weiter abstimmen (${mine} von ${stats.statements})` : "Abstimmen starten"}
+              </Link>
+              <div className="pub-doors">
+                {doors.kurzaussage ? <Link href={`${base}/punkt`}>Eigenen Punkt einbringen</Link> : null}
+                {doors.stellungnahme ? <Link href={`${base}/stellungnahme`}>Stellungnahme hochladen</Link> : null}
+              </div>
             </>
           )}
           <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>
@@ -108,12 +125,6 @@ export default async function Einstieg({ params }: { params: Promise<{ gemeinde:
           </section>
         ) : null}
       </main>
-
-      <footer className="site-foot">
-        <div className="wrap small muted">
-          Eine Beteiligung mit der <Link href="/">Landkarte des Streits</Link>.
-        </div>
-      </footer>
-    </div>
+    </PublicFrame>
   );
 }

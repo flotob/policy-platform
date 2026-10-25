@@ -97,6 +97,7 @@
 .pk-step h3 { font-size: 14px; font-weight: 600; margin: 20px 0 8px; }
 .pk-q { margin: 0 0 12px; }
 .pk-q-h { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+.pk-contra { border-left: 3px solid var(--disagree); padding: 4px 10px; margin-bottom: 6px; color: var(--ink-2); }
 .gap { border: 1px dashed color-mix(in srgb, var(--warn) 55%, var(--line)); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
 
 .pt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

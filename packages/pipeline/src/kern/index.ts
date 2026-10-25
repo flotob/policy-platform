@@ -5,3 +5,5 @@ export * from "./prompts.ts";
 export * from "./review.ts";
 export * from "./text.ts";
 export { textSimilarity } from "../jev-match.ts";
+export * from "./short.ts";
+export * from "./votes.ts";

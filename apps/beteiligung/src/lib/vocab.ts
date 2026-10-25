@@ -45,6 +45,7 @@ export type RejectKey = keyof typeof REJECT;
 export function actorName(actor: string | null, names: Record<string, string> = {}): string {
   if (!actor) return "";
   if (actor === "regel") return "automatisch zugeordnet";
+  if (actor === "demo") return "für die Demo vorab freigegeben";
   if (actor.startsWith("ki")) return "von der Maschine";
   if (actor.startsWith("user:")) return names[actor.slice(5)] ? `von ${names[actor.slice(5)]}` : "von der Redaktion";
   return actor;

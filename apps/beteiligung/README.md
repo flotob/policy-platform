@@ -19,6 +19,8 @@ JEV_CONCURRENCY=4
 pnpm --filter @policy/beteiligung dev      # http://localhost:3300 (needs dangerouslyDisableSandbox); starts the worker
 tsx scripts/seed-demo.mts [--member <email>] [--statements] [--reset-analysis [--keep-texts]]
                                             # Musterstadt Solarpflicht demo (fictional) + its 7 fictional statements
+tsx scripts/open-demo.mts                   # open the demo: skeleton + recommended points released as "demo"
+tsx scripts/simulate.mts [--participants 300] [--remove]   # simulated voters, fictional demo only, marked everywhere
 tsx scripts/drain.mts                       # run queued machine work once without the server
 tsx scripts/auth-sql.mts                    # SQL Better Auth needs (copied into migration 0015)
 ```
@@ -39,7 +41,12 @@ starts the server without the worker.
 | `/verwaltung/[id]/punkte` | staff | "Begründung und Einwände": the four steps with the town's claims, what supports and attacks each, open critical questions |
 | `/verwaltung/[id]/redaktion` | editors | The editorial queue: start skeleton, new points, uncertain assignments, spot checks |
 | `/[gemeinde]` | everyone | A municipality's campaigns (not drafts) |
-| `/[gemeinde]/[verfahren]` | citizens | Entry screen (Teilnehmeransicht screen 1), no account |
+| `/[gemeinde]/[verfahren]` | citizens | Entry screen (Teilnehmeransicht screen 1), no account; invitation code where the town asks for one |
+| `/[gemeinde]/[verfahren]/abstimmen` | citizens | Door 1: one statement at a time, fact/value label, agree / disagree / skip; at the end how the others voted |
+| `/[gemeinde]/[verfahren]/punkt` | citizens | Door 2: own point in two sentences, Jev checks it while you wait (screen 3) |
+| `/[gemeinde]/[verfahren]/stellungnahme` | citizens | Door 3: a full statement, as a private person or for an organisation |
+| `/[gemeinde]/[verfahren]/laufzettel/[token]` | citizens | Tracking slip: what became of each argument, machine vs. editors, "Das meint mein Punkt nicht" |
+| `/verwaltung/[id]/lagebild` | staff | Live picture: participation, camps (Polis math), saturation, thin statements, unasked questions |
 
 ## Decisions (Florian, 2026-10-25)
 
@@ -97,10 +104,21 @@ Milestone 2 (the machine and the editors) done: start skeleton, statements throu
 loop, editorial queue in three modes, "Begründung und Einwände" with open critical questions,
 opening the participation (state offen; the voting screens follow in M3).
 
-Next: M3 citizen doors 1–3 (vote, short statement through the same loop, upload), live
-recompute → M4 results page in Stephan's design + report → M5 hardening.
+Milestone 3 (the three doors) done: pseudonymous participation per campaign (cookie hash,
+optional invitation codes, rate limits); door 1 voting (fewest votes first, facts and values
+alternate, the measure itself first, votes per statement version); door 2 checked by Jev while
+the citizen waits (same claim → "Ja, das meine ich" counts as a vote; opposite → counts as
+disagreement; never the measure itself), else through the core loop to the editors; door 3
+uploads read at once; tracking slip per contribution with "Was genau geändert wurde" and the
+author's objection back into the queue; derived votes (assumption 3) recomputed from the moves
+(`kern/votes.ts`); live picture for the town. Migration 0017.
+
+Next: M4 results page in Stephan's design (Meinungsraum, Nach Befund / Nach Argument, source
+chain) + report → M5 hardening.
 
 Known limits: no email yet (no verification or password reset); one municipality per
 account (first membership); colleagues cannot be invited yet; one worker for all
 municipalities (a long job makes others wait); no OCR for scanned PDFs; Q1 (agreement
-machine vs. editors) is recorded but not shown yet.
+machine vs. editors) is recorded but not shown yet; camps are named A/B (naming comes with the
+results page); a citizen who clears cookies is a new pseudonym (limited per connection, not
+prevented — invitation codes are the strict mode).

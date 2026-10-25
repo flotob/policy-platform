@@ -4,7 +4,7 @@ import { useActionState } from "react";
 
 import { EDITORIAL_MODES, STEPS, type CampaignParams, type EditorialMode, type Steps } from "@/lib/params";
 
-import { createCampaign, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
+import { createCampaign, generateInvites, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
 
 function Status({ state, pending }: { state: ActionState; pending: boolean }) {
   if (pending) return <span className="form-status muted">Wird gespeichert …</span>;
@@ -249,5 +249,33 @@ export function UploadForm({ id }: { id: string }) {
         <Status state={state} pending={pending} />
       </div>
     </form>
+  );
+}
+
+/** Invitation codes: generated here, shown exactly once to print or send. */
+export function InviteForm({ id, total, used }: { id: string; total: number; used: number }) {
+  const [state, action] = useActionState<ActionState, FormData>(generateInvites.bind(null, id), {});
+  return (
+    <div className="invites">
+      <p className="small muted">
+        {total ? `${total} Codes erzeugt, ${used} davon benutzt.` : "Noch keine Codes."} Jeder Code öffnet die Beteiligung für genau eine Person.
+      </p>
+      <form action={action} className="invites-form">
+        <label htmlFor="count" className="small">
+          Neue Codes
+        </label>
+        <input id="count" name="count" type="number" min={1} max={5000} defaultValue={100} className="input" style={{ width: 110 }} />
+        <button type="submit" className="btn btn-quiet btn-small">
+          Codes erzeugen
+        </button>
+      </form>
+      {state.error ? <p className="error">{state.error}</p> : null}
+      {state.ok ? (
+        <div className="field">
+          <label htmlFor="codes">Die neuen Codes: jetzt kopieren oder drucken. Sie werden nicht noch einmal angezeigt.</label>
+          <textarea id="codes" className="textarea num" readOnly rows={8} value={state.ok} />
+        </div>
+      ) : null}
+    </div>
   );
 }

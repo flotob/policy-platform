@@ -10,7 +10,7 @@
  */
 
 import { sql } from "@policy/db";
-import { decomposeFile, machineDecides, proposeSkeleton } from "@policy/pipeline/kern";
+import { decomposeFile, decomposeShort, machineDecides, proposeSkeleton, syncDerivedVotes } from "@policy/pipeline/kern";
 
 import { getCampaign } from "./campaigns";
 import { getDb } from "./db";
@@ -49,9 +49,12 @@ export async function runJob(job: Row): Promise<void> {
   if (job.kind === "skelett") {
     result = await proposeSkeleton(deps, c);
   } else {
-    result = await decomposeFile(deps, c, job.file_id as string);
+    result =
+      job.kind === "kurzaussage" ? await decomposeShort(deps, c, job.submission_id as string) : await decomposeFile(deps, c, job.file_id as string);
     const decided = await machineDecides(deps, c);
     if (c.params.editorialMode === "ki") result = { ...(result as object), machine: decided };
+    // Automatic attachments and the machine's decisions count as votes of the senders (assumption 3).
+    await syncDerivedVotes(db, c.consultationId);
   }
   await db.execute(sql`
     UPDATE campaign_jobs SET state = 'fertig', result = ${JSON.stringify(result)}, finished_at = now() WHERE id = ${job.id as string}`);

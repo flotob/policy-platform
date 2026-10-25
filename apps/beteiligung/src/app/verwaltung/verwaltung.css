@@ -105,3 +105,7 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .machine-fail { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--danger); }
 .machine-fail p { flex: 1 1 320px; }
 .cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+
+.cp-h3 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; }
+.invites { display: grid; gap: 10px; max-width: 560px; }
+.invites-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
