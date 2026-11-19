@@ -81,6 +81,8 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 | `/passwort-vergessen`, `/passwort-neu` | staff | Password reset by email |
 | `/verwaltung/team` | staff (changes: initiator) | Members and roles, open invitations, invite a colleague |
 | `/verwaltung/kommunen` | platform admins | All municipalities; a new one + the invitation for its first person |
+| `/verwaltung/einstellungen` | staff (changes: initiator) | The town's contact, website, links to its own imprint and privacy notice, logo (migration 0020; shown on every public page of the town) |
+| `/impressum`, `/datenschutz` | everyone | streit.bar's own imprint (Legal Tech Center LTC UG) and privacy notice; linked on every page |
 | `/verwaltung` | staff | The municipality's campaigns |
 | `/verwaltung/neu` | initiator | New campaign: title, decision question, measure |
 | `/verwaltung/[id]` | staff | Measure, justification in four steps, process (doors, period, editorial mode, access), uploads, preparation, opening |

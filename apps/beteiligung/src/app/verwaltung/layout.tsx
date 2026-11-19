@@ -27,6 +27,7 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
           <nav className="ws-nav" aria-label="Verwaltung">
             <Link href="/verwaltung">Verfahren</Link>
             <Link href="/verwaltung/team">Team</Link>
+            <Link href="/verwaltung/einstellungen">Einstellungen</Link>
             {isPlatformAdmin(staff.user.email) ? <Link href="/verwaltung/kommunen">Kommunen</Link> : null}
           </nav>
           <div className="ws-user">

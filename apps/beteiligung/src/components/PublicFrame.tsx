@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-/** Every citizen page: the way back to the start page, where you are (town / campaign), the page, a quiet footer. */
-export function PublicFrame({
+import { kommuneBySlug } from "@/lib/kommune";
+
+/** Every citizen page: the way back to the start page, where you are (town / campaign), the page, the town's contact and legal links. */
+export async function PublicFrame({
   town,
   campaign,
   children,
@@ -13,6 +15,9 @@ export function PublicFrame({
   children: ReactNode;
   back?: boolean;
 }) {
+  const k = await kommuneBySlug(town.slug);
+  const s = k?.settings;
+  const contact = s ? [s.kontakt.stelle, s.kontakt.telefon].filter(Boolean).join(", ") : "";
   return (
     <div className="pub">
       <header className="pub-head wrap">
@@ -25,7 +30,11 @@ export function PublicFrame({
         </Link>
         <nav className="pub-crumbs" aria-label="Sie sind hier">
           <Link href={`/${town.slug}`} className="pub-town">
-            {town.name}
+            {k?.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={k.logo} alt="" className="pub-logo" />
+            ) : null}
+            {k?.name ?? town.name}
           </Link>
           {campaign && back ? (
             <>
@@ -41,8 +50,41 @@ export function PublicFrame({
       </header>
       {children}
       <footer className="site-foot">
-        <div className="wrap small muted">
-          Eine Beteiligung mit der <Link href="/">Landkarte des Streits</Link>. Ohne Anmeldung; deine Stimmen bleiben anonym.
+        <div className="wrap small muted pub-foot">
+          {s && (contact || s.kontakt.email || s.website) ? (
+            <p>
+              Fragen zur Beteiligung: {contact}
+              {contact && s.kontakt.email ? ", " : ""}
+              {s.kontakt.email ? <a href={`mailto:${s.kontakt.email}`}>{s.kontakt.email}</a> : null}
+              {s.website ? (
+                <>
+                  {" · "}
+                  <a href={s.website} rel="noopener">
+                    Website von {k?.name ?? town.name}
+                  </a>
+                </>
+              ) : null}
+            </p>
+          ) : null}
+          {s?.impressum || s?.datenschutz ? (
+            <p>
+              {k?.name ?? town.name}:{" "}
+              {s.impressum ? (
+                <a href={s.impressum} rel="noopener">
+                  Impressum
+                </a>
+              ) : null}
+              {s.impressum && s.datenschutz ? " · " : null}
+              {s.datenschutz ? (
+                <a href={s.datenschutz} rel="noopener">
+                  Datenschutz
+                </a>
+              ) : null}
+            </p>
+          ) : null}
+          <p>
+            Eine Beteiligung mit der <Link href="/">Landkarte des Streits</Link> auf streit.bar. Ohne Anmeldung; deine Stimmen bleiben anonym.
+          </p>
         </div>
       </footer>
     </div>

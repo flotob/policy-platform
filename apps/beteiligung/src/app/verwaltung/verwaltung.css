@@ -134,3 +134,6 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .team-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .team-link { margin-top: 12px; }
 .team-link .input { font-family: var(--mono, monospace); font-size: 13px; }
+.logo-form .logo-preview { display: block; max-height: 64px; max-width: 240px; margin-bottom: 16px; }
+.kv { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; }
+.kv dt { font-weight: 600; font-size: 14px; }

@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Public_Sans, Source_Serif_4 } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { LegalFooter } from "@/components/LegalFooter";
+
 import "./globals.css";
 import "./components.css";
 
@@ -16,7 +18,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="de" className={`${serif.variable} ${sans.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <LegalFooter />
+      </body>
     </html>
   );
 }
