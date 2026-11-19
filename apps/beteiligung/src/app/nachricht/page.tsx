@@ -35,7 +35,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
         <>
           <h1>Keine Nachrichten mehr?</h1>
           <p>Zu „{f.campaign.title}“ schreiben wir dir dann nicht mehr, und deine Adresse wird gelöscht.</p>
-          <form action={answer.bind(null, f.id, "abmelden", t)}>
+          <form action={answer.bind(null, f.id, "abmelden", t)} className="nachricht-form">
             <button type="submit" className="btn">
               Abmelden
             </button>
@@ -61,7 +61,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
           <p>
             Du bekommst höchstens zwei Nachrichten zu „{f.campaign.title}“: wenn das Ergebnis da ist und wenn der Gemeinderat entschieden hat.
           </p>
-          <form action={answer.bind(null, f.id, "bestaetigen", t)}>
+          <form action={answer.bind(null, f.id, "bestaetigen", t)} className="nachricht-form">
             <button type="submit" className="btn">
               Ja, ich möchte die Nachrichten
             </button>

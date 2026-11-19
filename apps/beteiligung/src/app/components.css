@@ -81,3 +81,4 @@
 .report-box .report-actions button[type="submit"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 .report-err { color: var(--danger); font-size: 13px; }
 .report-done { font-size: 13px; color: var(--agree); }
+.legal .nachricht-form { margin-top: 28px; }
