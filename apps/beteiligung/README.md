@@ -32,14 +32,18 @@ tsx scripts/auth-sql.mts                    # SQL Better Auth needs (copied into
 
 The language model runs through the Agent SDK on the local Claude login (dev only;
 production sets `ANTHROPIC_API_KEY` or a `CLAUDE_CODE_OAUTH_TOKEN`). `KERN_WORKER=0`
-starts the server without the worker. `SIGNUP_OPEN=1` allows new municipalities to sign up
-(set locally; off on the server). `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day.
+starts the server without the worker. Sign-up of new municipalities (`src/lib/signup.ts`):
+`SIGNUP_OPEN=1` = anyone (local only); `SIGNUP_CODE` = anyone with the shared registration code
+(12 characters from a 32-letter alphabet = 60 bits; case, spaces and dashes ignored; 10 wrong codes
+per connection and 200 in total per hour, then a pause; a new code retires the old one at once;
+the current one is in `platform/.deploy-secrets.local`); neither = closed. Better Auth's own
+sign-up endpoint is always off — accounts come only from our actions. `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day.
 `DEMO_LOGIN=1` puts a read-only demo login ("Beispiel ansehen") for Musterstadt on the login
 page (role betrachter; public credentials, created at startup; `DEMO_LOGIN_EMAIL/PASSWORD/TENANT`
 override). Better Auth's account-changing endpoints are off, so no visitor can lock the others out.
 
-Team accounts (since 2026-11-19, `src/lib/team.ts`, migration 0019 `staff_invites`): every account
-starts with an emailed invitation (sign-up stays closed). Initiators invite colleagues on
+Team accounts (since 2026-11-19, `src/lib/team.ts`, migration 0019 `staff_invites`): a town's
+first person registers with the code (above) or is invited by a platform admin. Initiators invite colleagues on
 `/verwaltung/team` (roles, resend, withdraw, remove; at least one initiator stays); platform admins
 (`PLATFORM_ADMINS`, comma-separated emails) create municipalities on `/verwaltung/kommunen` and
 invite their first person. The link carries a token (only its SHA-256 is stored, 7 days); it proves
@@ -62,8 +66,8 @@ the Agent SDK's Claude binary and the PDF readers survive; build-only placeholde
 database URL), branch `app/beteiligung`, port 3000. Database `beteiligung` in the shared
 Postgres container (restored from a `policy_probe` dump; `policy` and `auswertung` untouched).
 Env: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TYPESAFE_API_KEY`,
-`JEV_CONCURRENCY`, `MAX_LLM_JOBS_PER_DAY`, `CLAUDE_CODE_OAUTH_TOKEN`, `RESEND_API_KEY` (set by Florian in
-Coolify), `MAIL_FROM`, `PLATFORM_ADMINS`. Staff logins on the server are in `platform/.deploy-secrets.local`. Data update:
+`JEV_CONCURRENCY`, `MAX_LLM_JOBS_PER_DAY`, `CLAUDE_CODE_OAUTH_TOKEN`, `RESEND_API_KEY`, `SIGNUP_CODE`
+(set by Florian in Coolify), `MAIL_FROM`, `MAIL_REPLY_TO`, `PLATFORM_ADMINS`. Staff logins on the server are in `platform/.deploy-secrets.local`. Data update:
 `docker exec platform-postgres-1 pg_dump -Fc -U policy policy_probe` → scp → `docker cp` into
 the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-owner`.
 
@@ -72,7 +76,7 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 | Route | Who | What |
 |---|---|---|
 | `/` | everyone | Landing page with the opinion-space demo (Stephan's fictional numbers) |
-| `/registrieren`, `/anmelden` | municipal staff | Account + municipality (Better Auth, email + password; sign-up only with `SIGNUP_OPEN=1`) |
+| `/registrieren`, `/anmelden` | municipal staff | Account + municipality (email + password; sign-up with the registration code) |
 | `/einladung/[token]` | invited staff | Accept an invitation: name + password (new account) or join with the existing one |
 | `/passwort-vergessen`, `/passwort-neu` | staff | Password reset by email |
 | `/verwaltung/team` | staff (changes: initiator) | Members and roles, open invitations, invite a colleague |

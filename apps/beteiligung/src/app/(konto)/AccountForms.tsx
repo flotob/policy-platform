@@ -5,7 +5,7 @@ import { useActionState } from "react";
 
 import { acceptInvitation, login, register, requestReset, resetPassword, type FormState } from "./actions";
 
-export function RegisterForm({ loggedIn }: { loggedIn: boolean }) {
+export function RegisterForm({ loggedIn, needsCode }: { loggedIn: boolean; needsCode: boolean }) {
   const [state, action, pending] = useActionState<FormState, FormData>(register, {});
   const v = state.values ?? {};
   return (
@@ -32,6 +32,23 @@ export function RegisterForm({ loggedIn }: { loggedIn: boolean }) {
         <input id="kommune" name="kommune" className="input" placeholder="Stadt Musterstadt" required defaultValue={v.kommune} />
         <span className="hint">So erscheint sie über jedem Verfahren. Kolleginnen und Kollegen laden Sie später ein.</span>
       </div>
+      {needsCode ? (
+        <div className="field">
+          <label htmlFor="code">Einladungscode</label>
+          <input
+            id="code"
+            name="code"
+            className="input num"
+            autoComplete="off"
+            autoCapitalize="characters"
+            spellCheck={false}
+            placeholder="XXXX-XXXX-XXXX"
+            required
+            defaultValue={v.code}
+          />
+          <span className="hint">Groß- und Kleinschreibung und Bindestriche spielen keine Rolle.</span>
+        </div>
+      ) : null}
       {state.error ? (
         <p className="error" role="alert">
           {state.error}

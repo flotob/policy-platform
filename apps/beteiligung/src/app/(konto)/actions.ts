@@ -6,10 +6,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
-import { signupOpen } from "@/lib/auth-options";
 import { demoLogin } from "@/lib/demo-login";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
+import { checkSignupCode, createAccount, signupMode } from "@/lib/signup";
 import { acceptInvite, createTenant, looksLikeEmail, normEmail, readInvite } from "@/lib/team";
 
 export interface FormState {
@@ -26,30 +26,37 @@ async function createMunicipality(userId: string, name: string): Promise<void> {
 }
 
 export async function register(_prev: FormState, form: FormData): Promise<FormState> {
-  const values = { name: field(form, "name"), email: field(form, "email"), kommune: field(form, "kommune") };
-  if (!signupOpen()) return { error: "Neue Kommunen werden hier derzeit nur auf Anfrage freigeschaltet.", values };
+  const values = { name: field(form, "name"), email: field(form, "email"), kommune: field(form, "kommune"), code: field(form, "code") };
+  const mode = signupMode();
+  if (mode === "closed") return { error: "Neue Kommunen werden hier derzeit nur auf Anfrage freigeschaltet.", values };
   const password = String(form.get("password") ?? "");
   const session = await getSession();
 
   if (!session) {
     if (values.name.length < 2) return { error: "Bitte geben Sie Ihren Namen an.", values };
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values };
+    if (!looksLikeEmail(values.email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values };
     if (password.length < 10) return { error: "Das Passwort braucht mindestens 10 Zeichen.", values };
   }
   if (values.kommune.length < 3) return { error: "Bitte geben Sie den Namen Ihrer Kommune an.", values };
+  if (mode === "code") {
+    if (!values.code) return { error: "Bitte geben Sie den Einladungscode ein.", values };
+    const check = await checkSignupCode(values.code);
+    if (check === "limited") {
+      return { error: "Von Ihrem Anschluss kamen zu viele falsche Codes. Bitte versuchen Sie es in einer Stunde noch einmal.", values };
+    }
+    if (check === "wrong") return { error: "Dieser Einladungscode stimmt nicht. Bitte prüfen Sie ihn.", values };
+  }
 
   let userId = session?.user.id;
   if (!userId) {
     try {
-      const r = await auth.api.signUpEmail({ body: { name: values.name, email: values.email, password }, headers: await headers() });
-      userId = r.user.id;
+      userId = (await createAccount(values.name, values.email, password)) ?? undefined;
     } catch (e) {
-      if (isAPIError(e) && /exist/i.test(e.message)) {
-        return { error: "Zu dieser E-Mail-Adresse gibt es schon ein Konto. Melden Sie sich an.", values };
-      }
       console.error("[registrieren]", e);
       return { error: "Das Konto ließ sich nicht anlegen. Bitte versuchen Sie es noch einmal.", values };
     }
+    if (!userId) return { error: "Zu dieser E-Mail-Adresse gibt es schon ein Konto. Melden Sie sich an.", values };
+    await auth.api.signInEmail({ body: { email: normEmail(values.email), password }, headers: await headers() });
   }
   await createMunicipality(userId, values.kommune);
   redirect("/verwaltung");

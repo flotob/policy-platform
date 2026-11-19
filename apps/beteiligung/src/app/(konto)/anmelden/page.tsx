@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/SiteHeader";
-import { signupOpen } from "@/lib/auth-options";
 import { demoLogin } from "@/lib/demo-login";
 import { getSession, getStaff } from "@/lib/session";
+import { signupMode } from "@/lib/signup";
 
 import { loginDemo } from "../actions";
 import { LoginForm } from "../AccountForms";
@@ -45,7 +45,7 @@ export default async function Anmelden({ searchParams }: { searchParams: Promise
           {q.einladung === "angenommen" ? (
             <p className="notice">Einladung angenommen. Melden Sie sich mit Ihrem bisherigen Passwort an.</p>
           ) : null}
-          <LoginForm signup={signupOpen()} />
+          <LoginForm signup={signupMode() !== "closed"} />
         </div>
       </main>
     </>

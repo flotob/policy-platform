@@ -27,8 +27,9 @@ export const authOptions = {
     minPasswordLength: 10,
     // Accounts come from emailed invitations (lib/team.ts), whose link already proves the address.
     requireEmailVerification: false,
-    // New accounts only where SIGNUP_OPEN=1 (local); on the public server only existing accounts log in.
-    disableSignUp: process.env.SIGNUP_OPEN !== "1",
+    // Better Auth's own sign-up endpoint stays off: accounts are created by our server actions only,
+    // after the registration code (lib/signup.ts) or an invitation (lib/team.ts) was checked.
+    disableSignUp: true,
   },
   user: {
     modelName: "auth_user",
@@ -65,6 +66,3 @@ export const authOptions = {
     fields: { expiresAt: "expires_at", createdAt: "created_at", updatedAt: "updated_at" },
   },
 } satisfies BetterAuthOptions;
-
-/** Can new municipalities sign up here? Off unless SIGNUP_OPEN=1 — a public server would otherwise run the machine for anyone. */
-export const signupOpen = () => process.env.SIGNUP_OPEN === "1";
