@@ -6,6 +6,7 @@ import { EDITORIAL_MODES, STEPS, type CampaignParams, type EditorialMode, type S
 
 import { createCampaign, generateInvites, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
 import { Letters, type LetterInfo } from "./letters";
+import { READABLE_ACCEPT } from "@/lib/files";
 
 export function Status({ state, pending }: { state: ActionState; pending: boolean }) {
   if (pending) return <span className="form-status muted">Wird gespeichert …</span>;
@@ -221,8 +222,8 @@ export function UploadForm({ id }: { id: string }) {
         </div>
         <div className="field">
           <label htmlFor="file">Datei</label>
-          <input id="file" name="file" type="file" className="input file-input" accept=".pdf,.docx,.doc,.txt,.odt,.png,.jpg,.jpeg,.webp" required />
-          <span className="hint">PDF, Word oder Text, bis 20 MB.</span>
+          <input id="file" name="file" type="file" className="input file-input" accept={READABLE_ACCEPT} required />
+          <span className="hint">PDF, Word (.docx), Text oder ein Scan bzw. Foto, bis 20 MB. Ältere Word-Dateien (.doc) bitte als .docx oder PDF speichern.</span>
         </div>
       </div>
       <div className="field-row">

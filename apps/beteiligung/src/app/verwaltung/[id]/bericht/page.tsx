@@ -20,7 +20,7 @@ import "./bericht.css";
 export const metadata = { title: "Bericht" };
 
 const pc = (p: number) => `${Math.round(p * 100)} %`;
-const when = (d: string) => new Date(d).toLocaleString("de-DE", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+const when = (d: string) => new Date(d).toLocaleString("de-DE", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" });
 
 /**
  * Phase 4 for the municipality (R1–R5): the binding list of conclusions, the

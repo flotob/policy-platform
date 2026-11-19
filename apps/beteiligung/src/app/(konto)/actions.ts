@@ -83,7 +83,13 @@ export async function logout(): Promise<void> {
 export async function loginDemo(): Promise<void> {
   const d = demoLogin();
   if (!d) redirect("/anmelden");
-  await auth.api.signInEmail({ body: { email: d.email, password: d.password }, headers: await headers() });
+  try {
+    await auth.api.signInEmail({ body: { email: d.email, password: d.password }, headers: await headers() });
+  } catch (e) {
+    // The example account is made at start-up; if that failed, say so instead of an error page.
+    console.error("[demo-login] sign-in failed", e);
+    redirect("/anmelden?hinweis=beispiel");
+  }
   redirect("/verwaltung");
 }
 

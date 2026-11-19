@@ -11,7 +11,7 @@ import "../konto.css";
 
 export const metadata = { title: "Anmelden" };
 
-export default async function Anmelden({ searchParams }: { searchParams: Promise<{ passwort?: string; einladung?: string }> }) {
+export default async function Anmelden({ searchParams }: { searchParams: Promise<{ passwort?: string; einladung?: string; hinweis?: string }> }) {
   const q = await searchParams;
   if (await getStaff()) redirect("/verwaltung");
   // Logged in, but no municipality yet: finish the registration.
@@ -42,6 +42,7 @@ export default async function Anmelden({ searchParams }: { searchParams: Promise
             </form>
           ) : null}
           {q.passwort === "neu" ? <p className="notice">Ihr neues Passwort gilt. Melden Sie sich damit an.</p> : null}
+          {q.hinweis === "beispiel" ? <p className="notice">Das Beispiel ist gerade nicht erreichbar. Bitte versuchen Sie es in ein paar Minuten noch einmal.</p> : null}
           {q.einladung === "angenommen" ? (
             <p className="notice">Einladung angenommen. Melden Sie sich mit Ihrem bisherigen Passwort an.</p>
           ) : null}

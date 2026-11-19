@@ -19,10 +19,10 @@
 .rd-li-t { font-weight: 600; font-size: 14px; line-height: 1.35; }
 .rd-li-m { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
 .rd-empty { padding: 10px; }
-.mark { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
-.mark-release { background: var(--agree); }
-.mark-reject { background: var(--disagree); }
-.mark-review { background: var(--warn); }
+.rd-mark { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--line-2); }
+.rd-mark-release { background: var(--agree); }
+.rd-mark-reject { background: var(--disagree); }
+.rd-mark-review { background: var(--warn); }
 
 .rd-detail { min-width: 0; }
 .rd-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 24px 28px 28px; max-width: 760px; }
@@ -61,13 +61,13 @@
 .ne-label { max-width: 420px; }
 .ne-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 20px; align-items: start; }
 .ne-grid fieldset.plain { margin-bottom: 20px; }
-.seg { display: inline-flex; justify-self: start; width: max-content; max-width: 100%; flex-wrap: wrap; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--panel); }
-.seg label { position: relative; cursor: pointer; }
-.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.seg span { display: block; padding: 8px 14px; font-size: 14px; border-left: 1px solid var(--line-2); }
-.seg label:first-child span { border-left: 0; }
-.seg input:checked + span { background: var(--ink); color: var(--panel); }
-.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ne-seg { display: inline-flex; justify-self: start; width: max-content; max-width: 100%; flex-wrap: wrap; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.ne-seg label { position: relative; cursor: pointer; }
+.ne-seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.ne-seg span { display: block; padding: 8px 14px; font-size: 14px; border-left: 1px solid var(--line-2); }
+.ne-seg label:first-child span { border-left: 0; }
+.ne-seg input:checked + span { background: var(--ink); color: var(--panel); }
+.ne-seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* A source passage */
 .quote { margin: 0 0 14px; padding: 4px 0 4px 16px; border-left: 3px solid var(--agree); }

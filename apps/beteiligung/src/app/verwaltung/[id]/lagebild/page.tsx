@@ -6,7 +6,6 @@ import { getCampaign } from "@/lib/campaigns";
 import { camps, gaps, participationStats, saturation, thinStatements } from "@/lib/lagebild";
 import { requireStaff } from "@/lib/session";
 
-import "../redaktion.css";
 import "./lagebild.css";
 
 export const metadata = { title: "Lagebild" };

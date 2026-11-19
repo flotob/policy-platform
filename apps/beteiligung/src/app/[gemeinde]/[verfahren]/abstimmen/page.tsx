@@ -39,8 +39,8 @@ function Bar({ s }: { s: Statement }) {
   if (!total) return <span className="small muted">Noch keine Stimmen</span>;
   const pct = (x: number) => `${Math.round((x / total) * 100)}%`;
   return (
-    <span className="tally">
-      <span className="tally-bar" aria-hidden>
+    <span className="deck-tally">
+      <span className="deck-tally-bar" aria-hidden>
         <i className="a" style={{ width: pct(s.agree) }} />
         <i className="p" style={{ width: pct(s.pass) }} />
         <i className="d" style={{ width: pct(s.disagree) }} />

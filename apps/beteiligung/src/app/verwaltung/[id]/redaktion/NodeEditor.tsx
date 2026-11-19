@@ -45,7 +45,7 @@ export function NodeEditor({
       {isRoot ? null : (
         <fieldset className="plain ne-typ">
           <legend>Art der Aussage</legend>
-          <div className="seg">
+          <div className="ne-seg">
             {(Object.keys(TYP) as (keyof typeof TYP)[])
               .filter((k) => !isPremise || k !== "verfahren")
               .map((k) => (
@@ -74,7 +74,7 @@ export function NodeEditor({
             <>
               <fieldset className="plain">
                 <legend>Richtung</legend>
-                <div className="seg">
+                <div className="ne-seg">
                   <label>
                     <input type="radio" name="richtung" value="stuetzt" checked={richtung === "stuetzt"} onChange={() => setRichtung("stuetzt")} />
                     <span>stützt den Schritt</span>

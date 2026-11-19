@@ -20,7 +20,7 @@ import "./auswertung.css";
 export const metadata = { title: "Auswertung" };
 
 const n = (x: number) => x.toLocaleString("de-DE");
-const when = (d: string) => new Date(d).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const when = (d: string) => new Date(d).toLocaleString("de-DE", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" });
 
 /**
  * Phase 3 for the municipality: while citizens take part, the results page

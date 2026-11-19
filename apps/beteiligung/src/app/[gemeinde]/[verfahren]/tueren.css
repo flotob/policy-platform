@@ -48,12 +48,12 @@
 .mine-a { color: var(--agree); }
 .mine-d { color: var(--disagree); }
 .mine-p { color: var(--ink-3); }
-.tally { display: inline-flex; align-items: center; gap: 10px; }
-.tally-bar { display: inline-flex; width: 120px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
-.tally-bar i { display: block; height: 100%; }
-.tally-bar .a { background: var(--agree); }
-.tally-bar .p { background: var(--pass); }
-.tally-bar .d { background: var(--disagree); }
+.deck-tally { display: inline-flex; align-items: center; gap: 10px; }
+.deck-tally-bar { display: inline-flex; width: 120px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--line); }
+.deck-tally-bar i { display: block; height: 100%; }
+.deck-tally-bar .a { background: var(--agree); }
+.deck-tally-bar .p { background: var(--pass); }
+.deck-tally-bar .d { background: var(--disagree); }
 
 /* ——— Doors 2 and 3 —————————————————————————————————————————————————————— */
 .door { max-width: 720px; padding-block: 24px 56px; }

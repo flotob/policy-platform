@@ -36,11 +36,11 @@
 .result-list li:first-child { border-top: 0; padding-top: 4px; }
 .result-list h3 { font-family: var(--serif); font-size: 20px; font-weight: 600; }
 .result-list p { margin-top: 4px; color: var(--ink-2); max-width: 62ch; }
-.mark { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; }
-.mark.agree { background: var(--agree); }
-.mark.disagree { background: var(--disagree); }
-.mark.warn { background: var(--warn); }
-.mark.pass { background: transparent; border: 1.5px dashed var(--ink-3); }
+.lp-mark { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; }
+.lp-mark.agree { background: var(--agree); }
+.lp-mark.disagree { background: var(--disagree); }
+.lp-mark.warn { background: var(--warn); }
+.lp-mark.pass { background: transparent; border: 1.5px dashed var(--ink-3); }
 
 .trust dl { margin: 28px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
 .trust dt { font-weight: 600; font-size: 17px; }
@@ -58,5 +58,4 @@
 }
 @media (max-width: 560px) {
   .steps { grid-template-columns: minmax(0, 1fr); }
-  .site-nav { gap: 14px; font-size: 14px; }
 }

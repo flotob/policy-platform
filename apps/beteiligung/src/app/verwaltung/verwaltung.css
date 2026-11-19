@@ -78,7 +78,6 @@
   .cp-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .cp-nav { position: static; display: flex; flex-wrap: wrap; gap: 6px; }
   .cp-nav a { border: 1px solid var(--line); }
-  .field-row { grid-template-columns: minmax(0, 1fr); }
   .ws-table thead { display: none; }
   .ws-table, .ws-table tbody, .ws-table tr, .ws-table td { display: block; }
   .ws-table td { border-bottom: 0; padding: 6px 16px; }
@@ -98,9 +97,9 @@
 /* What the machine is doing for this campaign. */
 .machine { margin-top: 16px; padding: 10px 14px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--agree); font-size: 14px; display: grid; gap: 8px; }
 .machine.busy { border-left-color: var(--ga); }
-.machine .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ga); margin-right: 8px; vertical-align: 1px; animation: pulse 1.4s ease-in-out infinite; }
+.machine .pulse, .au .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ga); margin-right: 8px; vertical-align: 1px; animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { .machine .pulse { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .machine .pulse, .au .pulse { animation: none; } }
 .machine-fail { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; color: var(--danger); }
 .machine-fail p { flex: 1 1 320px; }
 .cp-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
@@ -153,16 +152,16 @@
   .letters-print { display: block; color: #111; background: #fff; }
   @page { size: A4; margin: 0; }
 }
-.letter { width: 210mm; min-height: 296mm; padding: 18mm 20mm 16mm 25mm; box-sizing: border-box; break-after: page; page-break-after: always; font-family: var(--serif); font-size: 11.5pt; line-height: 1.45; color: #111; position: relative; }
-.letter:last-child { break-after: auto; page-break-after: auto; }
-.letter-from { font-family: var(--sans); font-size: 10pt; font-weight: 600; margin: 0; }
+.print-letter { width: 210mm; min-height: 296mm; padding: 18mm 20mm 16mm 25mm; box-sizing: border-box; break-after: page; page-break-after: always; font-family: var(--serif); font-size: 11.5pt; line-height: 1.45; color: #111; position: relative; }
+.print-letter:last-child { break-after: auto; page-break-after: auto; }
+.print-letter-from { font-family: var(--sans); font-size: 10pt; font-weight: 600; margin: 0; }
 /* DIN 5008 address window: 45 mm from the top, 85 × 45 mm — for the label or the mail merge. */
-.letter-window { width: 85mm; height: 40mm; margin: 17mm 0 10mm; border: 0.3mm dashed #bbb; color: #bbb; font-family: var(--sans); font-size: 8pt; padding: 3mm; box-sizing: border-box; }
-.letter h1 { font-family: var(--serif); font-size: 16pt; font-weight: 600; margin: 0 0 5mm; }
-.letter p { margin: 0 0 3mm; }
-.letter-measure { padding-left: 4mm; border-left: 0.8mm solid #999; font-style: italic; }
-.letter-code { display: grid; grid-template-columns: 34mm 1fr; gap: 6mm; align-items: center; margin: 6mm 0; padding: 5mm; border: 0.4mm solid #111; border-radius: 2mm; }
-.letter-qr svg { width: 34mm; height: 34mm; display: block; }
-.letter-url { font-family: var(--sans); font-weight: 600; }
-.letter-pin { font-family: var(--sans); font-size: 18pt; font-weight: 700; letter-spacing: 0.08em; margin: 1mm 0 0; }
+.print-letter-window { width: 85mm; height: 40mm; margin: 17mm 0 10mm; border: 0.3mm dashed #bbb; color: #bbb; font-family: var(--sans); font-size: 8pt; padding: 3mm; box-sizing: border-box; }
+.print-letter h1 { font-family: var(--serif); font-size: 16pt; font-weight: 600; margin: 0 0 5mm; }
+.print-letter p { margin: 0 0 3mm; }
+.print-letter-measure { padding-left: 4mm; border-left: 0.8mm solid #999; font-style: italic; }
+.print-letter-code { display: grid; grid-template-columns: 34mm 1fr; gap: 6mm; align-items: center; margin: 6mm 0; padding: 5mm; border: 0.4mm solid #111; border-radius: 2mm; }
+.print-letter-qr svg { width: 34mm; height: 34mm; display: block; }
+.print-letter-url { font-family: var(--sans); font-weight: 600; }
+.print-letter-pin { font-family: var(--sans); font-size: 18pt; font-weight: 700; letter-spacing: 0.08em; margin: 1mm 0 0; }
 .cp-hint { max-width: 72ch; margin: 0 0 10px; }

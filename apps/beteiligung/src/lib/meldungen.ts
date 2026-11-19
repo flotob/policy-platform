@@ -27,7 +27,7 @@ const PER_HOUR = 10;
 export type ReportResult = { ok: true } | { ok: false; error: string };
 
 export async function reportContent(c: Campaign, kind: "node" | "move", id: string, reason: string, note: string): Promise<ReportResult> {
-  if (!REASONS.some((r) => r.key === reason)) return { ok: false, error: "Bitte wählen Sie einen Grund." };
+  if (!REASONS.some((r) => r.key === reason)) return { ok: false, error: "Bitte wähl einen Grund." };
   const db = getDb();
   // Only what belongs to this campaign and is public can be reported.
   const exists =
@@ -38,7 +38,7 @@ export async function reportContent(c: Campaign, kind: "node" | "move", id: stri
   const origin = await originHash(c);
   const recent = await db.execute(sql`
     SELECT count(*)::int AS n FROM content_reports WHERE campaign_id = ${c.id} AND origin_hash = ${origin} AND created_at > now() - interval '1 hour'`);
-  if (Number((recent.rows[0] as { n: number }).n) >= PER_HOUR) return { ok: false, error: "Sie haben in der letzten Stunde schon viel gemeldet. Bitte später noch einmal." };
+  if (Number((recent.rows[0] as { n: number }).n) >= PER_HOUR) return { ok: false, error: "Du hast in der letzten Stunde schon viel gemeldet. Bitte später noch einmal." };
   await db.execute(sql`
     INSERT INTO content_reports (tenant_id, campaign_id, subject_kind, subject_id, reason, note, origin_hash)
     VALUES (${c.tenantId}, ${c.id}, ${kind}, ${id}, ${reason}, ${note.trim().slice(0, 300) || null}, ${origin})

@@ -12,6 +12,8 @@ import { getParticipant } from "@/lib/teilnahme";
 import { CodeForm } from "./DoorForms";
 import { FollowForm, FollowPrompt } from "./FollowForm";
 import "../public.css";
+// The code form (letters, invitations) is a door form: its box and the code field are styled there.
+import "./tueren.css";
 
 const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
 const n = (x: number) => x.toLocaleString("de-DE");

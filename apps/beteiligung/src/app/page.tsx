@@ -121,7 +121,7 @@ export default function Home() {
           <ul className="result-list">
             {RESULTS.map((r) => (
               <li key={r.title}>
-                <span className={`mark ${r.cls}`} aria-hidden />
+                <span className={`lp-mark ${r.cls}`} aria-hidden />
                 <div>
                   <h3>{r.title}</h3>
                   <p>{r.text}</p>
