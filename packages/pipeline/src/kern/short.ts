@@ -18,7 +18,7 @@ import type { Richtung } from "./prompts.ts";
 import { decideMatch, matchRequest, type MatchNode, type MoveMatch } from "./match.ts";
 import { moveOutput, type KernContext } from "./prompts.ts";
 
-export const KERN_SHORT_FAMILY = "kern-short.v2";
+export const KERN_SHORT_FAMILY = "kern-short.v3";
 /** Up to this many nodes are compared in one request; beyond, Jev first picks the step. */
 const ONE_CALL = 24;
 const STEP_SHORTLIST = 14;
@@ -56,11 +56,14 @@ export interface ShortCheck {
 }
 
 const argumentQuestions = () => ({
+  // Tested 2026-11-19 on 32 posts (18 + 14 unseen): 32/32 at the threshold, the old wording 22/32 (it let
+  // bare verdicts like "Super Idee!" or "So ein Schwachsinn!!!" through). A bare yes or no is not an
+  // argument here: the citizen is asked for a reason and can still send it on.
   argument: noul(
-    "Does `statement` make a claim about the measure — a fact, an assessment, a concern or a proposal — that other people could agree or disagree with?",
+    "Does `statement` give something about the measure that others could weigh on its merits: a reason, a fact, a concern, a consequence or a concrete proposal?",
     {
-      true: "A claim about the measure, however blunt or short ('Ökodiktatur! Niemand schreibt mir vor, was auf mein Dach kommt' claims that the duty violates owners' freedom).",
-      false: "No claim: only an insult without content, a greeting, a question without a position, spam, or something unrelated to the measure.",
+      true: "Yes, however blunt or short: 'Ökodiktatur! Niemand schreibt mir vor, was auf mein Dach kommt' (owners' freedom), 'Die Handwerker sind ausgebucht' (a fact), 'Lieber Förderung als Zwang' (an alternative), 'Was ist mit dem Denkmalschutz?' (a concern), 'Mieter zahlen am Ende drauf' (a consequence).",
+      false: "No: only a verdict without any reason ('So ein Schwachsinn!', 'Super Idee!', 'Finde ich schlecht', 'Nein danke', 'Bin dafür'), an insult, a greeting, a question about the procedure, spam, or something unrelated to the measure.",
     },
   ),
   personal: noul("Does `statement` name or describe a private individual, or attack a person?", {
