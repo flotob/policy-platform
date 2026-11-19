@@ -37,7 +37,9 @@ starts the server without the worker. Sign-up of new municipalities (`src/lib/si
 (12 characters from a 32-letter alphabet = 60 bits; case, spaces and dashes ignored; 10 wrong codes
 per connection and 200 in total per hour, then a pause; a new code retires the old one at once;
 the current one is in `platform/.deploy-secrets.local`); neither = closed. Better Auth's own
-sign-up endpoint is always off — accounts come only from our actions. `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day.
+sign-up endpoint is always off — accounts come only from our actions. `MAX_LLM_JOBS_PER_DAY` caps the machine's jobs per day. `KERN_WORKERS` (default 2) jobs run side by side: one per
+procedure at a time, and towns take turns (a town with a job running waits behind towns without; among those,
+the town served longest ago goes first).
 `DEMO_LOGIN=1` puts a read-only demo login ("Beispiel ansehen") for Musterstadt on the login
 page (role betrachter; public credentials, created at startup; `DEMO_LOGIN_EMAIL/PASSWORD/TENANT`
 override). Better Auth's account-changing endpoints are off, so no visitor can lock the others out.

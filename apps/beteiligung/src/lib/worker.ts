@@ -1,8 +1,13 @@
 /**
- * The machine's background work: one job at a time, in this server process
- * (started from instrumentation.ts). One at a time on purpose — the language
- * model runs on a subscription with a session limit, and a municipal
- * procedure has a handful of statements, not thousands.
+ * The machine's background work, in this server process (started from
+ * instrumentation.ts). KERN_WORKERS jobs run side by side (default 2: the
+ * language model runs on a subscription with a session limit, so a few, not
+ * dozens). Two rules keep it safe and fair:
+ *   - one job per procedure at a time (the steps of one procedure build on
+ *     each other: matching, decisions, derived votes);
+ *   - towns take turns: a town with a job running waits behind towns without,
+ *     and among those the town served longest ago goes first. One town's long
+ *     upload no longer holds up everyone else.
  *
  * Jobs survive restarts: a job left "laeuft" by a crashed process is picked
  * up again after STALE_MIN; every step of the core loop is resumable (cached
@@ -19,6 +24,8 @@ import { getDb } from "./db";
 import { kernCampaign, kernDeps } from "./kern";
 
 const POLL_MS = 3000;
+/** Jobs running side by side. */
+const WORKERS = Math.max(1, Math.min(8, Number(process.env.KERN_WORKERS ?? 2) || 2));
 /**
  * At most this many jobs start per day (each calls the language model):
  * MAX_LLM_JOBS_PER_DAY on a public server, so a flood at door 2 cannot run up
@@ -34,7 +41,15 @@ const log = (m: string) => console.log(`[kern] ${m}`);
 
 let capped = false;
 
-async function claim(): Promise<Row | null> {
+/** Claims run one after another inside this process, so two loops never take two jobs of one procedure. */
+let claiming: Promise<unknown> = Promise.resolve();
+function claim(): Promise<Row | null> {
+  const next = claiming.then(claimOne, claimOne);
+  claiming = next.catch(() => null);
+  return next;
+}
+
+async function claimOne(): Promise<Row | null> {
   const db = getDb();
   await db.execute(sql`
     UPDATE campaign_jobs SET state = CASE WHEN attempts >= ${MAX_ATTEMPTS} THEN 'fehler' ELSE 'wartet' END,
@@ -51,7 +66,15 @@ async function claim(): Promise<Row | null> {
   }
   const r = await db.execute(sql`
     UPDATE campaign_jobs SET state = 'laeuft', attempts = attempts + 1, started_at = now(), error = NULL
-    WHERE id = (SELECT id FROM campaign_jobs WHERE state = 'wartet' ORDER BY created_at, kind <> 'skelett' FOR UPDATE SKIP LOCKED LIMIT 1)
+    WHERE id = (
+      SELECT j.id FROM campaign_jobs j
+      WHERE j.state = 'wartet'
+        AND NOT EXISTS (SELECT 1 FROM campaign_jobs r WHERE r.campaign_id = j.campaign_id AND r.state = 'laeuft')
+      ORDER BY
+        (SELECT count(*) FROM campaign_jobs r WHERE r.tenant_id = j.tenant_id AND r.state = 'laeuft'),
+        (SELECT max(r.started_at) FROM campaign_jobs r WHERE r.tenant_id = j.tenant_id) NULLS FIRST,
+        j.created_at, j.kind <> 'skelett'
+      FOR UPDATE OF j SKIP LOCKED LIMIT 1)
     RETURNING *`);
   return (r.rows[0] as Row | undefined) ?? null;
 }
@@ -122,18 +145,22 @@ let running = false;
 export function startWorker(): void {
   if (running) return;
   running = true;
-  log("worker started");
-  void (async () => {
-    for (;;) {
-      try {
-        if (!(await tick())) await new Promise((r) => setTimeout(r, POLL_MS));
-      } catch (e) {
-        // The database is away (Docker asleep): wait and try again.
-        log(`worker: ${(e as Error).message}`);
-        await new Promise((r) => setTimeout(r, POLL_MS * 5));
+  log(`worker started (${WORKERS} side by side)`);
+  for (let w = 0; w < WORKERS; w++) {
+    void (async () => {
+      // Staggered, so the loops do not poll in lockstep.
+      await new Promise((r) => setTimeout(r, w * 700));
+      for (;;) {
+        try {
+          if (!(await tick())) await new Promise((r) => setTimeout(r, POLL_MS));
+        } catch (e) {
+          // The database is away (Docker asleep): wait and try again.
+          log(`worker: ${(e as Error).message}`);
+          await new Promise((r) => setTimeout(r, POLL_MS * 5));
+        }
       }
-    }
-  })();
+    })();
+  }
 }
 
 /** Drain the queue once (scripts, tests). */
