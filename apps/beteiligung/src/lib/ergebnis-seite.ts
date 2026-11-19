@@ -37,7 +37,9 @@ export function methodParagraphs(c: Campaign, r: Ergebnis): string[] {
   }[c.params.editorialMode];
   const out = [
     made,
-    "Die Lager und die Zustimmungswerte sind aus der Abstimmungsmatrix berechnet, nach dem Verfahren von Polis. Die Einordnung jeder Aussage folgt aus zwei Zahlen und ihrem Typ, nicht aus einer Meinung der Maschine. Beim Lesen dieser Seite rechnet keine KI mehr.",
+    r.ready
+      ? "Die Lager und die Zustimmungswerte sind aus der Abstimmungsmatrix berechnet, nach dem Verfahren von Polis. Die Einordnung jeder Aussage folgt aus zwei Zahlen und ihrem Typ, nicht aus einer Meinung der Maschine. Beim Lesen dieser Seite rechnet keine KI mehr."
+      : `Für Lager haben zu wenige Menschen genug Aussagen bewertet (nötig sind ${r.needed.toLocaleString("de-DE")}). Die Zahlen sind deshalb einfach ausgezählt, über alle Teilnehmenden zusammen. Brücken, Streitpunkte und ein Urteil über die vier Stufen braucht es Lager; sie fehlen hier mit Absicht. Beim Lesen dieser Seite rechnet keine KI mehr.`,
   ];
   if (r.participation.senders) out.push("Stellungnahmen zählen als Stimmen ihrer Absender: Wer einen Punkt stützt, stimmt ihm zu; wer ihm widerspricht, lehnt ihn ab.");
   const fictional = c.fictional

@@ -13,7 +13,7 @@ import {
   type VoteIn,
 } from "../src/kern/befund.ts";
 import { checkRules, conclusions } from "../src/kern/bericht.ts";
-import { headline, readingOf, stepText } from "../src/kern/befund-text.ts";
+import { countLine, headline, readingOf, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
 
 /** A camp of 100 with this agreement and disagreement in percent (the rest passes). */
 const camp = (agree: number, disagree = 100 - agree - 10): CampCount => ({ agree, disagree: Math.max(0, disagree), pass: 100 - agree - Math.max(0, disagree), seen: 100 });
@@ -127,6 +127,39 @@ describe("evaluate", () => {
   };
   const r = evaluate(input);
   const by = (id: string) => r.statements.find((s) => s.id === id)!;
+
+  describe("too few people for camps", () => {
+    // The same procedure with four voters and a camp threshold of 50: counts and arguments, no verdicts.
+    const few = evaluate({
+      ...input,
+      votes: votes.filter((v) => ["p00", "p01", "p02", "p20"].includes(v.participant)),
+      params: { bridgeThreshold: 0.6, minParticipants: 50 },
+    });
+    const of = (id: string) => few.statements.find((s) => s.id === id)!;
+    it("is not ready and counts everyone together", () => {
+      expect(few.ready).toBe(false);
+      expect(few.camps).toBeNull();
+      expect(of("root").total).toEqual({ agree: 3, disagree: 1, pass: 0, seen: 4 });
+      expect(tallyOf(of("root"))).toBe("zu");
+      expect(tallyOf(of("value"))).toBe("zu");
+      expect(tallyOf(of("attack"))).toBe("ab");
+      expect(countLine(of("root"))).toBe("3 von 4 stimmen zu und 1 lehnt ab.");
+    });
+    it("keeps each statement's place in the steps, so the unasked questions are right", () => {
+      expect(of("skill").entries.map((e) => [e.step, e.role])).toEqual([["weg", "greift_an"]]);
+      expect(of("fact").entries.map((e) => e.role)).toEqual(["stuetzt", "greift_an"]);
+      const eingriff = few.steps.find((s) => s.key === "eingriff")!;
+      expect(eingriff.attacks).toBe(1);
+      expect(eingriff.unasked).toEqual(["nebenfolgen"]);
+    });
+    it("writes a report without camps or verdicts", () => {
+      const ss = conclusions(few, null, { town: "Musterstadt", measure: "X", questions: input.context.questions, fictional: false, editorialMode: "mensch", resultVersion: 1 });
+      const all = ss.map((x) => x.text).join(" ");
+      expect(all).not.toMatch(/Lager (A|B)|tragen in|Stufe \d (hält|wackelt|fällt)/);
+      expect(ss.some((x) => x.section === "stimmen" && x.text.includes("[A1]") && x.text.includes("3 von 4"))).toBe(true);
+      expect(smallHeadline(few).lead).toBe("Zu wenige Teilnehmende für Lager.");
+    });
+  });
 
   it("finds the two camps, the larger one first", () => {
     expect(r.ready).toBe(true);

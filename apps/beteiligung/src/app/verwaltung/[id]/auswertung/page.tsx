@@ -51,7 +51,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
         done: r.ready,
         text: r.ready
           ? `Genug Teilnehmende für Lager: ${n(r.clusterable)} haben ausreichend viele Aussagen bewertet.`
-          : `Für Lager müssen mindestens ${n(r.needed)} Menschen genug Aussagen bewerten. Bisher: ${n(r.clusterable)}.`,
+          : `Für Lager müssen mindestens ${n(r.needed)} Menschen genug Aussagen bewerten. Bisher: ${n(r.clusterable)}. Schließen geht trotzdem: Dann zählt das Ergebnis die Stimmen aller zusammen und zeigt die Argumente, ohne Lager.`,
       },
       {
         done: r.saturation.saturated,
@@ -83,16 +83,16 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
               </li>
             ))}
           </ul>
-          {fehler === "lager" ? <p className="notice">Für ein Ergebnis braucht es Lager, und dafür haben noch zu wenige Menschen abgestimmt.</p> : null}
+          {fehler === "leer" ? <p className="notice">Noch hat niemand abgestimmt. Für ein Ergebnis braucht es mindestens eine Stimme.</p> : null}
           {initiator ? (
             <form action={closeParticipation.bind(null, c.id)} className="au-actions">
-              <button type="submit" className="btn" disabled={!r.ready}>
+              <button type="submit" className="btn" disabled={!r.participation.voters}>
                 Beteiligung schließen
               </button>
             </form>
           ) : null}
         </section>
-        {r.ready ? (
+        {r.participation.voters ? (
           <section className="au-preview" aria-label="Vorschau der Ergebnisseite">
             <p className="au-label">Vorschau der Ergebnisseite · Zwischenstand, live gerechnet</p>
             <ResultView
@@ -105,7 +105,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
               period={null}
               questions={questionLabels}
               method={methodParagraphs(c, r)}
-              notice="Die Beteiligung läuft noch: Diese Zahlen ändern sich mit jeder Stimme. Namen bekommen die Lager nach dem Schließen."
+              notice={`Die Beteiligung läuft noch: Diese Zahlen ändern sich mit jeder Stimme.${r.ready ? " Namen bekommen die Lager nach dem Schließen." : ""}`}
             />
           </section>
         ) : null}
@@ -124,14 +124,15 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
   }
   const [report, locked, period] = await Promise.all([latestReport(c.id), namesLocked(saved.id), periodOf(c)]);
   const naming = namingOf(saved.campNames);
-  const confirmed = !!naming?.confirmedBy;
+  // Without camps there is nothing to name: the report can start at once.
+  const confirmed = !!naming?.confirmedBy || !saved.result.camps;
   const r = saved.result;
   const canReopen = initiator && (c.state === "auswertung" || c.state === "bericht") && !(report && ["freigegeben", "veroeffentlicht"].includes(report.state));
   const reportOfThis = report && report.resultId === saved.id && report.state !== "zurueckgewiesen";
 
   return (
     <div className="au">
-      <AutoRefresh active={!naming} everyMs={5000} />
+      <AutoRefresh active={!naming && !!saved.result.camps} everyMs={5000} />
       <section className="au-panel">
         <h2>Das Ergebnis</h2>
         <p className="au-lead">
@@ -148,6 +149,15 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
         ) : null}
       </section>
 
+      {!r.camps ? (
+        <section className="au-panel" id="lager">
+          <h2>Ohne Lager</h2>
+          <p className="au-lead">
+            Für Lager haben zu wenige Menschen abgestimmt ({n(r.clusterable)} von mindestens {n(r.needed)}). Das Ergebnis zählt deshalb die Stimmen
+            aller zusammen und zeigt die Argumente Schritt für Schritt, aber kein Urteil über Brücken, Streit oder die vier Stufen.
+          </p>
+        </section>
+      ) : (
       <section className="au-panel" id="lager">
         <h2>Die Lager benennen</h2>
         {!naming ? (
@@ -189,6 +199,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
           </>
         )}
       </section>
+      )}
 
       <section className="au-panel">
         <h2>Der Bericht</h2>

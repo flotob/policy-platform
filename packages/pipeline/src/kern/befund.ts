@@ -523,6 +523,14 @@ export function evaluate(input: EvaluateInput): Ergebnis {
 
     // "Nach Argument": where the statement stands in the four steps.
     const entries: Entry[] = [];
+    if (n.rolle !== "schluss" && n.schritt && k < 2) {
+      // Too few people for camps: the statement still has its place in the steps (what supports,
+      // what attacks), but no status — that needs camps. "offen" is a placeholder the pages do not show.
+      const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
+      entries.push({ step: n.schritt, question: n.frage, role: own, status: "offen", attack: null, camp: null });
+      const contra = own === "stuetzt" ? ms.filter((m) => m.stance === -1) : [];
+      if (contra.length) entries.push({ step: n.schritt, question: contra[0]!.frage ?? n.frage, role: "greift_an", status: "offen", attack: contra[0]!.aussage, camp: null });
+    }
     if (n.rolle !== "schluss" && n.schritt && k >= 2) {
       const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
       const campOfMove = (m: MoveIn) => (m.participant ? (campOf.get(m.participant) ?? null) : null);

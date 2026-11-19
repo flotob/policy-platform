@@ -38,12 +38,13 @@ export async function closeParticipation(id: string): Promise<void> {
   const staff = await requireInitiator();
   const c = await load(id, staff);
   if (c.state !== "offen") redirect(`/verwaltung/${id}/auswertung`);
-  if (!(await liveResult(c)).ready) redirect(`/verwaltung/${id}/auswertung?fehler=lager`);
+  // Without camps the result counts everyone together (small procedures); it only needs one vote.
+  if (!(await liveResult(c)).participation.voters) redirect(`/verwaltung/${id}/auswertung?fehler=leer`);
   // Close first, so no vote slips in between the evaluation and the state change.
   await getDb().execute(sql`UPDATE campaigns SET state = 'auswertung', updated_at = now() WHERE id = ${c.id}`);
   const saved = await saveResult({ ...c, state: "auswertung" }, `user:${staff.user.id}`);
   await audit(staff, "campaign.state", "campaign", c.id, { from: "offen", to: "auswertung", result: saved.id, version: saved.version, matrix: saved.result.matrixHash });
-  await enqueue(c.tenantId, c.id, "lagernamen", null, null, { resultId: saved.id });
+  if (saved.result.ready) await enqueue(c.tenantId, c.id, "lagernamen", null, null, { resultId: saved.id });
   refresh(id);
   redirect(`/verwaltung/${id}/auswertung`);
 }
@@ -107,7 +108,7 @@ export async function makeReport(id: string): Promise<void> {
   const c = await load(id, staff);
   const saved = await latestResult(c.id);
   if (!saved || !["auswertung", "bericht"].includes(c.state)) redirect(`/verwaltung/${id}/auswertung`);
-  if (!namingOf(saved.campNames)?.confirmedBy) redirect(`/verwaltung/${id}/auswertung?fehler=namen#lager`);
+  if (saved.result.camps && !namingOf(saved.campNames)?.confirmedBy) redirect(`/verwaltung/${id}/auswertung?fehler=namen#lager`);
   const open = await latestReport(c.id);
   if (open && open.resultId === saved.id && ["liste", "text", "geprueft", "durchgefallen", "freigegeben"].includes(open.state)) redirect(`/verwaltung/${id}/bericht`);
   const report = await startReport(c, saved, staff.tenant.name);

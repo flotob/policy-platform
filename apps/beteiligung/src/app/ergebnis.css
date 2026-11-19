@@ -227,3 +227,19 @@
   .erg .score .big { font-size: 32px; }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) { .erg-stage { transition: none; } }
+
+/* Too few people for camps: counts over everyone (ResultView "small") */
+.erg .tally { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 8px; background: var(--line); }
+.erg .tally i { display: block; height: 100%; }
+.erg .tally .a { background: var(--agree); }
+.erg .tally .d { background: var(--disagree); }
+.erg .tally .p { background: var(--pass); }
+.erg .tally.big { height: 14px; border-radius: 7px; margin: 14px 0 10px; }
+.erg [data-tally="ab"] .dot { background: var(--disagree); }
+.erg [data-tally="geteilt"] .dot { background: var(--warn); }
+.erg [data-tally="ohne"] .dot { background: var(--pass); }
+.erg .pill.tally-ab { background: var(--disagree-soft); color: var(--disagree); }
+.erg .pill.tally-geteilt { background: var(--warn-soft); color: var(--warn); }
+.erg .pill.tally-ohne { background: var(--line); color: var(--ink-2); }
+.erg .score.all { --c: var(--ink-3); }
+.erg .map-small .small-why { font-size: 12px; color: var(--ink-3); margin-top: 10px; }

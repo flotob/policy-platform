@@ -6,6 +6,7 @@ import {
   campName,
   categoryWords,
   conclusionText,
+  countLine,
   evidenceText,
   gapTexts,
   headline,
@@ -14,8 +15,15 @@ import {
   pillOf,
   readingOf,
   schemeConclusion,
+  smallHeadline,
+  smallNote,
   statusWords,
+  stepCountText,
   stepText,
+  TALLY_ORDER,
+  TALLY_WORDS,
+  tallyOf,
+  type Tally,
   TYP_WORDS,
   VERDICT_WORDS,
   word,
@@ -100,12 +108,15 @@ const VOTE: Record<string, string> = { a: "stimmt zu", d: "lehnt ab", p: "enthä
 export function ResultView(props: ResultViewProps) {
   const { r, names } = props;
   const k = r.camps?.k ?? 0;
+  /** Too few people for camps: counts over everyone and the arguments, no verdicts (see smallNote). */
+  const small = !r.ready;
   const N = r.statements.length;
   const byNr = useMemo(() => new Map(r.statements.map((s) => [s.nr, s])), [r]);
   const initial = r.core[0] ?? r.statements.find((s) => s.category === "streit")?.nr ?? r.statements[0]?.nr ?? 1;
   const [sel, setSel] = useState(initial);
   const [view, setView] = useState<"befund" | "argument">("befund");
   const [filter, setFilter] = useState<Category | "alle">("alle");
+  const [tallyFilter, setTallyFilter] = useState<Tally | "alle">("alle");
   const [mapMode, setMapMode] = useState<"vote" | "camp">("vote");
   const [sheet, setSheet] = useState(false);
   const [source, setSource] = useState<{ s: StatementOut; q: Quote } | null>(null);
@@ -175,6 +186,20 @@ export function ResultView(props: ResultViewProps) {
         {head}
         <div className="t">{s.text}</div>
         {foot}
+        {small && s.total.seen ? (
+          <>
+            <div className="tally" aria-hidden>
+              <i className="a" style={{ width: `${pct(s.total.agree, s.total.seen)}%` }} />
+              <i className="p" style={{ width: `${pct(s.total.pass, s.total.seen)}%` }} />
+              <i className="d" style={{ width: `${pct(s.total.disagree, s.total.seen)}%` }} />
+            </div>
+            <div className="vals num">
+              <span>
+                {s.total.agree} von {s.total.seen} {s.total.agree === 1 ? "stimmt" : "stimmen"} zu
+              </span>
+            </div>
+          </>
+        ) : null}
         {k >= 2 ? (
           <>
             <div className="bar" aria-hidden>
@@ -200,6 +225,7 @@ export function ResultView(props: ResultViewProps) {
 
   const qLabel = (key: string | null) => (key ? (props.questions.find((q) => q.key === key)?.label ?? null) : null);
   const stChip = (e: Entry) => {
+    if (small) return null;
     const w = statusWords(e.status, k);
     return <span className={`st ${w.tone}`}>{w.text}</span>;
   };
@@ -208,6 +234,33 @@ export function ResultView(props: ResultViewProps) {
   // ———— Lists ————
   const counts = new Map<Category, number>();
   for (const s of r.statements) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+
+  const tallies = new Map<Tally, number>();
+  for (const s of r.statements) tallies.set(tallyOf(s), (tallies.get(tallyOf(s)) ?? 0) + 1);
+  const tallyList = (
+    <>
+      <div className="chips" role="group" aria-label="Filter">
+        <button type="button" className="chip" aria-pressed={tallyFilter === "alle"} onClick={() => setTallyFilter("alle")}>
+          Alle Aussagen<span className="n num">{N}</span>
+        </button>
+        {TALLY_ORDER.filter((t) => tallies.get(t)).map((t) => (
+          <button key={t} type="button" className="chip" aria-pressed={tallyFilter === t} onClick={() => setTallyFilter(t)}>
+            {TALLY_WORDS[t]}
+            <span className="n num">{tallies.get(t)}</span>
+          </button>
+        ))}
+      </div>
+      {TALLY_ORDER.filter((t) => (tallyFilter === "alle" || tallyFilter === t) && tallies.get(t)).map((t) => (
+        <section key={t} className="group" data-tally={t}>
+          <h3>
+            <span className="dot" />
+            {TALLY_WORDS[t]}
+          </h3>
+          <div className="items">{r.statements.filter((s) => tallyOf(s) === t).map((s) => item(s))}</div>
+        </section>
+      ))}
+    </>
+  );
 
   const befundList = (
     <>
@@ -323,23 +376,50 @@ export function ResultView(props: ResultViewProps) {
               ))}
               {!att.length && !st.unasked.length ? <div className="none">Niemand hat diese Stufe angegriffen.</div> : null}
             </div>
-            <div className="urteil">
-              <span className={`st ${v.tone}`}>
-                Stufe {i + 1} {v.text}
-              </span>
-              <p>{stepText(st, r)}</p>
-            </div>
+            {small ? (
+              <div className="urteil">
+                <p>{stepCountText(st)}</p>
+              </div>
+            ) : (
+              <div className="urteil">
+                <span className={`st ${v.tone}`}>
+                  Stufe {i + 1} {v.text}
+                </span>
+                <p>{stepText(st, r)}</p>
+              </div>
+            )}
           </section>
         );
       })}
-      <div className="these concl">
-        <div className="who">Also</div>
-        <p>{conclusionText(r)}</p>
-      </div>
+      {small ? null : (
+        <div className="these concl">
+          <div className="who">Also</div>
+          <p>{conclusionText(r)}</p>
+        </div>
+      )}
     </>
   );
 
-  const scheme = (
+  const scheme = small ? (
+    <div className="scheme">
+      <p>
+        Wer eine Maßnahme begründet, macht vier Schritte. Jede Aussage aus der Beteiligung stützt einen davon oder greift ihn an. Ob ein Angriff
+        steht, entscheidet die Auswertung erst mit Lagern; hier steht, was vorgebracht wurde.
+      </p>
+      {r.steps.map((st, i) => (
+        <div key={st.key} className="row">
+          <span className="k">{i + 1}</span>
+          <span className="lbl">
+            {st.label}
+            <span className="sub num">
+              {st.supports} stützend · {st.attacks} {st.attacks === 1 ? "Angriff" : "Angriffe"}
+              {st.unasked.length ? ` · ${st.unasked.length} ${st.unasked.length === 1 ? "Frage" : "Fragen"} ungestellt` : ""}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  ) : (
     <div className="scheme">
       <p>
         Wer eine Maßnahme begründet, macht vier Schritte. Jede Aussage aus der Beteiligung stützt einen davon oder greift ihn an. Ein Angriff ist
@@ -405,11 +485,32 @@ export function ResultView(props: ResultViewProps) {
   const detail = (
     <article className="detail">
       <div className="kind">
-        <span className={`pill ${pillCls}`}>{pillOf(cur, k)}</span>
+        {small ? (
+          <span className={`pill tally-${tallyOf(cur)}`}>{TALLY_WORDS[tallyOf(cur)]}</span>
+        ) : (
+          <span className={`pill ${pillCls}`}>{pillOf(cur, k)}</span>
+        )}
         <span className="typ">{TYP_WORDS[cur.typ]}</span>
       </div>
       <h2>{cur.text}</h2>
       {where}
+      {small ? (
+        <div className="scores">
+          <div className="score all">
+            <div className="who">Alle Teilnehmenden</div>
+            <div className="big num">
+              {pct(cur.total.agree, cur.total.seen)}
+              <small>%</small>
+            </div>
+            <div className="abs num">{countLine(cur)}</div>
+            <div className="mini" aria-hidden>
+              <i className="a" style={{ width: `${pct(cur.total.agree, cur.total.seen)}%` }} />
+              <i className="p" style={{ width: `${pct(cur.total.pass, cur.total.seen)}%` }} />
+              <i className="d" style={{ width: `${pct(cur.total.disagree, cur.total.seen)}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : null}
       {k >= 2 ? (
         <div className="scores">
           {cur.camps.map((c, g) => (
@@ -431,9 +532,15 @@ export function ResultView(props: ResultViewProps) {
           ))}
         </div>
       ) : null}
-      <div className="reading">
-        <b>{reading[0]}</b> {reading.slice(1).join(" ")}
-      </div>
+      {small ? (
+        <div className="reading">
+          <b>{cur.rolle === "schluss" ? "Die Maßnahme selbst." : countLine(cur)}</b> Bei so wenigen Stimmen ist das eine Zählung, kein Befund.
+        </div>
+      ) : (
+        <div className="reading">
+          <b>{reading[0]}</b> {reading.slice(1).join(" ")}
+        </div>
+      )}
       {ev ? (
         <p className="evidence">
           <span>Belege</span>
@@ -469,7 +576,8 @@ export function ResultView(props: ResultViewProps) {
       )}
       <div className="ref">
         <span className="num">
-          Aussage {cur.nr} von {N} · Brückenschwelle {Math.round(r.params.bridgeThreshold * 100)} % in {k === 2 ? "beiden" : "allen"} Lagern
+          Aussage {cur.nr} von {N}
+          {small ? "" : ` · Brückenschwelle ${Math.round(r.params.bridgeThreshold * 100)} % in ${k === 2 ? "beiden" : "allen"} Lagern`}
         </span>
         <span className="nav">
           <button type="button" onClick={() => select(prev.nr)}>
@@ -484,16 +592,19 @@ export function ResultView(props: ResultViewProps) {
   );
 
   // ———— Head ————
-  const h = headline(r);
+  const h = small ? smallHeadline(r) : headline(r);
   const p = r.participation;
   const statements = p.files + p.uploads;
   const sub = [
     `${n(p.voters)} ${p.voters === 1 ? "Mensch hat" : "Menschen und Organisationen haben"}${props.period ? ` ${props.period}` : ""} abgestimmt${p.shortPoints ? ", eigene Punkte geschickt" : ""}${statements ? " und Stellung genommen" : ""}.`,
-    `Die Auswertung hat ${word(k, false)} Lager gefunden und ${N} Aussagen, an denen sich der Streit entscheidet. Jede Aussage führt bis zum Originalzitat zurück.`,
+    small
+      ? `Die Teilnehmenden haben über ${N} Aussagen abgestimmt. Jede Aussage führt bis zum Originalzitat zurück.`
+      : `Die Auswertung hat ${word(k, false)} Lager gefunden und ${N} Aussagen, an denen sich der Streit entscheidet. Jede Aussage führt bis zum Originalzitat zurück.`,
   ].join(" ");
   const showBridges = () => {
     setView("befund");
-    setFilter("bruecke");
+    if (small) setTallyFilter("zu");
+    else setFilter("bruecke");
     listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -536,6 +647,7 @@ export function ResultView(props: ResultViewProps) {
             )}
           </p>
         </div>
+        {small ? <p className="erg-notice">{smallNote(r)}</p> : null}
         {props.notice ? <p className="erg-notice">{props.notice}</p> : null}
         <div className="eyebrow" style={{ marginTop: 8 }}>
           Jeder Satz dieser Seite führt per Klick zurück: zur Aussage, zum Zitat, zum Originaldokument.
@@ -546,20 +658,44 @@ export function ResultView(props: ResultViewProps) {
         <aside className="erg-list" aria-label="Aussagen" ref={listRef}>
           <div className="seg" role="group" aria-label="Lesart">
             <button type="button" aria-pressed={view === "befund"} onClick={() => setView("befund")}>
-              Nach Befund
+              {small ? "Nach Zustimmung" : "Nach Befund"}
             </button>
             <button type="button" aria-pressed={view === "argument"} onClick={() => setView("argument")}>
               Nach Argument
             </button>
           </div>
           {view === "argument" ? scheme : null}
-          <div>{view === "befund" ? befundList : argumentList}</div>
+          <div>{view === "befund" ? (small ? tallyList : befundList) : argumentList}</div>
         </aside>
 
         <section className={`erg-stage${sheet ? " open" : ""}`} ref={stageRef} aria-live="polite">
           <button type="button" className="closeb" aria-label="Schließen" onClick={() => setSheet(false)}>
             <span />
           </button>
+          {small ? (
+            <div className="map map-small">
+              <div className="head">
+                <span className="eyebrow">Alle zusammen · {n(p.voters)} Teilnehmende</span>
+              </div>
+              <div className="tally big" aria-hidden>
+                <i className="a" style={{ width: `${pct(cur.total.agree, cur.total.seen)}%` }} />
+                <i className="p" style={{ width: `${pct(cur.total.pass, cur.total.seen)}%` }} />
+                <i className="d" style={{ width: `${pct(cur.total.disagree, cur.total.seen)}%` }} />
+              </div>
+              <div className="counts">
+                <div>
+                  <b className="num">{n(cur.total.agree)}</b> stimmen zu
+                </div>
+                <div>
+                  <b className="num">{n(cur.total.disagree)}</b> lehnen ab
+                </div>
+                <div>
+                  <b className="num">{n(cur.total.pass)}</b> enthalten sich
+                </div>
+              </div>
+              <p className="small-why">Für einen Meinungsraum mit Lagern braucht es mindestens {n(r.needed)} Menschen, die genug Aussagen bewertet haben.</p>
+            </div>
+          ) : (
           <div className="map">
             <div className="head">
               <span className="eyebrow">Der Meinungsraum · {n(total)} Teilnehmende</span>
@@ -647,6 +783,7 @@ export function ResultView(props: ResultViewProps) {
               ))}
             </div>
           </div>
+          )}
           {detail}
         </section>
       </div>

@@ -24,6 +24,10 @@ import type { Ergebnis, StatementOut } from "./befund.ts";
 import {
   campLabel,
   conclusionText,
+  countLine,
+  smallHeadline,
+  smallNote,
+  stepCountText,
   diagnosisText,
   evidenceText,
   headline,
@@ -38,6 +42,7 @@ import {
 export const SECTIONS = {
   ergebnis: "Das Wichtigste",
   beteiligung: "Wer sich beteiligt hat",
+  stimmen: "Wie abgestimmt wurde",
   einig: "Worauf sich die Lager einigen",
   warnung: "Vorsicht, Scheinkonsens",
   rat: "Was der Rat entscheiden muss",
@@ -75,6 +80,7 @@ const shares = (s: StatementOut, names: CampNames, field: "agree" | "disagree" =
 
 /** R1: the sentences, in report order. Templates only — the same result always gives the same list. */
 export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): Satz[] {
+  if (!r.ready) return smallConclusions(r, ctx);
   const out: Omit<Satz, "id">[] = [];
   const add = (section: SectionKey, text: string, refs: number[] = []) => out.push({ section, text, refs });
   const k = r.camps?.k ?? 0;
@@ -95,15 +101,15 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   // Wer sich beteiligt hat
   const p = r.participation;
   const how = [
-    p.direct ? `${fmt(p.direct)} haben selbst abgestimmt` : "",
+    p.direct ? `${fmt(p.direct)} ${p.direct === 1 ? "hat" : "haben"} selbst abgestimmt` : "",
     p.simulated ? `${fmt(p.simulated)} sind simuliert` : "",
     p.senders ? `von ${fmt(p.senders)} Absendern zählen die Stellungnahmen als Stimmen` : "",
   ].filter(Boolean);
-  const came = [p.shortPoints ? `${fmt(p.shortPoints)} eigene Punkte` : "", p.uploads + p.files ? `${fmt(p.uploads + p.files)} Stellungnahmen` : ""].filter(Boolean);
+  const came = [p.shortPoints ? `${fmt(p.shortPoints)} ${p.shortPoints === 1 ? "eigener Punkt" : "eigene Punkte"}` : "", p.uploads + p.files ? `${fmt(p.uploads + p.files)} ${p.uploads + p.files === 1 ? "Stellungnahme" : "Stellungnahmen"}` : ""].filter(Boolean);
   add(
     "beteiligung",
     `${fmt(p.voters)} Teilnehmende haben ${fmt(p.votes)} Stimmen zu ${r.statements.length} Aussagen abgegeben${how.length ? `: ${list(how)}` : ""}.` +
-      (came.length ? ` Eingegangen sind ${list(came)}.` : ""),
+      (came.length ? ` Eingegangen ${came.length === 1 && came[0]!.startsWith("1 ") ? "ist" : "sind"} ${list(came)}.` : ""),
   );
   if (ctx.fictional) add("beteiligung", "Dies ist ein Beispiel mit erfundenen Inhalten, kein echtes Verfahren.");
   if (r.camps) {
@@ -222,6 +228,61 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     `Jede Zahl dieses Berichts ist aus der offenen Abstimmungsmatrix nachrechenbar (Ergebnis Version ${ctx.resultVersion}, Prüfsumme ${r.matrixHash.slice(0, 12)}). Wertungsfragen hat die Maschine zu keinem Zeitpunkt entschieden.`,
   );
 
+  return out.map((s, i) => ({ ...s, id: `S${i + 1}` }));
+}
+
+/**
+ * R1 for a procedure with too few people for camps: counts over everyone and the arguments, step by
+ * step. No sentence says a statement carries or a step holds; that needs camps.
+ */
+function smallConclusions(r: Ergebnis, ctx: ReportContext): Satz[] {
+  const out: Omit<Satz, "id">[] = [];
+  const add = (section: SectionKey, text: string, refs: number[] = []) => out.push({ section, text, refs });
+  const h = smallHeadline(r);
+  add("ergebnis", `${h.lead} ${h.rest.map((x) => x.text).join("")}`);
+  add("ergebnis", smallNote(r));
+
+  const p = r.participation;
+  const how = [
+    p.direct ? `${fmt(p.direct)} ${p.direct === 1 ? "hat" : "haben"} selbst abgestimmt` : "",
+    p.senders ? `${p.senders === 1 ? "von einem Absender zählt die Stellungnahme" : `von ${fmt(p.senders)} Absendern zählen die Stellungnahmen`} als Stimmen` : "",
+  ].filter(Boolean);
+  const came = [p.shortPoints ? `${fmt(p.shortPoints)} ${p.shortPoints === 1 ? "eigener Punkt" : "eigene Punkte"}` : "", p.uploads + p.files ? `${fmt(p.uploads + p.files)} ${p.uploads + p.files === 1 ? "Stellungnahme" : "Stellungnahmen"}` : ""].filter(Boolean);
+  add(
+    "beteiligung",
+    `${fmt(p.voters)} ${p.voters === 1 ? "Person hat" : "Teilnehmende haben"} ${fmt(p.votes)} Stimmen zu ${r.statements.length} Aussagen abgegeben${how.length ? `: ${list(how)}` : ""}.` +
+      (came.length ? ` Eingegangen ${came.length === 1 && came[0]!.startsWith("1 ") ? "ist" : "sind"} ${list(came)}.` : ""),
+  );
+  if (ctx.fictional) add("beteiligung", "Dies ist ein Beispiel mit erfundenen Inhalten, kein echtes Verfahren.");
+  if (ctx.editorialMode === "ki") add("beteiligung", "Neue Punkte hat die Maschine ohne menschliche Freigabe entschieden; die Redaktion hat Stichproben geprüft.");
+
+  // The measure first, then every statement anyone voted on, in display order.
+  for (const s of r.statements.filter((x) => x.total.seen > 0)) {
+    add("stimmen", `${s.rolle === "schluss" ? "Zur Maßnahme selbst, " : ""}${ref(s)}: ${countLine(s)}`, [s.nr]);
+  }
+  const silent = r.statements.filter((x) => x.total.seen === 0);
+  if (silent.length) add("stimmen", `Zu ${fmt(silent.length)} ${silent.length === 1 ? "Aussage" : "Aussagen"} hat niemand abgestimmt: ${silent.map((x) => `[A${x.nr}]`).join(", ")}.`, silent.map((x) => x.nr));
+
+  r.steps.forEach((st, i) => {
+    const nrs = r.statements.filter((s) => s.entries.some((e) => e.step === st.key)).map((s) => s.nr);
+    add("schritte", `Stufe ${i + 1} „${st.label}“: ${stepCountText(st)}`, nrs);
+  });
+
+  const qLabel = (key: string) => ctx.questions.find((q) => q.key === key)?.label ?? key;
+  const stepNo = (key: string) => r.steps.findIndex((x) => x.key === key) + 1;
+  for (const g of r.gaps.unasked) {
+    add("luecken", `Zur Prüffrage „${qLabel(g.question)}“ in der Stufe ${stepNo(g.step)} hat niemand etwas gesagt, weder Einwand noch Antwort.`);
+  }
+  const attacksOnly = r.gaps.oneSided.filter((g) => g.direction === "greift_an");
+  if (attacksOnly.length) {
+    add("luecken", `Nur als Einwand vorgebracht, ohne Antwort: ${list(attacksOnly.map((g) => `„${qLabel(g.question)}“ (Stufe ${stepNo(g.step)})`))}. Die Stadt sollte die Antwort nachliefern.`, attacksOnly.flatMap((g) => g.nodes));
+  }
+
+  add("belastbarkeit", `Bei ${fmt(p.voters)} ${p.voters === 1 ? "Person" : "Teilnehmenden"} sind die Zählungen ein Stimmungsbild, keine belastbare Mehrheit.`);
+  add(
+    "belastbarkeit",
+    `Jede Zahl dieses Berichts ist aus der offenen Abstimmungsmatrix nachrechenbar (Ergebnis Version ${ctx.resultVersion}, Prüfsumme ${r.matrixHash.slice(0, 12)}). Wertungsfragen hat die Maschine zu keinem Zeitpunkt entschieden.`,
+  );
   return out.map((s, i) => ({ ...s, id: `S${i + 1}` }));
 }
 

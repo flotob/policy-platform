@@ -313,3 +313,69 @@ export function gapTexts(r: Ergebnis, questions: { key: string; label: string }[
   }
   return out;
 }
+
+// ———— Too few people for camps: counts and arguments, no verdicts ————
+// Below the camp threshold the page and the report count everyone together. A majority of a
+// handful is a show of hands, not a finding, so nothing here says "trägt", "Brücke" or "Streit".
+
+export type Tally = "zu" | "geteilt" | "ab" | "ohne";
+export const TALLY_ORDER: Tally[] = ["zu", "geteilt", "ab", "ohne"];
+export const TALLY_WORDS: Record<Tally, string> = {
+  zu: "Die Mehrheit stimmt zu",
+  geteilt: "Geteilt",
+  ab: "Die Mehrheit lehnt ab",
+  ohne: "Noch ohne Stimmen",
+};
+
+/** More than half of those who voted on the statement agree (or disagree); otherwise split. */
+export function tallyOf(s: StatementOut): Tally {
+  const t = s.total;
+  if (!t.seen) return "ohne";
+  if (2 * t.agree > t.seen) return "zu";
+  if (2 * t.disagree > t.seen) return "ab";
+  return "geteilt";
+}
+
+/** "3 von 4 stimmen zu, 1 lehnt ab." */
+export function countLine(s: StatementOut): string {
+  const t = s.total;
+  if (!t.seen) return "Dazu hat noch niemand abgestimmt.";
+  const parts = [`${t.agree} von ${t.seen} ${pl(t.agree, "stimmt", "stimmen")} zu`];
+  if (t.disagree) parts.push(`${t.disagree} ${pl(t.disagree, "lehnt", "lehnen")} ab`);
+  if (t.pass) parts.push(`${t.pass} ${pl(t.pass, "enthält sich", "enthalten sich")}`);
+  return `${parts.join(", ").replace(/, ([^,]*)$/, " und $1")}.`;
+}
+
+/** Why there are no camps, with the two numbers. */
+export function smallNote(r: Ergebnis): string {
+  const got = r.clusterable === 0 ? "hier noch niemand" : `hier ${r.clusterable === 1 ? "eine Person" : `${word(r.clusterable)} Personen`}`;
+  return `Lager zeigen sich erst, wenn mindestens ${r.needed} Menschen genug Aussagen bewertet haben; das waren ${got}. Deshalb zählt diese Seite die Stimmen aller zusammen und zeigt die Argumente, aber kein Urteil über Brücken, Streit oder die vier Stufen.`;
+}
+
+/** The headline without camps: how the statements split, counted over everyone. */
+export function smallHeadline(r: Ergebnis): { lead: string; rest: Segment[] } {
+  const by = (t: Tally) => r.statements.filter((s) => tallyOf(s) === t).length;
+  const [zu, ab, geteilt, ohne] = [by("zu"), by("ab"), by("geteilt"), by("ohne")];
+  // Dative after "bei": "bei einer Aussage", "bei sieben".
+  const dat = (x: number) => (x === 1 ? "einer" : word(x));
+  const parts = [
+    zu ? `bei ${dat(zu)} ${pl(zu, "Aussage", "Aussagen")} stimmt die Mehrheit zu` : "",
+    ab ? `bei ${dat(ab)} lehnt sie ab` : "",
+    geteilt ? `${word(geteilt)} ${pl(geteilt, "ist", "sind")} geteilt` : "",
+    ohne ? `${word(ohne)} ${pl(ohne, "hat", "haben")} noch keine Stimme` : "",
+  ].filter(Boolean);
+  return {
+    lead: "Zu wenige Teilnehmende für Lager.",
+    rest: [{ text: parts.length ? `Gezählt über alle zusammen: ${parts.join(", ").replace(/, ([^,]*)$/, " und $1")}.` : "Noch hat niemand abgestimmt." }],
+  };
+}
+
+/** A step without camps: what was said for and against it, and which questions nobody raised. */
+export function stepCountText(step: StepOut): string {
+  const sup = step.supports ? `${cap(word(step.supports))} ${pl(step.supports, "Aussage stützt", "Aussagen stützen")} die Stufe` : "Keine Aussage stützt die Stufe";
+  const att = step.attacks ? `${word(step.attacks)} ${pl(step.attacks, "greift", "greifen")} sie an` : "keine greift sie an";
+  const out = [`${sup}, ${att}.`];
+  if (step.unasked.length) out.push(`${cap(word(step.unasked.length))} ${pl(step.unasked.length, "Prüffrage hat", "Prüffragen hat")} niemand gestellt.`);
+  out.push("Ob ein Einwand steht, lässt sich ohne Lager nicht sagen.");
+  return out.join(" ");
+}
