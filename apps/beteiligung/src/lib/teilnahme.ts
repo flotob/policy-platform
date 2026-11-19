@@ -99,8 +99,10 @@ export async function within(kind: "vote" | "short" | "upload", participantId: s
       SELECT count(*)::int AS n FROM submissions WHERE participant_id = ${participantId} AND door = 'statement' AND created_at > now() - interval '1 hour'`);
     return Number((r.rows[0] as Row).n) < LIMITS.shortPerHour;
   }
+  // Uploads for an organisation are filed under the organisation's participant ("org:<name>|<uploader>"): they count too.
   const r = await db.execute(sql`
-    SELECT count(*)::int AS n FROM campaign_files WHERE participant_id = ${participantId} AND created_at > now() - interval '1 day'`);
+    SELECT count(*)::int AS n FROM campaign_files f JOIN participants x ON x.id = f.participant_id
+    WHERE (x.id = ${participantId} OR x.source_ref LIKE ${`org:%|${participantId}`}) AND f.created_at > now() - interval '1 day'`);
   return Number((r.rows[0] as Row).n) < LIMITS.uploadsPerDay;
 }
 

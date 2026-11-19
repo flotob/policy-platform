@@ -134,6 +134,10 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   if (!(await within("upload", p.id))) return { error: "Du hast heute schon mehrere Stellungnahmen hochgeladen. Bitte morgen wieder.", values };
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  const sha = createHash("sha256").update(bytes).digest("hex");
+  // A file that is already there costs nothing: checked before anything is read.
+  const dup = await getDb().execute(sql`SELECT 1 FROM campaign_files WHERE campaign_id = ${c.id} AND sha256 = ${sha}`);
+  if (dup.rows.length) return { error: "Diese Datei liegt schon vor.", values };
   let text: string;
   try {
     // A scan or a photo of a letter is read by the machine while the person waits; typed files need no machine.
@@ -145,15 +149,16 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
     return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuch es gleich noch einmal.", values };
   }
   const db = getDb();
-  const sha = createHash("sha256").update(bytes).digest("hex");
   const token = trackingToken();
   const fileId = await db.transaction(async (tx) => {
     // An organisation is a participant of its own (assumption 3); a private person speaks as themselves.
+    // The name is self-declared, so it is tied to this browser: typing another group's name opens a new
+    // participant, it never speaks with (or cancels) the votes of the one who uploaded first.
     let participant = p.id;
     if (as === "organisation") {
       const r = await tx.execute(sql`
         INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
-        VALUES (${c.tenantId}, ${c.consultationId}, ${`org:${org.toLowerCase().replace(/\s+/g, " ")}`}, ${org}, ${orgType}, 'de', 'stellungnahme')
+        VALUES (${c.tenantId}, ${c.consultationId}, ${`org:${org.toLowerCase().replace(/\s+/g, " ")}|${p.id}`}, ${org}, ${orgType}, 'de', 'stellungnahme')
         ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = excluded.author_org RETURNING id`);
       participant = (r.rows[0] as Row).id as string;
     }
