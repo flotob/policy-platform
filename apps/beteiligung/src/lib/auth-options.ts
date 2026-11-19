@@ -21,6 +21,20 @@ export const authOptions = {
     "/revoke-other-sessions",
     "/link-social",
     "/unlink-account",
+    // Nothing on the site needs these over HTTP either; some would hand out session rows (IP address, browser)
+    // of everyone on the shared demo account. Sign-in, sign-out and the reset run through our server actions.
+    "/list-sessions",
+    "/update-session",
+    "/verify-password",
+    "/list-accounts",
+    "/account-info",
+    "/get-access-token",
+    "/refresh-token",
+    "/send-verification-email",
+    "/verify-email",
+    "/sign-in/social",
+    "/sign-up/email",
+    "/delete-user/callback",
   ],
   emailAndPassword: {
     enabled: true,
