@@ -8,6 +8,7 @@ import { publicDecision } from "@/lib/beschluss";
 import { decisionHead, outcomeOf } from "@/lib/beschluss-words";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { periodOf } from "@/lib/ergebnis-seite";
+import { hiddenOf, hiddenWords, maskHidden } from "@/lib/meldungen";
 
 import "../../public.css";
 import "../../../bericht.css";
@@ -28,9 +29,16 @@ export default async function Bericht({ params }: { params: Promise<{ gemeinde: 
   const bundle = await publishedBundle(c);
   if (!bundle?.report.text) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;
-  const [period, decision] = await Promise.all([periodOf(c), publicDecision(c.id)]);
-  const { report } = bundle;
-  const decided = decision ? bundle.result.statements.filter((s) => decision.points[s.id]) : [];
+  const [period, decision, hidden] = await Promise.all([periodOf(c), publicDecision(c.id), hiddenOf(c)]);
+  // What the editors hid after a report is hidden here too: in the tables, and in the text written before.
+  const r = maskHidden(bundle.result, hidden);
+  const clean = hiddenWords(bundle.result, hidden);
+  const report = {
+    ...bundle.report,
+    text: bundle.report.text?.map((a) => ({ ...a, text: clean(a.text) })) ?? null,
+    sentences: bundle.report.sentences.map((x) => ({ ...x, text: clean(x.text) })),
+  };
+  const decided = decision ? r.statements.filter((s) => decision.points[s.id]) : [];
   return (
     <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
       <main className="wrap pub-report">

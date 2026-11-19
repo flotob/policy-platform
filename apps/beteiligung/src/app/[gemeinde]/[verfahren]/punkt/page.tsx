@@ -26,6 +26,12 @@ export default async function EigenerPunkt({ params }: { params: Promise<{ gemei
           Zwei Sätze reichen. Die Maschine prüft sofort, ob es deinen Punkt schon gibt; dann zählt deine Stimme dort. Ist er neu, prüft ihn ein Mensch
           aus der Redaktion, und du kannst mitverfolgen, was daraus wird.
         </p>
+        {c.fictional ? (
+          <p className="notice small">
+            Dies ist ein Beispiel mit erfundenen Inhalten. Was du hier schreibst, sehen auch andere Besucher, die sich das Beispiel aus Sicht der
+            Verwaltung ansehen. Bitte nichts Persönliches eintragen.
+          </p>
+        ) : null}
         <ShortForm gemeinde={c.tenant.slug} verfahren={c.slug} needsCode={c.params.access === "einladung" && !me} />
       </main>
     </PublicFrame>

@@ -24,7 +24,7 @@ import { sql } from "@policy/db";
 import { audit, decomposeFile, decomposeShort, machineDecides, proposeCampNames, proposeSkeleton, readFile, readShort, syncDerivedVotes, writeAndCheck } from "@policy/pipeline/kern";
 
 import { getResult, setCampNames } from "./auswertung";
-import { forgetUnconfirmed } from "./folgen";
+import { forgetUnconfirmed, notifyPending } from "./folgen";
 import { getReport, namingOf } from "./bericht";
 import { getCampaign } from "./campaigns";
 import { getDb } from "./db";
@@ -202,6 +202,8 @@ export function startWorker(): void {
   const tidy = () =>
     forgetUnconfirmed()
       .then((n) => (n ? log(`forgot ${n} unconfirmed e-mail address(es)`) : undefined))
+      .then(() => notifyPending())
+      .then((n) => (n ? log(`sending ${n} news mail(s) that had not gone out`) : undefined))
       .catch((e) => log(`housekeeping: ${(e as Error).message}`));
   setTimeout(tidy, 60_000);
   setInterval(tidy, 60 * 60 * 1000);

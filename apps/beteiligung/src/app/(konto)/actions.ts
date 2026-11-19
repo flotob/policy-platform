@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { allow, clientIp, recent, record } from "@/lib/limits";
 import { demoLogin } from "@/lib/demo-login";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
@@ -62,12 +63,25 @@ export async function register(_prev: FormState, form: FormData): Promise<FormSt
   redirect("/verwaltung");
 }
 
+const MIN = 60_000;
+
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {
   const values = { email: field(form, "email") };
+  // Password guessing: only FAILED tries count — 30 per connection (a town hall or a venue shares one) and
+  // 10 per account in 15 minutes. Successful log-ins never block anyone.
+  const ip = `login:ip:${await clientIp()}`;
+  const acc = `login:acc:${normEmail(values.email)}`;
+  if (recent(ip, 15 * MIN) >= 30 || recent(acc, 15 * MIN) >= 10) {
+    return { error: "Zu viele falsche Versuche. Bitte warten Sie eine Viertelstunde, oder setzen Sie Ihr Passwort zurück.", values };
+  }
   try {
     await auth.api.signInEmail({ body: { email: values.email, password: String(form.get("password") ?? "") }, headers: await headers() });
   } catch (e) {
-    if (isAPIError(e)) return { error: "E-Mail-Adresse oder Passwort stimmt nicht.", values };
+    if (isAPIError(e)) {
+      record(ip);
+      record(acc);
+      return { error: "E-Mail-Adresse oder Passwort stimmt nicht.", values };
+    }
     console.error("[anmelden]", e);
     return { error: "Die Anmeldung ist fehlgeschlagen. Bitte versuchen Sie es noch einmal.", values };
   }
@@ -97,6 +111,9 @@ export async function loginDemo(): Promise<void> {
 export async function requestReset(_prev: FormState, form: FormData): Promise<FormState> {
   const email = normEmail(field(form, "email"));
   if (!looksLikeEmail(email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values: { email } };
+  // At most 3 mails per address and 30 requests per connection an hour; the answer is the same either way.
+  const ip = await clientIp();
+  if (!allow(`reset:ip:${ip}`, 30, 60 * MIN) || !allow(`reset:acc:${email}`, 3, 60 * MIN)) redirect(`/passwort-vergessen?gesendet=1`);
   try {
     await auth.api.requestPasswordReset({ body: { email }, headers: await headers() });
   } catch (e) {

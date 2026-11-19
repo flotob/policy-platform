@@ -432,6 +432,9 @@ export function diagnosePair(statements: StatementOut[], g: number, h: number, t
   return { camps: [g, h], schluss, schlussNodes, art, artNodes: art === "wertkonflikt" ? values : art === "scheinfaktenstreit" ? facts : [...values, ...facts] };
 }
 
+/** The wording shown for an attack: from a contribution that may be quoted — never one that names a private person. */
+const shownAttack = (contra: MoveIn[]) => contra.find((m) => !m.personal)?.aussage ?? null;
+
 // ———— The evaluation ————
 
 const STEP_ORDER: StepKey[] = ["lage", "wirkung", "weg", "eingriff"];
@@ -591,7 +594,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
       entries.push({ step: n.schritt, question: n.frage, role: own, status: "offen", attack: null, camp: null });
       const contra = own === "stuetzt" ? ms.filter((m) => m.stance === -1) : [];
-      if (contra.length) entries.push({ step: n.schritt, question: contra[0]!.frage ?? n.frage, role: "greift_an", status: "offen", attack: contra[0]!.aussage, camp: null });
+      if (contra.length) entries.push({ step: n.schritt, question: contra[0]!.frage ?? n.frage, role: "greift_an", status: "offen", attack: shownAttack(contra), camp: null });
     }
     if (n.rolle !== "schluss" && n.schritt && k >= 2) {
       const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
@@ -615,7 +618,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
             question: contra[0]!.frage ?? n.frage,
             role: "greift_an",
             status: attackStatus(cc, t, true, n.typ, proven),
-            attack: contra[0]!.aussage,
+            attack: shownAttack(contra),
             camp: null,
           });
         }

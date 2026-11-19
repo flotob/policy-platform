@@ -219,7 +219,7 @@ export async function followCampaign(gemeinde: string, verfahren: string, token:
     const r = await db.execute(sql`SELECT 1 FROM submissions WHERE consultation_id = ${c.consultationId} AND tracking_token = ${token}`);
     if (r.rows.length) tokens.add(token);
   }
-  const res = await follow(c, email, [...tokens], await originHash(c));
+  const res = await follow(c, email, [...tokens], await originHash(c, "folgen"));
   if (!res.ok) return { error: res.error, values: { email } };
   return {
     ok: res.already

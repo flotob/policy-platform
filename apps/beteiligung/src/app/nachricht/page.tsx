@@ -42,6 +42,16 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
           </form>
         </>
       );
+  } else if (f.expired) {
+    body = (
+      <>
+        <h1>Dieser Link ist abgelaufen</h1>
+        <p>Die Bestätigung gilt sieben Tage. Trag deine Adresse bei „{f.campaign.title}“ einfach noch einmal ein, dann bekommst du einen neuen Link.</p>
+        <p>
+          <Link href={f.campaign.url}>Zur Beteiligung</Link>
+        </p>
+      </>
+    );
   } else {
     body =
       fertig || f.confirmed ? (
