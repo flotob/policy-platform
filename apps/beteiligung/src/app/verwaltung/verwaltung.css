@@ -139,3 +139,11 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .kv dt { font-weight: 600; font-size: 14px; }
 .letter { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
 .letter h3 { font-family: var(--serif); font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.start { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; margin-bottom: 28px; display: grid; gap: 12px; }
+.start h2 { font-family: var(--serif); font-size: 21px; font-weight: 600; }
+.start-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.start-steps li { display: flex; gap: 12px; align-items: flex-start; }
+.start-steps li .tick { margin-top: 2px; }
+.start-steps li.done .tick { background: var(--agree); border-color: var(--agree); }
+.start-steps li.done b { color: var(--ink-3); text-decoration: line-through; }
+.start-steps p { margin: 2px 0 4px; max-width: 64ch; }
