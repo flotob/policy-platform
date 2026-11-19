@@ -111,19 +111,19 @@ export default async function Abstimmen({
                 </details>
               ) : null}
               <div className="card-buttons">
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, 1)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 1)}>
                   <button type="submit" className="vote vote-a">
                     <span aria-hidden className="vote-dot" />
                     Stimme zu
                   </button>
                 </form>
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, -1)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, -1)}>
                   <button type="submit" className="vote vote-d">
                     <span aria-hidden className="vote-dot" />
                     Lehne ab
                   </button>
                 </form>
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, 0)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 0)}>
                   <button type="submit" className="vote vote-p">
                     Überspringen
                   </button>

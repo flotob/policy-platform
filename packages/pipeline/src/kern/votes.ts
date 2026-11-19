@@ -13,7 +13,16 @@ import { sql, type Db } from "@policy/db";
 
 export const DERIVED_METHODS = ["tuer2", "abgeleitet"] as const;
 
-export async function syncDerivedVotes(db: Pick<Db, "execute">, consultationId: string): Promise<void> {
+export async function syncDerivedVotes(db: Pick<Db, "transaction">, consultationId: string): Promise<void> {
+  // One recomputation at a time per consultation: two side by side could read different states of the
+  // moves, and the later write would bring back a vote whose source an editor had just withdrawn.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`derived-votes:${consultationId}`}, 0))`);
+    await sync(tx, consultationId);
+  });
+}
+
+async function sync(db: Pick<Db, "execute">, consultationId: string): Promise<void> {
   await db.execute(sql`
     WITH derived AS (
       SELECT p.tenant_id, s.participant_id, m.map_point_id, p.version,

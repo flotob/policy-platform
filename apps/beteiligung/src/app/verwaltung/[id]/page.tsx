@@ -27,7 +27,9 @@ export default async function CampaignPage({ params, searchParams }: { params: P
   const campaign = await getCampaign(staff.tenant.id, id);
   if (!campaign) notFound();
   const [files, open, invites] = await Promise.all([listFiles(campaign.id), openingCheck(campaign.consultationId), inviteCounts(campaign.id)]);
-  const editable = staff.role === "initiator";
+  // After closing, the procedure stays as it was evaluated: result, report and published pages refer to it.
+  const settled = ["auswertung", "bericht", "veroeffentlicht"].includes(campaign.state);
+  const editable = staff.role === "initiator" && !settled;
   const preparing = campaign.state === "entwurf" || campaign.state === "vorbereitung";
   const publicPath = `/${staff.tenant.slug}/${campaign.slug}`;
   const stepsDone = STEPS.filter((s) => campaign.steps[s.key]).length;
@@ -61,6 +63,9 @@ export default async function CampaignPage({ params, searchParams }: { params: P
       </nav>
 
       <div className="cp-sections">
+        {settled && staff.role === "initiator" ? (
+          <p className="notice">Die Beteiligung ist geschlossen. Maßnahme, Begründung und Ablauf bleiben so, wie sie ausgewertet wurden.</p>
+        ) : null}
         <section id="massnahme" className="cp-section">
           <h2>Die Maßnahme</h2>
           {editable ? (

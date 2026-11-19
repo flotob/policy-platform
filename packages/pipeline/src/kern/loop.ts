@@ -127,6 +127,10 @@ export async function proposeSkeleton(deps: KernDeps, c: KernCampaign): Promise<
 
   const created: { id: string; text: string }[] = [];
   await db.transaction(async (tx) => {
+    // Checked again here: an editor may have released the old draft while the model was writing.
+    const now = await tx.execute(sql`
+      SELECT 1 FROM map_points WHERE consultation_id = ${c.consultationId} AND rolle IN ('schluss', 'praemisse') AND status = 'released' LIMIT 1`);
+    if (now.rows.length) throw new Error("Das Startgerüst ist schon (teilweise) freigegeben; es wird nicht mehr automatisch ersetzt.");
     // A re-proposal replaces the earlier draft; moves already waiting on it keep their content as proposals of their own.
     const old = await tx.execute(sql`
       UPDATE map_points SET status = 'rejected'
@@ -235,13 +239,18 @@ async function windowOutput(
   if (cached.rows[0]) return movesOutput.parse((cached.rows[0] as Row).output).zuege;
   const { output, provenance } = await deps.llm.generateStructured({ system, prompt, schema: movesJsonSchema, model });
   const parsed = movesOutput.parse(output);
-  await deps.db.execute(sql`
+  const ins = await deps.db.execute(sql`
     INSERT INTO extractions (tenant_id, consultation_id, submission_id, window_index, window_count, window_start, window_end,
                              call_hash, model, output, provenance)
     VALUES (${c.tenantId}, ${c.consultationId}, ${sub.id}, ${w.index}, ${w.count}, ${w.start}, ${w.start + w.text.length},
             ${callHash}, ${provenance.model}, ${JSON.stringify(parsed)}, ${JSON.stringify(provenance)})
-    ON CONFLICT (submission_id, window_index, call_hash) DO NOTHING`);
-  return parsed.zuege;
+    ON CONFLICT (submission_id, window_index, call_hash) DO NOTHING RETURNING id`);
+  if (ins.rows.length) return parsed.zuege;
+  // Another machine read the same window meanwhile (reading ahead): its stored reading counts, so every
+  // run sees the same proposals in the same order.
+  const kept = await deps.db.execute(sql`
+    SELECT output FROM extractions WHERE submission_id = ${sub.id} AND window_index = ${w.index} AND call_hash = ${callHash}`);
+  return movesOutput.parse((kept.rows[0] as Row).output).zuege;
 }
 
 /**
@@ -362,7 +371,18 @@ async function processMove(
 
   let newNode: string | null = null;
   await db.transaction(async (tx) => {
-    let nodeId = match?.node ?? null;
+    // The point list was loaded when the job started; an editor may have rejected or merged the matched
+    // point since. A move never lands on such a point (no queue would show it): it becomes a proposal.
+    if (match?.node && (r === "auto" || r === "unsicher" || r === "gegenteil")) {
+      const st = await tx.execute(sql`SELECT status FROM map_points WHERE id = ${match.node} FOR SHARE`);
+      const status = (st.rows[0] as Row | undefined)?.status;
+      if (status !== "draft" && status !== "released") {
+        result.routes[r] = (result.routes[r] ?? 1) - 1;
+        r = "neu";
+        result.routes.neu = (result.routes.neu ?? 0) + 1;
+      }
+    }
+    let nodeId = r === "neu" ? null : (match?.node ?? null);
     let state: "vorgelegt" | "verknuepft" = "vorgelegt";
     let sample = false;
     let decidedBy: string | null = null;
@@ -441,18 +461,21 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
   const chunks = chunkText(sub.text);
   const result: DecomposeResult = { windows: chunks.length, proposed: 0, moves: 0, quoteMissing: 0, routes: {}, newNodes: 0 };
   const nodes = await campaignNodes(db, c.consultationId);
-  const done = new Set(
-    ((await db.execute(sql`SELECT ord FROM moves WHERE submission_id = ${sub.id}`)).rows as Row[]).map((x) => Math.floor(Number(x.ord) / 1000)),
-  );
+  // A resumed job skips exactly the moves already stored (each move commits on its own): a failure
+  // half-way through a window must not lose the rest of it. The window's reading is cached, so the
+  // same proposals come back in the same order.
+  const stored = new Set(((await db.execute(sql`SELECT ord FROM moves WHERE submission_id = ${sub.id}`)).rows as Row[]).map((x) => Number(x.ord)));
   let cursor = 0;
   for (const [index, text] of chunks.entries()) {
     const start = Math.max(0, sub.text.indexOf(text, cursor));
     cursor = start + text.length;
-    if (done.has(index)) continue; // resumed job: this window's moves are stored
     const zuege = await windowOutput(deps, c, sub, { text, index, count: chunks.length, start });
     result.proposed += zuege.length;
     deps.log(`window ${index + 1}/${chunks.length}: ${zuege.length} moves proposed`);
-    for (const [i, z] of zuege.entries()) await processMove(deps, c, sub, z, index * 1000 + i, nodes, result);
+    for (const [i, z] of zuege.entries()) {
+      if (stored.has(index * 1000 + i)) continue;
+      await processMove(deps, c, sub, z, index * 1000 + i, nodes, result);
+    }
   }
   await audit(db, {
     tenantId: c.tenantId,
@@ -485,13 +508,16 @@ async function shortOutput(deps: KernDeps, c: KernCampaign, sub: Submission): Pr
   if (cached.rows[0]) return shortMovesOutput.parse((cached.rows[0] as Row).output).zuege;
   const { output, provenance } = await deps.llm.generateStructured({ system, prompt, schema: shortMovesJsonSchema, model });
   const parsed = shortMovesOutput.parse(output);
-  await deps.db.execute(sql`
+  const ins = await deps.db.execute(sql`
     INSERT INTO extractions (tenant_id, consultation_id, submission_id, window_index, window_count, window_start, window_end,
                              call_hash, model, output, provenance)
     VALUES (${c.tenantId}, ${c.consultationId}, ${sub.id}, 0, 1, 0, ${sub.text.length},
             ${callHash}, ${provenance.model}, ${JSON.stringify(parsed)}, ${JSON.stringify(provenance)})
-    ON CONFLICT (submission_id, window_index, call_hash) DO NOTHING`);
-  return parsed.zuege;
+    ON CONFLICT (submission_id, window_index, call_hash) DO NOTHING RETURNING id`);
+  if (ins.rows.length) return parsed.zuege;
+  const kept = await deps.db.execute(sql`
+    SELECT output FROM extractions WHERE submission_id = ${sub.id} AND window_index = 0 AND call_hash = ${callHash}`);
+  return shortMovesOutput.parse((kept.rows[0] as Row).output).zuege;
 }
 
 /** Door 2's slow half on its own (see readFile). */
@@ -510,8 +536,8 @@ export async function decomposeShort(deps: KernDeps, c: KernCampaign, submission
   if (!s) throw new Error("Die Kurzaussage gibt es nicht mehr.");
   const sub: Submission = { id: s.id as string, text: s.text as string, sender: null, senderType: "privat" };
   const result: DecomposeResult = { windows: 1, proposed: 0, moves: 0, quoteMissing: 0, routes: {}, newNodes: 0 };
-  const existing = await db.execute(sql`SELECT 1 FROM moves WHERE submission_id = ${sub.id} LIMIT 1`);
-  if (existing.rows.length) return result; // resumed: already read
+  // Resumed: the moves already stored are skipped one by one (the reading is cached).
+  const stored = new Set(((await db.execute(sql`SELECT ord FROM moves WHERE submission_id = ${sub.id}`)).rows as Row[]).map((x) => Number(x.ord)));
   const check = await db.execute(sql`
     SELECT decided FROM judgments WHERE subject_kind = 'submission' AND subject_id = ${sub.id} AND family = ${KERN_SHORT_FAMILY}`);
   const rejected = ((check.rows[0] as Row | undefined)?.decided as { node?: string | null; answer?: string; pPersonal?: number } | undefined) ?? undefined;
@@ -522,6 +548,7 @@ export async function decomposeShort(deps: KernDeps, c: KernCampaign, submission
   result.proposed = zuege.length;
   const nodes = await campaignNodes(db, c.consultationId);
   for (const [i, z] of zuege.entries()) {
+    if (stored.has(i)) continue;
     // A short text is quoted whole when the model's excerpt cannot be found in it.
     const zz = locateQuote(sub.text, z.zitat) ? z : { ...z, zitat: sub.text };
     await processMove(deps, c, sub, zz, i, nodes, result, { notNode, personal });
@@ -566,7 +593,10 @@ export async function machineDecides(deps: KernDeps, c: KernCampaign): Promise<{
   const waiting = await db.execute(sql`
     SELECT m.id FROM moves m JOIN map_points p ON p.id = m.map_point_id
     WHERE m.consultation_id = ${c.consultationId} AND m.state = 'vorgelegt' AND p.status = 'released' AND p.rolle = 'beitrag'
-      AND m.route IN ('unsicher', 'gegenteil')`);
+      AND m.route IN ('unsicher', 'gegenteil')
+      -- A citizen's "Das meint mein Punkt nicht" and anything with personal data are for a person to decide.
+      AND NOT COALESCE((m.decision->>'einspruch')::boolean, false)
+      AND NOT ('personal_data' = ANY(COALESCE(m.flags, '{}')))`);
   for (const m of waiting.rows as Row[]) {
     await confirmMove(db, { tenantId: c.tenantId, moveId: m.id as string, actor });
     out.confirmed++;

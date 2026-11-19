@@ -6,6 +6,8 @@
  * unchangeable (W9) — the published page and the report read only that.
  */
 
+import { createHash } from "node:crypto";
+
 import { sql } from "@policy/db";
 import { evaluate, type BelegKey, type Ergebnis, type EvaluateInput, type MoveIn, type NodeIn, type SourceIn } from "@policy/pipeline/kern";
 
@@ -139,7 +141,9 @@ const live = new Map<string, { key: string; value: Ergebnis }>();
 /** The result as it stands now — the municipality's preview while citizens take part. */
 export async function liveResult(c: Campaign): Promise<Ergebnis> {
   const input = await loadInput(c);
-  const key = `${input.votes.length}:${input.votes.reduce((s, v) => s + v.value + 2, 0)}:${input.nodes.map((n) => `${n.id}${n.version}`).join()}:${input.moves.length}`;
+  // The key covers every input (votes, wording, quotes and their flags, drawn codes, parameters): a count
+  // or a sum could stay equal while the matrix changed. Hashing is cheap next to the evaluation.
+  const key = createHash("sha256").update(JSON.stringify(input)).digest("hex");
   const hit = live.get(c.id);
   if (hit && hit.key === key) return hit.value;
   const value = evaluate(input);

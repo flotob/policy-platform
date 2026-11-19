@@ -58,7 +58,7 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
 }
 
 /** Door 1: one click, one vote; the deck moves on. */
-export async function vote(gemeinde: string, verfahren: string, statementId: string, value: -1 | 0 | 1): Promise<void> {
+export async function vote(gemeinde: string, verfahren: string, statementId: string, version: number, value: -1 | 0 | 1): Promise<void> {
   const { c, base } = await open(gemeinde, verfahren);
   let p;
   try {
@@ -68,7 +68,8 @@ export async function vote(gemeinde: string, verfahren: string, statementId: str
     throw e;
   }
   if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
-  await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0);
+  const counted = await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0, Number(version) || undefined);
+  if (!counted) redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Diese Aussage wurde gerade geändert oder zurückgezogen. Deine Stimme ist nicht gezählt; sieh dir die Karte bitte noch einmal an.")}`);
   redirect(`${base}/abstimmen`);
 }
 

@@ -107,7 +107,8 @@ export async function runJob(job: Row): Promise<void> {
     const saved = await getResult(campaign.id, job.result_id as string);
     if (!saved) throw Object.assign(new Error("Das Ergebnis gibt es nicht mehr."), { fatal: true });
     const proposal = await proposeCampNames(deps.llm, saved.result, campaign.measure);
-    const current = namingOf(saved.campNames);
+    // Read again: the editors may have confirmed names while the model was writing — those stay.
+    const current = namingOf((await getResult(campaign.id, saved.id))?.campNames);
     await setCampNames(saved.id, current?.confirmedBy ? { ...current, proposal } : { ...proposal, proposal, confirmedBy: null, confirmedAt: null });
     await audit(db, { tenantId: campaign.tenantId, actor: "ki:lagernamen", action: "result.camp_names_proposed", subjectKind: "campaign_result", subjectId: saved.id, payload: proposal });
     result = proposal;
@@ -118,8 +119,12 @@ export async function runJob(job: Row): Promise<void> {
     if (report.state !== "liste" && report.state !== "durchgefallen") throw Object.assign(new Error("Diese Fassung ist schon geprüft."), { fatal: true });
     const { text, checks } = await writeAndCheck(deps, report.sentences, { town: c.context.town, measure: campaign.measure }, report.feedback ? [`Die Redaktion: ${report.feedback}`] : []);
     const state = checks.passed ? "geprueft" : "durchgefallen";
-    await db.execute(sql`
-      UPDATE campaign_reports SET text = ${JSON.stringify(text)}, checks = ${JSON.stringify(checks)}, state = ${state}, updated_at = now() WHERE id = ${report.id}`);
+    // Only if the report is still waiting for its text: withdrawn meanwhile (new camp names, reopened)
+    // it stays withdrawn.
+    const w = await db.execute(sql`
+      UPDATE campaign_reports SET text = ${JSON.stringify(text)}, checks = ${JSON.stringify(checks)}, state = ${state}, updated_at = now()
+      WHERE id = ${report.id} AND state IN ('liste', 'durchgefallen') RETURNING id`);
+    if (!w.rows.length) throw Object.assign(new Error("Der Bericht wurde inzwischen zurückgezogen."), { fatal: true });
     await audit(db, { tenantId: campaign.tenantId, actor: "ki:bericht", action: `report.${state}`, subjectKind: "campaign_report", subjectId: report.id, payload: { attempts: checks.attempts, rules: checks.rules.length, flagged: checks.reader.filter((x) => !x.pass).length } });
     result = { state, attempts: checks.attempts, paragraphs: text.length };
   } else {
@@ -131,7 +136,8 @@ export async function runJob(job: Row): Promise<void> {
     await syncDerivedVotes(db, c.consultationId);
   }
   await db.execute(sql`
-    UPDATE campaign_jobs SET state = 'fertig', result = ${JSON.stringify(result)}, finished_at = now() WHERE id = ${job.id as string}`);
+    UPDATE campaign_jobs SET state = 'fertig', result = ${JSON.stringify(result)}, finished_at = now()
+    WHERE id = ${job.id as string} AND state = 'laeuft' AND attempts = ${Number(job.attempts)}`);
   log(`${job.kind} ${job.id} done`);
 }
 
@@ -178,6 +184,12 @@ async function readAhead(): Promise<boolean> {
 async function tick(): Promise<boolean> {
   const job = await claim();
   if (!job) return false;
+  // Heartbeat: a long job (a big scan, many windows) is not "stale" while it runs — only a crashed one is.
+  const beat = setInterval(() => {
+    void getDb()
+      .execute(sql`UPDATE campaign_jobs SET started_at = now() WHERE id = ${job.id as string} AND state = 'laeuft' AND attempts = ${Number(job.attempts)}`)
+      .catch(() => undefined);
+  }, 60_000);
   try {
     await runJob(job);
   } catch (e) {
@@ -187,7 +199,9 @@ async function tick(): Promise<boolean> {
     const final = err.fatal || err.name === "UnreadableFile" || /freigegeben/.test(err.message) || Number(job.attempts) >= MAX_ATTEMPTS;
     await getDb().execute(sql`
       UPDATE campaign_jobs SET state = ${final ? "fehler" : "wartet"}, error = ${err.message.slice(0, 500)}, finished_at = ${final ? new Date().toISOString() : null}
-      WHERE id = ${job.id as string}`);
+      WHERE id = ${job.id as string} AND state = 'laeuft' AND attempts = ${Number(job.attempts)}`);
+  } finally {
+    clearInterval(beat);
   }
   return true;
 }
