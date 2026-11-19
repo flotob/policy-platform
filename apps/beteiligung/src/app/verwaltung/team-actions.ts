@@ -63,7 +63,7 @@ export async function removeFromTeam(userId: string, _prev: ActionState): Promis
 /** Platform admins: a new municipality and the invitation for its first person (initiator). */
 export async function createMunicipalityWithInvite(_prev: InviteState, form: FormData): Promise<InviteState> {
   const staff = await requireStaff();
-  if (!isPlatformAdmin(staff.user.email)) redirect("/verwaltung");
+  if (!isPlatformAdmin(staff.user)) redirect("/verwaltung");
   const values = { name: field(form, "name"), email: field(form, "email") };
   if (values.name.length < 3) return { error: "Bitte geben Sie den Namen der Kommune an.", values };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values };
@@ -76,7 +76,7 @@ export async function createMunicipalityWithInvite(_prev: InviteState, form: For
 
 export async function resendTownInvitation(tenantId: string, inviteId: string, _prev: InviteState): Promise<InviteState> {
   const staff = await requireStaff();
-  if (!isPlatformAdmin(staff.user.email)) redirect("/verwaltung");
+  if (!isPlatformAdmin(staff.user)) redirect("/verwaltung");
   const r = await resendInvite(tenantId, inviteId, { id: staff.user.id, name: staff.user.name });
   revalidatePath("/verwaltung/kommunen");
   return inviteMessage(r);

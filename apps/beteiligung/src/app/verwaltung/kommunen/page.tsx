@@ -14,7 +14,7 @@ const date = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", y
 /** Platform admins only (env PLATFORM_ADMINS): every municipality on streit.bar, and a new one with its first invitation. */
 export default async function Kommunen() {
   const staff = await requireStaff();
-  if (!isPlatformAdmin(staff.user.email)) redirect("/verwaltung");
+  if (!isPlatformAdmin(staff.user)) redirect("/verwaltung");
   const towns = await listTenants();
   const pending = (
     await getDb().execute(sql`

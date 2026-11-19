@@ -229,6 +229,7 @@ export function UploadForm({ id }: { id: string }) {
         <div className="field">
           <label htmlFor="sender">Absender (bei Stellungnahmen)</label>
           <input id="sender" name="sender" className="input" placeholder="Stadtwerke Musterstadt" defaultValue={state.values?.sender} />
+          <span className="hint">Bei einer Privatperson erscheint der Name nirgends öffentlich, nur „Privatperson“.</span>
         </div>
         <div className="field">
           <label htmlFor="senderType">Art des Absenders</label>

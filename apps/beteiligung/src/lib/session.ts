@@ -9,7 +9,7 @@ import { getDb } from "./db";
 export type Role = "initiator" | "redaktion" | "betrachter";
 
 export interface Staff {
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; emailVerified: boolean };
   tenant: { id: string; slug: string; name: string };
   role: Role;
 }
@@ -27,7 +27,7 @@ export const getStaff = cache(async (): Promise<Staff | null> => {
   const t = r.rows[0] as { id: string; slug: string; name: string; role: Role } | undefined;
   if (!t) return null;
   return {
-    user: { id: session.user.id, name: session.user.name, email: session.user.email },
+    user: { id: session.user.id, name: session.user.name, email: session.user.email, emailVerified: session.user.emailVerified === true },
     tenant: { id: t.id, slug: t.slug, name: t.name },
     role: t.role,
   };

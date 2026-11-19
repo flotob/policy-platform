@@ -253,7 +253,7 @@ async function participantForFile(tx: Pick<Db, "execute">, c: KernCampaign, f: R
   if (f.participant_id) return f.participant_id as string;
   const r = await tx.execute(sql`
     INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
-    VALUES (${c.tenantId}, ${c.consultationId}, ${`datei:${f.id as string}`}, ${(f.sender as string | null) ?? null},
+    VALUES (${c.tenantId}, ${c.consultationId}, ${`datei:${f.id as string}`}, ${f.sender_type === "privat" ? null : ((f.sender as string | null) ?? null)},
             ${(f.sender_type as string | null) ?? null}, 'de', 'datei')
     ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = excluded.author_org RETURNING id`);
   return (r.rows[0] as Row).id as string;
@@ -291,7 +291,7 @@ async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string): P
     const s = await tx.execute(sql`
       INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text,
                                submitted_at, participant_id)
-      VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${sender}, ${senderType}, 'de', 'beteiligung', ${fileId}, ${text},
+      VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${senderType === "privat" ? null : sender}, ${senderType}, 'de', 'beteiligung', ${fileId}, ${text},
               ${f.created_at as string}, ${participant})
       RETURNING id`);
     const sid = (s.rows[0] as Row).id as string;

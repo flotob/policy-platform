@@ -38,10 +38,15 @@ export const looksLikeEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 const isDemo = (email: string) => normEmail(email) === normEmail(demoLogin()?.email ?? "");
 
-/** Platform admins (env PLATFORM_ADMINS, comma-separated email addresses) set up new municipalities. */
-export function isPlatformAdmin(email: string): boolean {
+/**
+ * Platform admins (env PLATFORM_ADMINS, comma-separated email addresses) set up new municipalities.
+ * Only for a VERIFIED address: an account made with the shared sign-up code proves nothing about the
+ * mailbox, so registering an allowlisted address must not be enough.
+ */
+export function isPlatformAdmin(user: { email: string; emailVerified: boolean }): boolean {
+  if (!user.emailVerified) return false;
   const list = (process.env.PLATFORM_ADMINS ?? "").split(",").map(normEmail).filter(Boolean);
-  return list.includes(normEmail(email));
+  return list.includes(normEmail(user.email));
 }
 
 async function audit(tenantId: string, actor: string, action: string, subjectKind: string, subjectId: string, payload: unknown) {
@@ -275,7 +280,9 @@ export async function readInvite(token: string): Promise<InviteState> {
   const r = await getDb().execute(sql`
     SELECT i.email, i.role, i.expires_at <= now() AS expired, i.accepted_at IS NOT NULL AS accepted,
       i.withdrawn_at IS NOT NULL AS withdrawn, t.name AS "tenantName",
-      EXISTS (SELECT 1 FROM auth_user u WHERE lower(u.email) = lower(i.email)) AS "hasAccount"
+      -- Only a verified account counts: one made with the shared sign-up code proves nothing about the mailbox,
+      -- so its owner sets a new password through this link instead (acceptInvite).
+      EXISTS (SELECT 1 FROM auth_user u WHERE lower(u.email) = lower(i.email) AND u.email_verified) AS "hasAccount"
     FROM staff_invites i JOIN tenants t ON t.id = i.tenant_id
     WHERE i.token_hash = ${hashToken(token)}`);
   const i = r.rows[0] as
@@ -305,8 +312,24 @@ export async function acceptInvite(token: string, account: { name: string; passw
       FOR UPDATE`);
     const inv = r.rows[0] as { id: string; tenantId: string; email: string; role: Role; invitedBy: string } | undefined;
     if (!inv) return { ok: false as const, error: "Diese Einladung gilt nicht mehr. Bitten Sie um eine neue." };
-    const u = (await tx.execute(sql`SELECT id FROM auth_user WHERE lower(email) = ${normEmail(inv.email)}`)).rows[0] as { id: string } | undefined;
+    const u = (await tx.execute(sql`SELECT id, email_verified FROM auth_user WHERE lower(email) = ${normEmail(inv.email)} FOR UPDATE`)).rows[0] as
+      | { id: string; email_verified: boolean }
+      | undefined;
     let userId = u?.id;
+    if (u && !u.email_verified) {
+      // Someone made this account with the sign-up code before the invitation came — perhaps not the mailbox's
+      // owner. The invitation link proves the mailbox: its holder sets the password, every other login ends.
+      if (!account || !hash) return { ok: false as const, error: "Bitte legen Sie Ihr Passwort fest." };
+      await tx.execute(sql`UPDATE auth_user SET name = ${account.name}, email_verified = true, updated_at = now() WHERE id = ${u.id}`);
+      const acc = await tx.execute(sql`
+        UPDATE auth_account SET password = ${hash}, updated_at = now() WHERE user_id = ${u.id} AND provider_id = 'credential' RETURNING id`);
+      if (!acc.rows.length) {
+        await tx.execute(sql`
+          INSERT INTO auth_account (id, account_id, provider_id, user_id, password, created_at, updated_at)
+          VALUES (${randomUUID()}, ${u.id}, 'credential', ${u.id}, ${hash}, now(), now())`);
+      }
+      await tx.execute(sql`DELETE FROM auth_session WHERE user_id = ${u.id}`);
+    }
     if (!userId) {
       if (!account || !hash) return { ok: false as const, error: "Bitte geben Sie Ihren Namen und ein Passwort an." };
       userId = randomUUID();
@@ -324,8 +347,8 @@ export async function acceptInvite(token: string, account: { name: string; passw
     await tx.execute(sql`
       INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
       VALUES (${inv.tenantId}, ${`user:${userId}`}, 'team.join', 'staff_invite', ${inv.id},
-        ${JSON.stringify({ role: inv.role, newAccount: !u })})`);
-    return { ok: true as const, email: normEmail(inv.email), created: !u };
+        ${JSON.stringify({ role: inv.role, newAccount: !u, claimedUnverified: !!u && !u.email_verified })})`);
+    return { ok: true as const, email: normEmail(inv.email), created: !u || !u.email_verified };
   });
   return res;
 }
