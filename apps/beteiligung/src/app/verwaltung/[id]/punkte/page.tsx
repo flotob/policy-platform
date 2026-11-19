@@ -166,7 +166,7 @@ export default async function Punkte({ params, searchParams }: { params: Promise
                   {here.length ? (
                     <ul className="pt-list">{here.map(row)}</ul>
                   ) : !contradicted.length ? (
-                    <p className="gap">Diesen Einwand hat noch niemand erhoben.</p>
+                    <p className="pk-gap">Diesen Einwand hat noch niemand erhoben.</p>
                   ) : null}
                 </div>
               );

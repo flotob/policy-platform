@@ -77,7 +77,7 @@
 .report-box .report-note { display: grid; gap: 4px; }
 .report-box textarea { width: 100%; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 8px; }
 .report-actions { display: flex; gap: 8px; }
-.report-actions button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); cursor: pointer; }
-.report-actions button[type="submit"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.report-box .report-actions button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); cursor: pointer; }
+.report-box .report-actions button[type="submit"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 .report-err { color: var(--danger); font-size: 13px; }
 .report-done { font-size: 13px; color: var(--agree); }
