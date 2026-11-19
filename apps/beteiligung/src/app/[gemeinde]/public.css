@@ -84,3 +84,12 @@
 .follow-row .input { flex: 1 1 200px; min-width: 0; }
 .follow-fine { margin-top: 6px; }
 .follow-ok { margin-top: 18px; padding: 10px 12px; border-radius: 8px; background: var(--agree-soft); font-size: 14.5px; }
+/* The news offer while voting: closable, and one line away after closing. */
+.follow-card { position: relative; margin-top: 22px; padding: 2px 16px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.follow-card .follow { margin-top: 12px; padding-top: 0; border-top: 0; }
+.follow-card .follow-head { padding-right: 28px; }
+.follow-card .follow-ok { margin-top: 12px; }
+.follow-close { position: absolute; top: 8px; right: 10px; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--ink-3); font-size: 20px; line-height: 1; cursor: pointer; }
+.follow-close:hover { background: var(--bg); color: var(--ink); }
+.follow-reopen { display: block; margin: 18px auto 0; border: 0; background: none; padding: 4px; font: inherit; font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.follow-reopen:hover { color: var(--ink); }

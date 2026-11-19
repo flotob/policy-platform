@@ -10,7 +10,7 @@ import { getParticipant } from "@/lib/teilnahme";
 
 import { vote } from "../actions";
 import { reportFromDeck } from "../melden-actions";
-import { FollowForm } from "../FollowForm";
+import { FollowPrompt } from "../FollowForm";
 import "../../public.css";
 import "../tueren.css";
 
@@ -168,6 +168,7 @@ export default async function Abstimmen({
                     : "Ein Vorschlag, wie die Maßnahme gestaltet werden könnte."}
               </span>
             </div>
+            {voted.size ? <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} /> : null}
           </>
         ) : (
           <section className="deck-done">
@@ -187,7 +188,7 @@ export default async function Abstimmen({
                 </Link>
               ) : null}
             </div>
-            <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} />
+            <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open />
             <h2>So haben die anderen bisher abgestimmt</h2>
             <ul className="done-list">
               {statements.map((s) => {

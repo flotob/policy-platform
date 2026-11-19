@@ -10,7 +10,7 @@ import { STEPS } from "@/lib/params";
 import { getParticipant } from "@/lib/teilnahme";
 
 import { CodeForm } from "./DoorForms";
-import { FollowForm } from "./FollowForm";
+import { FollowForm, FollowPrompt } from "./FollowForm";
 import "../public.css";
 
 const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
@@ -142,7 +142,9 @@ export default async function Einstieg({
             </>
           )}
           {c.state === "veroeffentlicht" ? null : <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>}
-          {(open && mine) || c.state === "auswertung" || c.state === "bericht" || (c.state === "veroeffentlicht" && !decision) ? (
+          {open && mine ? (
+            <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} />
+          ) : c.state === "auswertung" || c.state === "bericht" || (c.state === "veroeffentlicht" && !decision) ? (
             <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} after={c.state === "veroeffentlicht" ? "decision" : "result"} />
           ) : null}
           {open && !needsCode && !letterCode && !me && codes?.drawn ? (
