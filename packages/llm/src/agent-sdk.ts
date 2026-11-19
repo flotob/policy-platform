@@ -61,7 +61,14 @@ export class AgentSdkProvider implements LlmProvider {
       options: {
         model,
         systemPrompt: req.system,
+        // Isolated: no built-in tools at all (`allowedTools: []` only means "none auto-approved" — the tools
+        // would still be offered to the model, which reads citizens' uploads), no settings files, CLAUDE.md
+        // or MCP servers from the machine it runs on. The model only reads and answers in the schema.
+        tools: [],
         allowedTools: [],
+        settingSources: [],
+        mcpServers: {},
+        strictMcpConfig: true,
         maxTurns: 3, // schema-validation retries need extra turns
         outputFormat: { type: "json_schema", schema: req.schema },
       } as never,
