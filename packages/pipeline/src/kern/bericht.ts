@@ -23,6 +23,7 @@ import { z } from "zod";
 import type { Ergebnis, StatementOut } from "./befund.ts";
 import {
   campLabel,
+  campShares,
   conclusionText,
   countLine,
   smallHeadline,
@@ -78,8 +79,7 @@ const ref = (s: StatementOut) => `„${s.text}“ [A${s.nr}]`;
 const fmt = (n: number) => n.toLocaleString("de-DE");
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
 const list = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}`);
-const shares = (s: StatementOut, names: CampNames, field: "agree" | "disagree" = "agree") =>
-  s.camps.map((c, g) => `${pct(c[field], c.seen)} % im ${campLabel(names, g)}`).join(", ");
+const shares = campShares;
 
 /** R1: the sentences, in report order. Templates only — the same result always gives the same list. */
 export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): Satz[] {
@@ -105,7 +105,7 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   const p = r.participation;
   const how = [
     p.direct ? `${fmt(p.direct)} ${p.direct === 1 ? "hat" : "haben"} selbst abgestimmt` : "",
-    p.simulated ? `${fmt(p.simulated)} sind simuliert` : "",
+    p.simulated ? `${fmt(p.simulated)} ${p.simulated === 1 ? "ist" : "sind"} simuliert` : "",
     p.senders ? `von ${fmt(p.senders)} Absendern zählen die Stellungnahmen als Stimmen` : "",
   ].filter(Boolean);
   const came = [p.shortPoints ? `${fmt(p.shortPoints)} ${p.shortPoints === 1 ? "eigener Punkt" : "eigene Punkte"}` : "", p.uploads + p.files ? `${fmt(p.uploads + p.files)} ${p.uploads + p.files === 1 ? "Stellungnahme" : "Stellungnahmen"}` : ""].filter(Boolean);
@@ -194,7 +194,11 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     {
       section: "klaeren",
       items: r.statements.filter((x) => x.category === "klaerbar"),
-      lead: (n) => `Bei ${n === 1 ? "einer Tatsachenfrage" : `${word(n)} Tatsachenfragen`} sind die Lager uneins. Empfehlung: ein Gutachten, das ${n === 1 ? "sie" : "sie"} vor dem Beschluss klärt.`,
+      lead: (n) => {
+        const split = r.statements.filter((x) => x.category === "klaerbar" && x.profile === "trennt").length;
+        const how = split === n ? "sind die Lager uneins" : split === 0 ? "liegen Belege vor, aber kein Lager hat sich festgelegt" : "sind die Lager uneins oder trotz Belegen noch nicht festgelegt";
+        return `Bei ${n === 1 ? "einer Tatsachenfrage" : `${word(n)} Tatsachenfragen`} ${how}. Empfehlung: ein Gutachten, das sie vor dem Beschluss klärt.`;
+      },
     },
     {
       section: "klaeren",
@@ -266,8 +270,10 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
         lot.onlySelf ? `${num(lot.onlySelf)} nur bei denen, die von sich aus mitgemacht haben` : "",
       ].filter(Boolean);
       let text = `Gegenprobe durch Los mit ${fmt(lot.drawn)} ausgelosten Teilnehmenden: `;
-      text += a.length ? `Von ${num(lot.bridges)} Brücken tragen ${list(a)}` : `Von ${num(lot.bridges)} Brücken ließ sich keine prüfen`;
-      if (lot.tooFew) text += a.length ? `; bei ${lot.tooFew === 1 ? "einer" : num(lot.tooFew)} haben zu wenige Ausgeloste abgestimmt` : ", weil zu wenige Ausgeloste abgestimmt haben";
+      if (lot.bridges === 1) {
+        text += lot.firm ? "Die eine Brücke trägt auch bei den Ausgelosten" : lot.onlySelf ? "Die eine Brücke trägt nur bei denen, die von sich aus mitgemacht haben" : "Die eine Brücke ließ sich nicht prüfen";
+      } else text += a.length ? `Von ${num(lot.bridges)} Brücken tragen ${list(a)}` : `Von ${num(lot.bridges)} Brücken ließ sich keine prüfen`;
+      if (lot.tooFew) text += a.length && lot.bridges > 1 ? `; bei ${lot.tooFew === 1 ? "einer" : num(lot.tooFew)} haben zu wenige Ausgeloste abgestimmt` : ", weil zu wenige Ausgeloste abgestimmt haben";
       add("belastbarkeit", `${text}.`, r.statements.filter((x) => x.check?.lot?.status === "faellt").map((x) => x.nr));
     }
   }
@@ -429,7 +435,13 @@ export function checkRules(sentences: Satz[], text: Absatz[]): Issue[] {
     const ss = own.filter((s): s is Satz => !!s);
     const nums = new Set(ss.flatMap((s) => [...numbersIn(s.text)]));
     const refs = new Set(ss.flatMap((s) => [...s.refs, ...refsIn(s.text)]));
-    for (const x of numbersIn(a.text)) if (!nums.has(x)) issues.push({ absatz: n, text: `Absatz ${n} nennt die Zahl ${x}, die in seinen Sätzen nicht vorkommt.` });
+    // "eine Brücke" in a sentence may read "1 Brücke" in the text (the writer is told to use digits); the
+    // article is not counted as a number, so "1" passes wherever its sentences say "ein…".
+    const saysOne = ss.some((s) => /\bein(e|er|en|em|es)?\b/i.test(s.text));
+    for (const x of numbersIn(a.text)) {
+      if (nums.has(x) || (x === "1" && saysOne)) continue;
+      issues.push({ absatz: n, text: `Absatz ${n} nennt die Zahl ${x}, die in seinen Sätzen nicht vorkommt.` });
+    }
     for (const x of refsIn(a.text)) if (!refs.has(x)) issues.push({ absatz: n, text: `Absatz ${n} nennt Aussage [A${x}], die in seinen Sätzen nicht vorkommt.` });
   });
   for (const s of sentences) if (!cited.has(s.id)) issues.push({ absatz: null, text: `Satz ${s.id} kommt im Text nicht vor: „${s.text.slice(0, 80)}${s.text.length > 80 ? "…" : ""}“` });

@@ -334,11 +334,14 @@ async function processMove(
   ord: number,
   nodes: MatchNode[],
   result: DecomposeResult,
-  opts: { notNode?: string | null; personal?: boolean } = {},
+  opts: { notNode?: string | null; personal?: boolean; from?: number } = {},
 ): Promise<void> {
   const { db } = deps;
   const random = deps.random ?? Math.random;
-  const span = locateQuote(sub.text, z.zitat);
+  // The quote is searched in its own window first: the same sentence earlier in a long text must not
+  // take its place (the surrounding paragraph shown with it would be the wrong one).
+  const inWindow = opts.from ? locateQuote(sub.text.slice(opts.from), z.zitat) : null;
+  const span = inWindow ? { ...inWindow, start: inWindow.start + opts.from!, end: inWindow.end + opts.from! } : locateQuote(sub.text, z.zitat);
   if (!span) {
     result.quoteMissing++;
     return;
@@ -474,7 +477,7 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
     deps.log(`window ${index + 1}/${chunks.length}: ${zuege.length} moves proposed`);
     for (const [i, z] of zuege.entries()) {
       if (stored.has(index * 1000 + i)) continue;
-      await processMove(deps, c, sub, z, index * 1000 + i, nodes, result);
+      await processMove(deps, c, sub, z, index * 1000 + i, nodes, result, { from: start });
     }
   }
   await audit(db, {

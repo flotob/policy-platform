@@ -105,9 +105,15 @@ export function evidenceText(s: StatementOut): string | null {
 }
 
 /** "72 % im Lager „Klima zuerst“, 18 % im Lager „Kosten & Freiheit“" */
-function perCamp(s: StatementOut, names: CampNames, field: "agree" | "disagree") {
-  return s.camps.map((c, g) => `${pct(c[field], c.seen)} % im ${campLabel(names, g)}`).join(", ");
+/** Fewer votes than this in a camp are not the camp's position (a statistical floor, not a policy threshold). */
+export const MIN_CAMP_VOTES = 3;
+
+/** "62 % im Lager „A“, zu wenige Stimmen im Lager „B“": no percentage where a camp hardly voted. */
+export function campShares(s: StatementOut, names: CampNames, field: "agree" | "disagree" = "agree"): string {
+  return s.camps.map((c, g) => (c.seen < MIN_CAMP_VOTES ? `zu wenige Stimmen im ${campLabel(names, g)}` : `${pct(c[field], c.seen)} % im ${campLabel(names, g)}`)).join(", ");
 }
+
+const perCamp = campShares;
 
 /** The reading of one statement ("Befund"), from its profile, type and role. */
 export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): string[] {
@@ -148,7 +154,11 @@ export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): strin
       } else out.push("Eine Frage der Ausgestaltung: Der Rat kann sie im Beschluss regeln, hier lässt sich verhandeln.");
       break;
     case "klaerbar":
-      out.push(`Eine Tatsachenfrage, über die die Lager uneins sind. Ein Gutachten kann sie klären${proven(s) ? "; Belege dazu liegen teils schon vor" : ""}.`);
+      out.push(
+        s.profile === "trennt"
+          ? `Eine Tatsachenfrage, über die die Lager uneins sind. Ein Gutachten kann sie klären${proven(s) ? "; Belege dazu liegen teils schon vor" : ""}.`
+          : "Eine Tatsachenfrage, zu der Belege vorliegen, aber noch kein Lager hat sich festgelegt. Ein Gutachten kann sie klären.",
+      );
       break;
     case "offen":
       if (s.typ === "T") out.push(proven(s) ? "Belege liegen vor, aber sie haben kein Lager überzeugt. Vor einem Beschluss zu prüfen." : "Im Verfahren ohne Beleg geblieben. Vor einem Beschluss nachzuliefern.");
@@ -172,7 +182,8 @@ export function stepText(step: StepOut, r: Ergebnis): string {
   ];
   const parts = raw
     .filter(([x]) => x > 0)
-    .map(([x, one, many, rest], i) => `${word(x, false)}${i === 0 ? ` ${pl(x, "Angriff", "Angriffe")}` : ""} ${pl(x, one, many)}${rest ? ` ${rest}` : ""}`);
+    // "Zwei Angriffe sind abgewehrt und einer ist offen": a later part stands for "Angriff" — "einer", not "ein".
+    .map(([x, one, many, rest], i) => `${i === 0 ? `${word(x, false)} ${pl(x, "Angriff", "Angriffe")}` : x === 1 ? "einer" : word(x, false)} ${pl(x, one, many)}${rest ? ` ${rest}` : ""}`);
   const out = [`Die Stufe ${VERDICT_WORDS[step.verdict].text}.`];
   if (!step.attacks) out.push("Niemand hat sie angegriffen.");
   else out.push(cap(parts.join(", ").replace(/, ([^,]*)$/, " und $1")) + ".");
@@ -231,7 +242,11 @@ export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
   const carried = r.statements.filter((s) => s.profile === "getragen").length;
   const rejected = r.statements.filter((s) => s.profile === "abgelehnt").length;
   const lead =
-    (carried ? `${cap(word(carried))} von ${word(n)} Aussagen ${pl(carried, "trägt", "tragen")} in ${bothDat(k)} Lagern` : `Keine der ${word(n)} Aussagen trägt in ${bothDat(k)} Lagern`) +
+    (n === 1
+      ? `Die einzige Aussage trägt ${carried ? "" : "nicht "}in ${bothDat(k)} Lagern`
+      : carried
+        ? `${cap(word(carried))} von ${word(n)} Aussagen ${pl(carried, "trägt", "tragen")} in ${bothDat(k)} Lagern`
+        : `Keine der ${word(n)} Aussagen trägt in ${bothDat(k)} Lagern`) +
     (rejected ? `, ${word(rejected)} lehnen ${both(k)} ab.` : ".");
   const d = r.diagnoses[0];
   if (!d) return { lead, rest: [] };
@@ -278,6 +293,7 @@ export function diagnosisText(r: Ergebnis, names: CampNames, i = 0): string {
   const s = {
     bruecke_gruende: `Über die Maßnahme selbst sind sich ${pair} einig, und auch über die Gründe der Stadt: eine Brücke der Gründe, die hält.`,
     bruecke_ergebnisse: `Über die Maßnahme selbst sind sich ${pair} einig, aber nicht über die Gründe dafür: eine Brücke der Ergebnisse, die bei der ersten Ausgestaltungsfrage brechen kann.`,
+    abgelehnt: `Die Maßnahme selbst lehnen ${pair} beide ab.`,
     streit: `Über die Maßnahme selbst sind sich ${pair} nicht einig.`,
     offen: `Über die Maßnahme selbst hat sich weder das ${campLabel(names, g)} noch das ${campLabel(names, h)} klar festgelegt.`,
   }[d.schluss];
