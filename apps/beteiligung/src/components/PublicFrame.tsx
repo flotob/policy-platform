@@ -26,7 +26,7 @@ export async function PublicFrame({
             <i className="ga" />
             <i className="gb" />
           </span>
-          Landkarte des Streits
+          streit.bar
         </Link>
         <nav className="pub-crumbs" aria-label="Sie sind hier">
           <Link href={`/${town.slug}`} className="pub-town">
@@ -83,7 +83,7 @@ export async function PublicFrame({
             </p>
           ) : null}
           <p>
-            Eine Beteiligung mit der <Link href="/">Landkarte des Streits</Link> auf streit.bar. Ohne Anmeldung; deine Stimmen bleiben anonym.
+            Eine Beteiligung auf <Link href="/">streit.bar</Link>. Ohne Anmeldung; deine Stimmen bleiben anonym.
           </p>
         </div>
       </footer>

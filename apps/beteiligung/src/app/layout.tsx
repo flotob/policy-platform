@@ -11,7 +11,7 @@ const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif", axe
 const sans = Public_Sans({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "Landkarte des Streits", template: "%s – Landkarte des Streits" },
+  title: { default: "streit.bar", template: "%s – streit.bar" },
   description: "Bürgerbeteiligung für Kommunen: Worüber eine Stadt wirklich streitet, was ein Gutachten klären kann und was der Rat entscheiden muss.",
 };
 

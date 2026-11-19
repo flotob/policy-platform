@@ -8,7 +8,7 @@ import type { BetterAuthOptions } from "better-auth";
  * scripts/auth-sql.ts — keep both in step).
  */
 export const authOptions = {
-  appName: "Landkarte des Streits",
+  appName: "streit.bar",
   // No screen uses these, and on a shared demo account they would let one visitor lock out the others.
   disabledPaths: [
     "/change-password",

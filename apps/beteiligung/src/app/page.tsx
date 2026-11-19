@@ -78,7 +78,7 @@ export default function Home() {
             <h1>Worüber streitet Ihre Stadt wirklich?</h1>
             <p className="hero-lead">
               Sie stellen eine Maßnahme zur Diskussion, etwa eine Solarpflicht für Neubauten. Bürgerinnen und Bürger stimmen ab, ergänzen
-              eigene Punkte oder reichen Stellungnahmen ein. Die Landkarte des Streits zeigt dem Rat, worüber man sich längst einig ist, was
+              eigene Punkte oder reichen Stellungnahmen ein. streit.bar zeigt dem Rat, worüber man sich längst einig ist, was
               ein Gutachten klären kann und was er selbst entscheiden muss.
             </p>
             <div className="hero-cta">
@@ -161,7 +161,7 @@ export default function Home() {
       </main>
       <footer className="site-foot">
         <div className="wrap">
-          <p className="small muted">Landkarte des Streits ist ein Prototyp. Das Beispiel Musterstadt ist erfunden.</p>
+          <p className="small muted">streit.bar ist ein Prototyp. Das Beispiel Musterstadt ist erfunden.</p>
         </div>
       </footer>
     </>

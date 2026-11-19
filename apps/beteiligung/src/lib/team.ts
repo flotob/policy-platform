@@ -149,7 +149,7 @@ ${link}
 
 Der Link gilt bis zum ${day.format(opts.expiresAt)}. Wenn Sie nicht wissen, worum es geht, ignorieren Sie diese E-Mail. Dann passiert nichts.
 
-streit.bar – Landkarte des Streits`,
+streit.bar`,
   });
   return { link, mailed: r.ok };
 }
@@ -347,6 +347,6 @@ ${link}
 
 Der Link gilt eine Stunde. Wenn Sie das nicht waren, ignorieren Sie diese E-Mail. Ihr Passwort bleibt dann, wie es ist.
 
-streit.bar – Landkarte des Streits`,
+streit.bar`,
   });
 }

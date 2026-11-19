@@ -19,7 +19,7 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
               <i className="ga" />
               <i className="gb" />
             </span>
-            Landkarte des Streits
+            streit.bar
           </Link>
           <Link href="/verwaltung" className="ws-tenant" title="Ihre Verfahren">
             {staff.tenant.name}

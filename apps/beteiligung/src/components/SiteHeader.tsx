@@ -13,7 +13,7 @@ export async function SiteHeader() {
             <i className="ga" />
             <i className="gb" />
           </span>
-          Landkarte des Streits
+          streit.bar
         </Link>
         <nav className="site-nav" aria-label="Hauptnavigation">
           <Link href="/#ablauf">So funktioniert es</Link>
