@@ -35,8 +35,29 @@ export class AgentSdkProvider implements LlmProvider {
 
     let output: T | undefined;
     let resultText: string | undefined;
+    // With attachments the prompt is one user message with content blocks (a PDF as document, images as image).
+    const prompt = req.attachments?.length
+      ? (async function* () {
+          yield {
+            type: "user",
+            parent_tool_use_id: null,
+            session_id: "",
+            message: {
+              role: "user",
+              content: [
+                ...req.attachments!.map((a) =>
+                  a.mediaType === "application/pdf"
+                    ? { type: "document", source: { type: "base64", media_type: a.mediaType, data: a.data } }
+                    : { type: "image", source: { type: "base64", media_type: a.mediaType, data: a.data } },
+                ),
+                { type: "text", text: req.prompt },
+              ],
+            },
+          };
+        })()
+      : req.prompt;
     for await (const message of query({
-      prompt: req.prompt,
+      prompt: prompt as never,
       options: {
         model,
         systemPrompt: req.system,

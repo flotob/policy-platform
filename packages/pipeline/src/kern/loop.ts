@@ -44,6 +44,7 @@ import {
 } from "./prompts.ts";
 import { KERN_REVIEW_FAMILY, reviewNode, type NodeReview } from "./review.ts";
 import { KERN_SHORT_FAMILY, shortMovesJsonSchema, shortMovesOutput, shortPrompt } from "./short.ts";
+import { readScan } from "./ocr.ts";
 import { extractFileText } from "./text.ts";
 
 export type EditorialMode = "mensch" | "assistiert" | "ki";
@@ -278,7 +279,8 @@ async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string): P
     }
     return { id: f.submission_id as string, text: f.text as string, sender, senderType };
   }
-  const text = await extractFileText(new Uint8Array(f.content as Buffer), f.filename as string, (f.mime as string | null) ?? null);
+  // A scanned letter is read by the machine (ocr.ts); typed files as before.
+  const text = await extractFileText(new Uint8Array(f.content as Buffer), f.filename as string, (f.mime as string | null) ?? null, readScan(deps.llm));
   const id = await db.transaction(async (tx) => {
     const participant = await participantForFile(tx, c, f);
     const s = await tx.execute(sql`

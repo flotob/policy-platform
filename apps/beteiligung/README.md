@@ -85,6 +85,7 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 | `/verwaltung/kommunen` | platform admins | All municipalities; a new one + the invitation for its first person |
 | `/verwaltung/einstellungen` | staff (changes: initiator) | The town's contact, website, links to its own imprint and privacy notice, logo (migration 0020; shown on every public page of the town) |
 | (on the voting card and the results page) | citizens | "Hier stimmt etwas nicht": report a statement or a quote with a reason (migration 0021 `content_reports`, 10 per connection and hour). The editors see "Meldungen" at the top of the Redaktion tab: hide (reason required, logged; a quote keeps its vote, a statement leaves the vote; in stored results the statement keeps its number, its text is replaced) or let it stand |
+| `/verwaltung/[id]#unterlagen` "Brief, Anruf oder Bürgerbüro eintragen" | editors | The paper route: a letter, a call or a visit typed in, or a scan (PDF/photo) attached; before opening and while open. It becomes a statement like any upload (sender private or an organisation); scans are read by the language model (`packages/pipeline/src/kern/ocr.ts`, the PDF or image as an attachment), letterhead and signature left out |
 | `/impressum`, `/datenschutz` | everyone | streit.bar's own imprint (Legal Tech Center LTC UG) and privacy notice; linked on every page |
 | `/verwaltung` | staff | The municipality's campaigns |
 | `/verwaltung/neu` | initiator | New campaign: title, decision question, measure |

@@ -18,6 +18,8 @@ export interface GenerateRequest {
   schema: Record<string, unknown>;
   /** Provider-specific model override. */
   model?: string;
+  /** Files the model reads along with the prompt (a scanned letter as PDF or image), base64. */
+  attachments?: { mediaType: string; data: string }[];
 }
 
 export interface CallProvenance {
@@ -46,6 +48,7 @@ export function promptHash(req: GenerateRequest): string {
         system: req.system ?? null,
         prompt: req.prompt,
         schema: req.schema,
+        attachments: req.attachments?.map((a) => createHash("sha256").update(a.data).digest("hex")) ?? null,
       }),
     )
     .digest("hex");

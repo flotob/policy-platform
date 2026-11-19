@@ -7,6 +7,7 @@ import { openingCheck } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 
 import { deleteFile, openCampaign, setState } from "../actions";
+import { LetterForm } from "../brief-form";
 import { BasicsForm, InviteForm, JustificationForm, ProcessForm, UploadForm } from "../forms";
 
 const ROLE = { entwurf: "Entwurf", unterlage: "Unterlage", stellungnahme: "Stellungnahme" } as const;
@@ -129,6 +130,16 @@ export default async function CampaignPage({ params, searchParams }: { params: P
             <p className="small muted">Gelesene Stellungnahmen bleiben: Ihre Beiträge sind schon in der Redaktion.</p>
           ) : null}
           {editable && preparing ? <UploadForm id={campaign.id} /> : null}
+          {staff.role !== "betrachter" && (preparing || campaign.state === "offen") ? (
+            <div className="letter">
+              <h3>Brief, Anruf oder Bürgerbüro eintragen</h3>
+              <p className="small muted">
+                Wer nicht online mitmacht, zählt genauso. Tippen Sie den Beitrag ab oder hängen Sie einen Scan an; die Maschine zerlegt ihn wie jede
+                Stellungnahme, und die Redaktion entscheidet wie immer.
+              </p>
+              <LetterForm id={campaign.id} />
+            </div>
+          ) : null}
         </section>
 
         <section id="freischalten" className="cp-section">

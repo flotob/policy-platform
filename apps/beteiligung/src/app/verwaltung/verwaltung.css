@@ -137,3 +137,5 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .logo-form .logo-preview { display: block; max-height: 64px; max-width: 240px; margin-bottom: 16px; }
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; }
 .kv dt { font-weight: 600; font-size: 14px; }
+.letter { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--line); }
+.letter h3 { font-family: var(--serif); font-size: 18px; font-weight: 600; margin-bottom: 6px; }
