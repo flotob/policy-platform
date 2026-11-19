@@ -77,13 +77,22 @@ const fresh = (await rows(sql`SELECT * FROM campaign_results WHERE id = ${saved.
 let report = await startReport(c, { ...saved, campNames: fresh.camp_names }, x.name as string);
 await db.execute(sql`UPDATE campaigns SET state = 'bericht', updated_at = now() WHERE id = ${c.id}`);
 await audit(c.tenantId, "report.created", "campaign_report", report.id, { version: report.version, result: saved.id, sentences: report.sentences.length });
-for (let attempt = 0; attempt < 3; attempt++) {
+// The report job runs here — or in the running app's worker, which may claim it first: wait for either.
+const until = Date.now() + 10 * 60 * 1000;
+let retries = 0;
+while (Date.now() < until) {
   await drain();
   report = (await getReport(c.id, report.id))!;
-  console.log(`report v${report.version}: ${report.state}`);
   if (report.state === "geprueft") break;
-  if (report.state === "durchgefallen") await enqueue(c.tenantId, c.id, "bericht", null, null, { reportId: report.id });
+  if (report.state === "durchgefallen") {
+    if (++retries > 2) break;
+    console.log("report failed its checks — writing again");
+    await enqueue(c.tenantId, c.id, "bericht", null, null, { reportId: report.id });
+    continue;
+  }
+  await new Promise((r) => setTimeout(r, 3000));
 }
+console.log(`report v${report.version}: ${report.state}`);
 if (report.state !== "geprueft") throw new Error(`the report did not pass its checks (${report.state}) — look at it in the workspace`);
 await db.execute(sql`UPDATE campaign_reports SET state = 'freigegeben', decided_by = 'demo', decided_at = now(), updated_at = now() WHERE id = ${report.id}`);
 await audit(c.tenantId, "report.freigegeben", "campaign_report", report.id, { version: report.version });
