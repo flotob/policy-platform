@@ -26,7 +26,7 @@
     "unpdf": "^1.9.1"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^26.6.6",
     "@types/pg": "^8.11.0",
     "@types/qrcode": "1.5.5",
     "@types/react": "^19.0.0",
