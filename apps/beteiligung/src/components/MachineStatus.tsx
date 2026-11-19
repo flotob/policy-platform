@@ -14,6 +14,8 @@ export function MachineStatus({ campaignId, jobs, editable, quiet = false }: { c
   const done = jobs.filter((j) => j.state === "fertig");
   const failed = jobs.filter((j) => j.state === "fehler");
   const busy = !!running || waiting > 0;
+  /** Statements read ahead by an idle machine, waiting only for their turn to be sorted in. */
+  const readAhead = jobs.filter((j) => j.state === "wartet" && (j.result as { gelesen?: boolean } | null)?.gelesen).length;
   // A published procedure: nothing left for the machine to report unless it is working or something failed.
   if (quiet && !busy && !failed.length) return null;
   const last = jobs[jobs.length - 1];
@@ -44,7 +46,8 @@ export function MachineStatus({ campaignId, jobs, editable, quiet = false }: { c
                     : `Sie liest „${running.filename ?? "eine Stellungnahme"}“${running.sender ? ` (${running.sender})` : ""}.`
             : "Sie fängt gleich an."}{" "}
           <span className="muted num">
-            {done.length} von {jobs.length} Aufgaben erledigt. Die Seite aktualisiert sich von selbst.
+            {done.length} von {jobs.length} Aufgaben erledigt
+            {readAhead ? `, ${readAhead} weitere schon gelesen und bereit zum Einsortieren` : ""}. Die Seite aktualisiert sich von selbst.
           </span>
         </p>
       ) : evaluating ? (

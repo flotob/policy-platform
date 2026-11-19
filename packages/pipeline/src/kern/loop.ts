@@ -281,7 +281,12 @@ async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string): P
   }
   // A scanned letter is read by the machine (ocr.ts); typed files as before.
   const text = await extractFileText(new Uint8Array(f.content as Buffer), f.filename as string, (f.mime as string | null) ?? null, readScan(deps.llm));
-  const id = await db.transaction(async (tx) => {
+  const made = await db.transaction(async (tx) => {
+    // Reading runs ahead in parallel (readFile): if another machine created the text meanwhile, that one counts.
+    const lock = await tx.execute(sql`
+      SELECT f.submission_id, s.text FROM campaign_files f LEFT JOIN submissions s ON s.id = f.submission_id WHERE f.id = ${fileId} FOR UPDATE OF f`);
+    const now = lock.rows[0] as Row | undefined;
+    if (now?.submission_id) return { id: now.submission_id as string, text: now.text as string };
     const participant = await participantForFile(tx, c, f);
     const s = await tx.execute(sql`
       INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text,
@@ -291,9 +296,9 @@ async function submissionFor(deps: KernDeps, c: KernCampaign, fileId: string): P
       RETURNING id`);
     const sid = (s.rows[0] as Row).id as string;
     await tx.execute(sql`UPDATE campaign_files SET submission_id = ${sid} WHERE id = ${fileId}`);
-    return sid;
+    return { id: sid, text };
   });
-  return { id, text, sender, senderType };
+  return { id: made.id, text: made.text, sender, senderType };
 }
 
 interface Submission {
@@ -411,6 +416,24 @@ async function processMove(
   }
 }
 
+/**
+ * The slow half of reading a statement, on its own: the text (with the scan reader) and the
+ * language model's proposal for every window, stored in `extractions`. It does not depend on any
+ * other statement, so idle machines run it ahead, side by side; the sorting-in (decomposeFile)
+ * stays one statement at a time per procedure and then finds the reading done.
+ */
+export async function readFile(deps: KernDeps, c: KernCampaign, fileId: string): Promise<{ windows: number }> {
+  const sub = await submissionFor(deps, c, fileId);
+  const chunks = chunkText(sub.text);
+  let cursor = 0;
+  for (const [index, text] of chunks.entries()) {
+    const start = Math.max(0, sub.text.indexOf(text, cursor));
+    cursor = start + text.length;
+    await windowOutput(deps, c, sub, { text, index, count: chunks.length, start });
+  }
+  return { windows: chunks.length };
+}
+
 export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: string): Promise<DecomposeResult> {
   const { db } = deps;
   const sub = await submissionFor(deps, c, fileId);
@@ -451,6 +474,34 @@ export async function decomposeFile(deps: KernDeps, c: KernCampaign, fileId: str
 /** Door 2's check: at or above this the short text counts as naming a private person. */
 export const PERSONAL_FROM = 0.5;
 
+/** Door 2's reading, stored like a statement's window, so it can run ahead too. */
+async function shortOutput(deps: KernDeps, c: KernCampaign, sub: Submission): Promise<MoveOutput[]> {
+  const system = movesSystem(c.context);
+  const prompt = shortPrompt(sub.text);
+  const model = process.env.LLM_MODEL ?? "claude-sonnet-5-5";
+  const callHash = createHash("sha256").update(JSON.stringify({ system, prompt, schema: shortMovesJsonSchema, model, door: 2 })).digest("hex");
+  const cached = await deps.db.execute(sql`
+    SELECT output FROM extractions WHERE submission_id = ${sub.id} AND window_index = 0 AND call_hash = ${callHash}`);
+  if (cached.rows[0]) return shortMovesOutput.parse((cached.rows[0] as Row).output).zuege;
+  const { output, provenance } = await deps.llm.generateStructured({ system, prompt, schema: shortMovesJsonSchema, model });
+  const parsed = shortMovesOutput.parse(output);
+  await deps.db.execute(sql`
+    INSERT INTO extractions (tenant_id, consultation_id, submission_id, window_index, window_count, window_start, window_end,
+                             call_hash, model, output, provenance)
+    VALUES (${c.tenantId}, ${c.consultationId}, ${sub.id}, 0, 1, 0, ${sub.text.length},
+            ${callHash}, ${provenance.model}, ${JSON.stringify(parsed)}, ${JSON.stringify(provenance)})
+    ON CONFLICT (submission_id, window_index, call_hash) DO NOTHING`);
+  return parsed.zuege;
+}
+
+/** Door 2's slow half on its own (see readFile). */
+export async function readShort(deps: KernDeps, c: KernCampaign, submissionId: string): Promise<void> {
+  const r = await deps.db.execute(sql`SELECT id, text FROM submissions WHERE id = ${submissionId} AND consultation_id = ${c.consultationId}`);
+  const s = r.rows[0] as Row | undefined;
+  if (!s) return;
+  await shortOutput(deps, c, { id: s.id as string, text: s.text as string, sender: null, senderType: "privat" });
+}
+
 export async function decomposeShort(deps: KernDeps, c: KernCampaign, submissionId: string): Promise<DecomposeResult> {
   const { db } = deps;
   const r = await db.execute(sql`
@@ -467,10 +518,7 @@ export async function decomposeShort(deps: KernDeps, c: KernCampaign, submission
   const notNode = rejected?.answer === "nein" ? (rejected.node ?? null) : null;
   const personal = (rejected?.pPersonal ?? 0) >= PERSONAL_FROM;
 
-  const system = movesSystem(c.context);
-  const prompt = shortPrompt(sub.text);
-  const { output } = await deps.llm.generateStructured({ system, prompt, schema: shortMovesJsonSchema });
-  const zuege = shortMovesOutput.parse(output).zuege;
+  const zuege = await shortOutput(deps, c, sub);
   result.proposed = zuege.length;
   const nodes = await campaignNodes(db, c.consultationId);
   for (const [i, z] of zuege.entries()) {

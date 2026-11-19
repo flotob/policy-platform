@@ -1,6 +1,6 @@
 /**
  * The machine's background work, in this server process (started from
- * instrumentation.ts). KERN_WORKERS jobs run side by side (default 2: the
+ * instrumentation.ts). KERN_WORKERS loops run side by side (default 5: the
  * language model runs on a subscription with a session limit, so a few, not
  * dozens). Two rules keep it safe and fair:
  *   - one job per procedure at a time (the steps of one procedure build on
@@ -9,13 +9,19 @@
  *     and among those the town served longest ago goes first. One town's long
  *     upload no longer holds up everyone else.
  *
+ * Reading runs ahead: a loop with nothing it may claim takes a waiting statement of a busy
+ * procedure and does the slow half — the language model reading it (readFile/readShort, stored
+ * in `extractions`). Reading does not depend on other statements, so it runs side by side; the
+ * sorting-in (is this point known or new?) stays one job at a time per procedure and then finds
+ * the reading done. A town uploading thirty statements waits for one reading, not thirty.
+ *
  * Jobs survive restarts: a job left "laeuft" by a crashed process is picked
  * up again after STALE_MIN; every step of the core loop is resumable (cached
  * model outputs, stored moves are skipped).
  */
 
 import { sql } from "@policy/db";
-import { audit, decomposeFile, decomposeShort, machineDecides, proposeCampNames, proposeSkeleton, syncDerivedVotes, writeAndCheck } from "@policy/pipeline/kern";
+import { audit, decomposeFile, decomposeShort, machineDecides, proposeCampNames, proposeSkeleton, readFile, readShort, syncDerivedVotes, writeAndCheck } from "@policy/pipeline/kern";
 
 import { getResult, setCampNames } from "./auswertung";
 import { forgetUnconfirmed } from "./folgen";
@@ -26,7 +32,7 @@ import { kernCampaign, kernDeps } from "./kern";
 
 const POLL_MS = 3000;
 /** Jobs running side by side. */
-const WORKERS = Math.max(1, Math.min(8, Number(process.env.KERN_WORKERS ?? 2) || 2));
+const WORKERS = Math.max(1, Math.min(8, Number(process.env.KERN_WORKERS ?? 5) || 5));
 /**
  * At most this many jobs start per day (each calls the language model):
  * MAX_LLM_JOBS_PER_DAY on a public server, so a flood at door 2 cannot run up
@@ -41,6 +47,10 @@ type Row = Record<string, unknown>;
 const log = (m: string) => console.log(`[kern] ${m}`);
 
 let capped = false;
+
+/** Jobs being read ahead right now (this process): not claimed until their reading is stored. */
+const reading = new Set<string>();
+const readingIds = () => JSON.stringify([...reading]);
 
 /** Claims run one after another inside this process, so two loops never take two jobs of one procedure. */
 let claiming: Promise<unknown> = Promise.resolve();
@@ -71,6 +81,7 @@ async function claimOne(): Promise<Row | null> {
       SELECT j.id FROM campaign_jobs j
       WHERE j.state = 'wartet'
         AND NOT EXISTS (SELECT 1 FROM campaign_jobs r WHERE r.campaign_id = j.campaign_id AND r.state = 'laeuft')
+        AND j.id::text NOT IN (SELECT jsonb_array_elements_text(${readingIds()}::jsonb))
       ORDER BY
         (SELECT count(*) FROM campaign_jobs r WHERE r.tenant_id = j.tenant_id AND r.state = 'laeuft'),
         (SELECT max(r.started_at) FROM campaign_jobs r WHERE r.tenant_id = j.tenant_id) NULLS FIRST,
@@ -124,6 +135,46 @@ export async function runJob(job: Row): Promise<void> {
   log(`${job.kind} ${job.id} done`);
 }
 
+/**
+ * Read one waiting statement ahead (see the top of this file). Only statements of procedures that
+ * are busy — any other waiting job a free loop simply claims. Returns false when there is nothing.
+ */
+async function readAhead(): Promise<boolean> {
+  if (capped) return false;
+  const db = getDb();
+  const r = await db.execute(sql`
+    SELECT j.* FROM campaign_jobs j
+    WHERE j.state = 'wartet' AND j.kind IN ('zerlegen', 'kurzaussage')
+      AND NOT COALESCE((j.result->>'gelesen')::boolean, false) AND NOT COALESCE((j.result->>'lesefehler')::boolean, false)
+      AND EXISTS (SELECT 1 FROM campaign_jobs b WHERE b.campaign_id = j.campaign_id AND b.state = 'laeuft')
+    ORDER BY j.created_at LIMIT 50`);
+  const job = (r.rows as Row[]).find((x) => !reading.has(x.id as string));
+  if (!job) return false;
+  const id = job.id as string;
+  reading.add(id);
+  try {
+    // Claimed in the meantime? Then its own run reads it.
+    const still = await db.execute(sql`SELECT state FROM campaign_jobs WHERE id = ${id}`);
+    if ((still.rows[0] as Row | undefined)?.state !== "wartet") return true;
+    const t = await db.execute(sql`SELECT name FROM tenants WHERE id = ${job.tenant_id as string}`);
+    const campaign = await getCampaign(job.tenant_id as string, job.campaign_id as string);
+    if (!campaign) return true;
+    const c = kernCampaign(campaign, (t.rows[0] as Row).name as string);
+    const deps = await kernDeps(log);
+    if (job.kind === "kurzaussage") await readShort(deps, c, job.submission_id as string);
+    else await readFile(deps, c, job.file_id as string);
+    await db.execute(sql`UPDATE campaign_jobs SET result = COALESCE(result, '{}'::jsonb) || '{"gelesen": true}'::jsonb WHERE id = ${id} AND state = 'wartet'`);
+    log(`${job.kind} ${id} read ahead`);
+  } catch (e) {
+    // Not fatal: the job itself reads again when its turn comes, and reports the error then.
+    log(`${job.kind} ${id} could not be read ahead: ${(e as Error).message}`);
+    await db.execute(sql`UPDATE campaign_jobs SET result = COALESCE(result, '{}'::jsonb) || '{"lesefehler": true}'::jsonb WHERE id = ${id} AND state = 'wartet'`);
+  } finally {
+    reading.delete(id);
+  }
+  return true;
+}
+
 async function tick(): Promise<boolean> {
   const job = await claim();
   if (!job) return false;
@@ -160,7 +211,7 @@ export function startWorker(): void {
       await new Promise((r) => setTimeout(r, w * 700));
       for (;;) {
         try {
-          if (!(await tick())) await new Promise((r) => setTimeout(r, POLL_MS));
+          if (!(await tick()) && !(await readAhead())) await new Promise((r) => setTimeout(r, POLL_MS));
         } catch (e) {
           // The database is away (Docker asleep): wait and try again.
           log(`worker: ${(e as Error).message}`);
