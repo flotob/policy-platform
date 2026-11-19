@@ -38,6 +38,17 @@ starts the server without the worker. `SIGNUP_OPEN=1` allows new municipalities 
 page (role betrachter; public credentials, created at startup; `DEMO_LOGIN_EMAIL/PASSWORD/TENANT`
 override). Better Auth's account-changing endpoints are off, so no visitor can lock the others out.
 
+Team accounts (since 2026-11-19, `src/lib/team.ts`, migration 0019 `staff_invites`): every account
+starts with an emailed invitation (sign-up stays closed). Initiators invite colleagues on
+`/verwaltung/team` (roles, resend, withdraw, remove; at least one initiator stays); platform admins
+(`PLATFORM_ADMINS`, comma-separated emails) create municipalities on `/verwaltung/kommunen` and
+invite their first person. The link carries a token (only its SHA-256 is stored, 7 days); it proves
+the address, so the account is created verified. Password reset by email (`/passwort-vergessen`,
+Better Auth `requestPasswordReset`, link 1 hour, other sessions end). Email goes through Resend's
+HTTP API (`src/lib/mail.ts`): `RESEND_API_KEY`, `MAIL_FROM` (default `streit.bar <post@streit.bar>`),
+`MAIL_REPLY_TO`. Without a key the mail is printed to the server log (dev) or the inviting person
+gets the link to pass on by hand (server); `.test` addresses never get mail.
+
 ## Deployment (https://streit.bar)
 
 Since 2026-11-19 the app answers at https://streit.bar. `www.streit.bar` and the old
@@ -51,8 +62,8 @@ the Agent SDK's Claude binary and the PDF readers survive; build-only placeholde
 database URL), branch `app/beteiligung`, port 3000. Database `beteiligung` in the shared
 Postgres container (restored from a `policy_probe` dump; `policy` and `auswertung` untouched).
 Env: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `TYPESAFE_API_KEY`,
-`JEV_CONCURRENCY`, `MAX_LLM_JOBS_PER_DAY`, `CLAUDE_CODE_OAUTH_TOKEN` (set by Florian in
-Coolify). Staff logins on the server are in `platform/.deploy-secrets.local`. Data update:
+`JEV_CONCURRENCY`, `MAX_LLM_JOBS_PER_DAY`, `CLAUDE_CODE_OAUTH_TOKEN`, `RESEND_API_KEY` (set by Florian in
+Coolify), `MAIL_FROM`, `PLATFORM_ADMINS`. Staff logins on the server are in `platform/.deploy-secrets.local`. Data update:
 `docker exec platform-postgres-1 pg_dump -Fc -U policy policy_probe` → scp → `docker cp` into
 the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-owner`.
 
@@ -61,7 +72,11 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 | Route | Who | What |
 |---|---|---|
 | `/` | everyone | Landing page with the opinion-space demo (Stephan's fictional numbers) |
-| `/registrieren`, `/anmelden` | municipal staff | Account + municipality (Better Auth, email + password) |
+| `/registrieren`, `/anmelden` | municipal staff | Account + municipality (Better Auth, email + password; sign-up only with `SIGNUP_OPEN=1`) |
+| `/einladung/[token]` | invited staff | Accept an invitation: name + password (new account) or join with the existing one |
+| `/passwort-vergessen`, `/passwort-neu` | staff | Password reset by email |
+| `/verwaltung/team` | staff (changes: initiator) | Members and roles, open invitations, invite a colleague |
+| `/verwaltung/kommunen` | platform admins | All municipalities; a new one + the invitation for its first person |
 | `/verwaltung` | staff | The municipality's campaigns |
 | `/verwaltung/neu` | initiator | New campaign: title, decision question, measure |
 | `/verwaltung/[id]` | staff | Measure, justification in four steps, process (doors, period, editorial mode, access), uploads, preparation, opening |

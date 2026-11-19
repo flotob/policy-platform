@@ -25,7 +25,7 @@ export const authOptions = {
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,
-    // No mail provider yet: accounts work without confirming the address.
+    // Accounts come from emailed invitations (lib/team.ts), whose link already proves the address.
     requireEmailVerification: false,
     // New accounts only where SIGNUP_OPEN=1 (local); on the public server only existing accounts log in.
     disableSignUp: process.env.SIGNUP_OPEN !== "1",

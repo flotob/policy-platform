@@ -8,9 +8,9 @@ export const metadata = { title: "Verfahren" };
 
 const date = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
 
-export default async function Verwaltung({ searchParams }: { searchParams: Promise<{ fehler?: string }> }) {
+export default async function Verwaltung({ searchParams }: { searchParams: Promise<{ fehler?: string; willkommen?: string }> }) {
   const staff = await requireStaff();
-  const { fehler } = await searchParams;
+  const { fehler, willkommen } = await searchParams;
   const campaigns = await listCampaigns(staff.tenant.id);
   return (
     <>
@@ -25,6 +25,7 @@ export default async function Verwaltung({ searchParams }: { searchParams: Promi
           </Link>
         ) : null}
       </div>
+      {willkommen ? <p className="notice">Willkommen im Team von {staff.tenant.name}.</p> : null}
       {fehler === "rolle" ? <p className="notice">Verfahren anlegen und ändern dürfen nur Initiatorinnen und Initiatoren Ihrer Kommune.</p> : null}
 
       {campaigns.length === 0 ? (

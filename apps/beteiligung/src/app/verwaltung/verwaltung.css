@@ -111,3 +111,26 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .cp-h3 { font-size: 16px; font-weight: 600; margin: 24px 0 8px; }
 .invites { display: grid; gap: 10px; max-width: 560px; }
 .invites-form { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Team and municipalities */
+.ws-nav { display: flex; gap: 4px; font-size: 14px; }
+.ws-nav a { padding: 6px 10px; border-radius: 6px; text-decoration: none; color: var(--ink-2); }
+.ws-nav a:hover { background: var(--bg); color: var(--ink); }
+.team-table td { vertical-align: middle; }
+.team-table .nowrap { white-space: nowrap; }
+.team-invite .field-row { align-items: start; }
+.team-section { margin-top: 36px; }
+.team-section h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.team-section > p { max-width: 62ch; }
+.team-invite { margin-top: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px 16px; }
+.team-roles { border: 0; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; }
+.team-roles legend { margin-bottom: 6px; }
+.team-role { display: flex; gap: 10px; align-items: baseline; cursor: pointer; }
+.team-inline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.team-inline .select { width: auto; min-height: 34px; padding-block: 4px; font-size: 14px; }
+.team-invites { list-style: none; margin: 12px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.team-invites li { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 16px; }
+.team-invites li + li { border-top: 1px solid var(--line); }
+.team-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.team-link { margin-top: 12px; }
+.team-link .input { font-family: var(--mono, monospace); font-size: 13px; }

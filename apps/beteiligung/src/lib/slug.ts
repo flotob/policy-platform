@@ -14,4 +14,7 @@ export function slugify(text: string): string {
 }
 
 /** First path segments the app itself uses: no municipality may take them. */
-export const RESERVED = new Set(["anmelden", "registrieren", "abmelden", "verwaltung", "api", "beispiel", "impressum", "datenschutz", "_next"]);
+export const RESERVED = new Set([
+  "anmelden", "registrieren", "abmelden", "verwaltung", "api", "beispiel", "impressum", "datenschutz", "_next",
+  "einladung", "passwort-vergessen", "passwort-neu",
+]);

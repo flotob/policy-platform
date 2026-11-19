@@ -10,7 +10,7 @@ import { signupOpen } from "@/lib/auth-options";
 import { demoLogin } from "@/lib/demo-login";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { RESERVED, slugify } from "@/lib/slug";
+import { acceptInvite, createTenant, looksLikeEmail, normEmail, readInvite } from "@/lib/team";
 
 export interface FormState {
   error?: string;
@@ -19,24 +19,10 @@ export interface FormState {
 
 const field = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
-/** A municipality for the logged-in user: tenant + initiator membership, slug kept free of app paths. */
+/** A municipality for the logged-in user: tenant + initiator membership. */
 async function createMunicipality(userId: string, name: string): Promise<void> {
-  const db = getDb();
-  let base = slugify(name.replace(/^(stadt|gemeinde|markt|landkreis|kreis)\s+/i, "")) || "kommune";
-  if (RESERVED.has(base)) base = `${base}-kommune`;
-  const taken = new Set(
-    ((await db.execute(sql`SELECT slug FROM tenants WHERE slug = ${base} OR slug LIKE ${`${base}-%`}`)).rows as { slug: string }[]).map((r) => r.slug),
-  );
-  let slug = base;
-  for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`;
-  await db.transaction(async (tx) => {
-    const t = await tx.execute(sql`INSERT INTO tenants (slug, name) VALUES (${slug}, ${name}) RETURNING id`);
-    const tenantId = (t.rows[0] as { id: string }).id;
-    await tx.execute(sql`INSERT INTO memberships (user_id, tenant_id, role) VALUES (${userId}, ${tenantId}, 'initiator')`);
-    await tx.execute(sql`
-      INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload)
-      VALUES (${tenantId}, ${`user:${userId}`}, 'tenant.create', 'tenant', ${tenantId}, ${JSON.stringify({ name, slug })})`);
-  });
+  const t = await createTenant(name, userId);
+  await getDb().execute(sql`INSERT INTO memberships (user_id, tenant_id, role) VALUES (${userId}, ${t.id}, 'initiator')`);
 }
 
 export async function register(_prev: FormState, form: FormData): Promise<FormState> {
@@ -92,4 +78,57 @@ export async function loginDemo(): Promise<void> {
   if (!d) redirect("/anmelden");
   await auth.api.signInEmail({ body: { email: d.email, password: d.password }, headers: await headers() });
   redirect("/verwaltung");
+}
+
+/** "Passwort vergessen": always the same answer, whether an account exists or not. */
+export async function requestReset(_prev: FormState, form: FormData): Promise<FormState> {
+  const email = normEmail(field(form, "email"));
+  if (!looksLikeEmail(email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values: { email } };
+  try {
+    await auth.api.requestPasswordReset({ body: { email }, headers: await headers() });
+  } catch (e) {
+    if (!isAPIError(e)) console.error("[passwort-vergessen]", e);
+  }
+  redirect(`/passwort-vergessen?gesendet=1`);
+}
+
+export async function resetPassword(_prev: FormState, form: FormData): Promise<FormState> {
+  const token = field(form, "token");
+  const password = String(form.get("password") ?? "");
+  if (password.length < 10) return { error: "Das Passwort braucht mindestens 10 Zeichen." };
+  if (password !== String(form.get("password2") ?? "")) return { error: "Die beiden Passwörter sind nicht gleich." };
+  try {
+    await auth.api.resetPassword({ body: { newPassword: password, token }, headers: await headers() });
+  } catch (e) {
+    if (isAPIError(e)) return { error: "Der Link gilt nicht mehr. Fordern Sie bitte einen neuen an." };
+    console.error("[passwort-neu]", e);
+    return { error: "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal." };
+  }
+  redirect("/anmelden?passwort=neu");
+}
+
+/** Accept an invitation: join with an existing account, or create one with name and password. */
+export async function acceptInvitation(_prev: FormState, form: FormData): Promise<FormState> {
+  const token = field(form, "token");
+  const values = { name: field(form, "name") };
+  const inv = await readInvite(token);
+  if (inv.state !== "offen") return { error: "Diese Einladung gilt nicht mehr. Bitten Sie um eine neue." };
+  if (inv.hasAccount) {
+    const r = await acceptInvite(token, null);
+    if (!r.ok) return { error: r.error };
+    redirect("/anmelden?einladung=angenommen");
+  }
+  const password = String(form.get("password") ?? "");
+  if (values.name.length < 2) return { error: "Bitte geben Sie Ihren Namen an.", values };
+  if (password.length < 10) return { error: "Das Passwort braucht mindestens 10 Zeichen.", values };
+  if (password !== String(form.get("password2") ?? "")) return { error: "Die beiden Passwörter sind nicht gleich.", values };
+  const r = await acceptInvite(token, { name: values.name, password });
+  if (!r.ok) return { error: r.error, values };
+  try {
+    await auth.api.signInEmail({ body: { email: r.email, password }, headers: await headers() });
+  } catch (e) {
+    console.error("[einladung] sign-in after accepting", e);
+    redirect("/anmelden?einladung=angenommen");
+  }
+  redirect("/verwaltung?willkommen=1");
 }

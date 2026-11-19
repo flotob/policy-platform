@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { requireStaff } from "@/lib/session";
+import { isPlatformAdmin } from "@/lib/team";
 
 import { logout } from "../(konto)/actions";
 import "./verwaltung.css";
@@ -23,6 +24,11 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
           <Link href="/verwaltung" className="ws-tenant" title="Ihre Verfahren">
             {staff.tenant.name}
           </Link>
+          <nav className="ws-nav" aria-label="Verwaltung">
+            <Link href="/verwaltung">Verfahren</Link>
+            <Link href="/verwaltung/team">Team</Link>
+            {isPlatformAdmin(staff.user.email) ? <Link href="/verwaltung/kommunen">Kommunen</Link> : null}
+          </nav>
           <div className="ws-user">
             <span className="muted small">{staff.user.name}</span>
             <form action={logout}>

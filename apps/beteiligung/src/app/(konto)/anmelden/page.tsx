@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/SiteHeader";
+import { signupOpen } from "@/lib/auth-options";
 import { demoLogin } from "@/lib/demo-login";
 import { getSession, getStaff } from "@/lib/session";
 
@@ -10,7 +11,8 @@ import "../konto.css";
 
 export const metadata = { title: "Anmelden" };
 
-export default async function Anmelden() {
+export default async function Anmelden({ searchParams }: { searchParams: Promise<{ passwort?: string; einladung?: string }> }) {
+  const q = await searchParams;
   if (await getStaff()) redirect("/verwaltung");
   // Logged in, but no municipality yet: finish the registration.
   if (await getSession()) redirect("/registrieren");
@@ -39,7 +41,11 @@ export default async function Anmelden() {
               </p>
             </form>
           ) : null}
-          <LoginForm />
+          {q.passwort === "neu" ? <p className="notice">Ihr neues Passwort gilt. Melden Sie sich damit an.</p> : null}
+          {q.einladung === "angenommen" ? (
+            <p className="notice">Einladung angenommen. Melden Sie sich mit Ihrem bisherigen Passwort an.</p>
+          ) : null}
+          <LoginForm signup={signupOpen()} />
         </div>
       </main>
     </>
