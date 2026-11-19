@@ -38,7 +38,13 @@ starts the server without the worker. `SIGNUP_OPEN=1` allows new municipalities 
 page (role betrachter; public credentials, created at startup; `DEMO_LOGIN_EMAIL/PASSWORD/TENANT`
 override). Better Auth's account-changing endpoints are off, so no visitor can lock the others out.
 
-## Deployment (https://beteiligung.saskana.org)
+## Deployment (https://streit.bar)
+
+Since 2026-11-19 the app answers at https://streit.bar. `www.streit.bar` and the old
+`beteiligung.saskana.org` (links already handed out) reach the same app and are sent on to the
+same path on streit.bar by `src/middleware.ts`. DNS at Gandi (A records → 5.78.195.10).
+Coolify's own ports are closed to the internet; reach its API through
+`ssh -N -L 18000:localhost:8000 root@5.78.195.10`.
 
 Coolify app `beteiligung` on the Hetzner box, `Dockerfile.beteiligung` (full workspace image —
 the Agent SDK's Claude binary and the PDF readers survive; build-only placeholders for the
@@ -80,7 +86,7 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 - Step model of the artifact: Lage · Wirkung · Weg · Eingriff (≈ proportionality test); the question→step mapping is a parameter (`QUESTIONS` in `src/lib/params.ts`).
 - Citizens without login (pseudonymous cookie, rate limits, optional invite code).
 - Demo: Stephan's fictional Musterstadt Solarpflicht, marked fictional everywhere (`campaigns.fictional`).
-- Domain later: municipal.saskana.org.
+- Domain: streit.bar (decided 2026-11-19; name and brand of the product).
 
 ## Data
 
