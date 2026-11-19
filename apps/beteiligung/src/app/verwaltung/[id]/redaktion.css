@@ -120,3 +120,12 @@
   .rd-card { padding: 18px 16px 22px; }
   .pk-root { padding: 16px; }
 }
+
+/* Citizens' reports */
+.rd-reports { border: 1px solid var(--warn); border-radius: 12px; padding: 18px 20px; margin: 0 0 24px; background: color-mix(in srgb, var(--warn) 6%, var(--panel)); display: grid; gap: 12px; }
+.rd-reports h2 { font-family: var(--serif); font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.rd-report { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 6px; }
+.rd-report blockquote { margin: 0; font-family: var(--serif); font-size: 17px; }
+.rd-report ul { margin: 0; padding-left: 18px; }
+.rd-report-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.rd-report-actions .input { flex: 1 1 260px; min-height: 34px; padding-block: 4px; font-size: 14px; }

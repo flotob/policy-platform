@@ -5,6 +5,7 @@ import { PublicFrame } from "@/components/PublicFrame";
 import { publishedBundle } from "@/lib/bericht";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { methodParagraphs, periodOf, questionLabels, townShort } from "@/lib/ergebnis-seite";
+import { hiddenOf, maskHidden } from "@/lib/meldungen";
 
 import "../../public.css";
 import "../../../ergebnis.css";
@@ -23,12 +24,13 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
   const bundle = await publishedBundle(c);
   if (!bundle) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;
-  const period = await periodOf(c);
+  const [period, hidden] = await Promise.all([periodOf(c), hiddenOf(c)]);
+  const r = maskHidden(bundle.result, hidden);
   return (
     <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
       <main className="pub-erg">
         <ResultView
-          r={bundle.result}
+          r={r}
           names={bundle.naming?.names ?? null}
           title={c.title}
           town={townShort(c.tenant.name)}
@@ -36,7 +38,8 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
           eyebrow={`Online-Anhang zum Bericht · ${c.tenant.name}${c.fictional ? " · Beispiel mit erfundenen Inhalten" : ""}`}
           period={period}
           questions={questionLabels}
-          method={methodParagraphs(c, bundle.result)}
+          method={methodParagraphs(c, r)}
+          reportable={{ gemeinde: c.tenant.slug, verfahren: c.slug }}
           report={{ href: `${base}/bericht`, label: "Den Bericht lesen" }}
           files={[
             { href: `${base}/daten/abstimmungsmatrix.csv`, label: "Abstimmungsmatrix (CSV)" },

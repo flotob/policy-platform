@@ -3,6 +3,7 @@ import { sql } from "@policy/db";
 import { publishedBundle } from "@/lib/bericht";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
+import { hiddenOf, maskHidden } from "@/lib/meldungen";
 
 /**
  * R5, the open export: the vote matrix (W1), the statements, the
@@ -26,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ gemeind
   const c = await getPublicCampaign(gemeinde, verfahren);
   const bundle = c ? await publishedBundle(c) : null;
   if (!c || !bundle) return new Response("Nicht gefunden", { status: 404 });
-  const r = bundle.result;
+  const r = maskHidden(bundle.result, await hiddenOf(c));
   const names = bundle.naming?.names ?? [];
   const camp = (g: number) => (g >= 0 ? (names[g] ?? `Lager ${"ABCDE"[g]}`) : "");
 

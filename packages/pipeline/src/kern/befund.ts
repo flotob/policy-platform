@@ -491,6 +491,17 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       });
     }
   }
+  // Without camps everyone still belongs in the open matrix (W1): no position, no camp, the votes.
+  if (!people.length && pids.length) {
+    const voteOf = new Map<string, string[]>();
+    for (const v of votes) {
+      const a = voteOf.get(v.participant) ?? nodes.map(() => ".");
+      a[nodeIndex.get(v.node)!] = v.value === 1 ? "a" : v.value === -1 ? "d" : "p";
+      voteOf.set(v.participant, a);
+    }
+    const via = new Map(input.participants.map((p) => [p.id, p.via]));
+    people = pids.map((pid, id) => ({ n: id + 1, camp: -1, x: -1, y: -1, v: voteOf.get(pid)!.join(""), via: via.get(pid) ?? null }));
+  }
   const k = camps?.k ?? 0;
   const members = Array.from({ length: k }, (_, g) => new Set([...campOf].filter(([, c]) => c === g).map(([p]) => p)));
   const personOf = (p: string | null) => (p && pIndex.has(p) && campOf.has(p) ? pIndex.get(p)! + 1 : null);

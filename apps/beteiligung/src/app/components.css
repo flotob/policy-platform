@@ -63,3 +63,21 @@
 .legal p + p { margin-top: 10px; }
 .legal ul { padding-left: 20px; margin: 8px 0; }
 .legal address { font-style: normal; line-height: 1.6; }
+
+/* "Hier stimmt etwas nicht": report a statement or a quote */
+.report-open, .card-report > summary { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ink-3); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.report-open:hover, .card-report > summary:hover { color: var(--ink); }
+.card-report { margin-top: 18px; }
+.card-report > summary { list-style: none; display: inline; }
+.card-report > summary::-webkit-details-marker { display: none; }
+.report-box { margin-top: 10px; display: grid; gap: 10px; font-size: 14px; color: var(--ink); text-align: left; }
+.report-box fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.report-box legend { font-weight: 600; margin-bottom: 4px; }
+.report-box label { display: flex; gap: 8px; align-items: baseline; }
+.report-box .report-note { display: grid; gap: 4px; }
+.report-box textarea { width: 100%; font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 8px; }
+.report-actions { display: flex; gap: 8px; }
+.report-actions button { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel); color: var(--ink); cursor: pointer; }
+.report-actions button[type="submit"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.report-err { color: var(--danger); font-size: 13px; }
+.report-done { font-size: 13px; color: var(--agree); }

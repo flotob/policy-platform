@@ -5,6 +5,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { ResultView } from "@/components/ergebnis/ResultView";
 import { latestResult, liveResult, namesLocked } from "@/lib/auswertung";
 import { latestReport, namingOf } from "@/lib/bericht";
+import { hiddenOf, maskHidden } from "@/lib/meldungen";
 import { getCampaign } from "@/lib/campaigns";
 import { methodParagraphs, periodOf, questionLabels, townShort } from "@/lib/ergebnis-seite";
 import { countQueue } from "@/lib/redaktion";
@@ -126,7 +127,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
   const naming = namingOf(saved.campNames);
   // Without camps there is nothing to name: the report can start at once.
   const confirmed = !!naming?.confirmedBy || !saved.result.camps;
-  const r = saved.result;
+  const r = maskHidden(saved.result, await hiddenOf(c));
   const canReopen = initiator && (c.state === "auswertung" || c.state === "bericht") && !(report && ["freigegeben", "veroeffentlicht"].includes(report.state));
   const reportOfThis = report && report.resultId === saved.id && report.state !== "zurueckgewiesen";
 

@@ -84,6 +84,7 @@ the Postgres container → `dropdb/createdb beteiligung` → `pg_restore --no-ow
 | `/verwaltung/team` | staff (changes: initiator) | Members and roles, open invitations, invite a colleague |
 | `/verwaltung/kommunen` | platform admins | All municipalities; a new one + the invitation for its first person |
 | `/verwaltung/einstellungen` | staff (changes: initiator) | The town's contact, website, links to its own imprint and privacy notice, logo (migration 0020; shown on every public page of the town) |
+| (on the voting card and the results page) | citizens | "Hier stimmt etwas nicht": report a statement or a quote with a reason (migration 0021 `content_reports`, 10 per connection and hour). The editors see "Meldungen" at the top of the Redaktion tab: hide (reason required, logged; a quote keeps its vote, a statement leaves the vote; in stored results the statement keeps its number, its text is replaced) or let it stand |
 | `/impressum`, `/datenschutz` | everyone | streit.bar's own imprint (Legal Tech Center LTC UG) and privacy notice; linked on every page |
 | `/verwaltung` | staff | The municipality's campaigns |
 | `/verwaltung/neu` | initiator | New campaign: title, decision question, measure |

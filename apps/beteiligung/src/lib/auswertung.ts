@@ -112,7 +112,8 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
         participant: (m.participant_id as string | null) ?? null,
         sender: sender(m),
         source: source(m),
-        personal: ((m.flags as string[] | null) ?? []).includes("personal_data"),
+        // A quote the editors hid after a report counts like personal data: the vote stays, the words go.
+        personal: ((m.flags as string[] | null) ?? []).some((f) => f === "personal_data" || f === "versteckt"),
         decidedBy: (m.decided_by as string | null) ?? null,
       }),
     ),

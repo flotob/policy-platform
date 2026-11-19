@@ -5,9 +5,11 @@ import { PublicFrame } from "@/components/PublicFrame";
 import { lastVotedTyp, myVotes, nextFor, statementsUnderVote, type Statement } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { QUESTIONS, STEPS } from "@/lib/params";
+import { REASONS } from "@/lib/meldungen";
 import { getParticipant } from "@/lib/teilnahme";
 
 import { vote } from "../actions";
+import { reportFromDeck } from "../melden-actions";
 import "../../public.css";
 import "../tueren.css";
 
@@ -126,6 +128,29 @@ export default async function Abstimmen({
                   </button>
                 </form>
               </div>
+              {next.rolle !== "schluss" ? (
+                <details className="card-report">
+                  <summary>Hier stimmt etwas nicht</summary>
+                  <form action={reportFromDeck.bind(null, c.tenant.slug, c.slug, next.id)} className="report-box">
+                    <fieldset>
+                      <legend>Was stimmt an dieser Aussage nicht?</legend>
+                      {REASONS.map((r, i) => (
+                        <label key={r.key}>
+                          <input type="radio" name="grund" value={r.key} defaultChecked={i === 0} /> {r.label}
+                        </label>
+                      ))}
+                    </fieldset>
+                    <label className="report-note">
+                      Kurz erklären (freiwillig)
+                      <textarea name="notiz" maxLength={300} rows={2} />
+                    </label>
+                    <div className="report-actions">
+                      <button type="submit">Melden</button>
+                    </div>
+                    <p className="small muted">Die Redaktion entscheidet. Bis dahin bleibt die Aussage stehen; du kannst sie überspringen.</p>
+                  </form>
+                </details>
+              ) : null}
             </article>
 
             <div className="deck-foot">

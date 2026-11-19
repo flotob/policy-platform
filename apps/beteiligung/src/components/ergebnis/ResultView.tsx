@@ -31,6 +31,8 @@ import {
 } from "@policy/pipeline/kern/text";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { ReportBox } from "@/components/ReportBox";
+
 /**
  * The results page after Stephan's design (Online-Anhang, Musterstadt),
  * rendered from the stored result object (W9) — or, in the workspace, from
@@ -54,6 +56,8 @@ export interface ResultViewProps {
   notice?: string | null;
   report?: { href: string; label: string } | null;
   files?: { href: string; label: string }[];
+  /** On the public page: citizens can report a statement or a quote ("Hier stimmt etwas nicht"). */
+  reportable?: { gemeinde: string; verfahren: string } | null;
 }
 
 const W = 640;
@@ -579,6 +583,9 @@ export function ResultView(props: ResultViewProps) {
           Aussage {cur.nr} von {N}
           {small ? "" : ` · Brückenschwelle ${Math.round(r.params.bridgeThreshold * 100)} % in ${k === 2 ? "beiden" : "allen"} Lagern`}
         </span>
+        {props.reportable && cur.rolle !== "schluss" ? (
+          <ReportBox key={`n${cur.id}`} gemeinde={props.reportable.gemeinde} verfahren={props.reportable.verfahren} kind="node" id={cur.id} label="Aussage melden" />
+        ) : null}
         <span className="nav">
           <button type="button" onClick={() => select(prev.nr)}>
             ← Vorige
@@ -854,6 +861,16 @@ export function ResultView(props: ResultViewProps) {
             ) : (
               <p className="hint">Bei Privatpersonen zeigen wir nur die zitierte Stelle, nie den Text darum herum.</p>
             )}
+            {props.reportable ? (
+              <ReportBox
+                key={`m${source.q.move}`}
+                gemeinde={props.reportable.gemeinde}
+                verfahren={props.reportable.verfahren}
+                kind="move"
+                id={source.q.move}
+                label="Hier stimmt etwas nicht: Zitat melden"
+              />
+            ) : null}
             {person ? (
               <div className="also">
                 <div className="eyebrow">Dieselbe Person hat außerdem bewertet</div>

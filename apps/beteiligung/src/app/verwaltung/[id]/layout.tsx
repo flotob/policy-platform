@@ -6,6 +6,7 @@ import { CampaignTabs } from "@/components/CampaignTabs";
 import { MachineStatus } from "@/components/MachineStatus";
 import { getCampaign } from "@/lib/campaigns";
 import { STATES } from "@/lib/params";
+import { countOpenReports } from "@/lib/meldungen";
 import { countQueue, listJobs } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 
@@ -14,7 +15,8 @@ export default async function CampaignLayout({ children, params }: { children: R
   const staff = await requireStaff();
   const campaign = await getCampaign(staff.tenant.id, (await params).id);
   if (!campaign) notFound();
-  const [jobs, queue] = await Promise.all([listJobs(campaign.id), countQueue(campaign.consultationId)]);
+  const [jobs, open, reports] = await Promise.all([listJobs(campaign.id), countQueue(campaign.consultationId), countOpenReports(campaign.id)]);
+  const queue = open + reports;
   const showWork = campaign.state !== "entwurf" || jobs.length > 0;
 
   return (

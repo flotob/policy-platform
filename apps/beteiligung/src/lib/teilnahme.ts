@@ -29,7 +29,7 @@ const cookieName = (c: Campaign) => `teilnahme-${c.id.slice(0, 8)}`;
 const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 
 /** Where a request comes from, salted per campaign — only for counting, never stored in clear. */
-async function originHash(c: Campaign): Promise<string> {
+export async function originHash(c: Campaign): Promise<string> {
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || h.get("x-real-ip") || "local";
   return hash(`${ip}|${c.id}|${process.env.BETTER_AUTH_SECRET ?? ""}`).slice(0, 32);

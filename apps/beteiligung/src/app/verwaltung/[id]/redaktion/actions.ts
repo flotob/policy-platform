@@ -18,6 +18,7 @@ import { redirect } from "next/navigation";
 import { getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { QUESTIONS, STEPS } from "@/lib/params";
+import { decideReport } from "@/lib/meldungen";
 import { getNode, skeletonRecommended } from "@/lib/redaktion";
 import { requireEditor } from "@/lib/session";
 import { REJECT, type RejectKey } from "@/lib/vocab";
@@ -191,4 +192,14 @@ export async function reassignMoveAction(id: string, back: string, moveId: strin
     () => reassignMove(db, { tenantId: campaign.tenantId, moveId, actor, to: { node, stance } }),
     back.startsWith("punkt=") ? `${base}?${back}` : base,
   );
+}
+
+/** A citizen's report: hide the item (reason required, logged) or let it stand. */
+export async function decideReportAction(id: string, kind: "node" | "move", subjectId: string, form: FormData): Promise<void> {
+  const x = await ctx(id);
+  const hide = String(form.get("entscheidung") ?? "") === "ausblenden";
+  const err = await decideReport(x.campaign, kind, subjectId, hide, String(form.get("grund") ?? ""), x.staff.user.id);
+  if (!err && hide) await syncDerivedVotes(x.db, x.campaign.consultationId);
+  revalidatePath(`/verwaltung/${id}`, "layout");
+  redirect(err ? `${x.base}?meldung=${encodeURIComponent(err)}#meldungen` : `${x.base}#meldungen`);
 }

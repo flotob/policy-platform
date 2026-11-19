@@ -5,12 +5,14 @@ import { notFound } from "next/navigation";
 import { Quote } from "@/components/Quote";
 import { getCampaign } from "@/lib/campaigns";
 import { EDITORIAL_MODES, QUESTIONS, STEPS, type EditorialMode } from "@/lib/params";
+import { openReports, reasonLabel } from "@/lib/meldungen";
 import { getMove, getNode, listNodes, loadQueue, movesOfNode, queueSize, type Move, type Node } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 import { actorName, certainty, FLAG, REJECT, TYP } from "@/lib/vocab";
 
 import {
   confirmMoveAction,
+  decideReportAction,
   detachMoveAction,
   discardMoveAction,
   mergeNodeAction,
@@ -119,7 +121,7 @@ export default async function Redaktion({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ punkt?: string; beitrag?: string; fehler?: string }>;
+  searchParams: Promise<{ punkt?: string; beitrag?: string; fehler?: string; meldung?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -128,7 +130,7 @@ export default async function Redaktion({
   if (!campaign) notFound();
   const canDecide = staff.role !== "betrachter";
   const mode = campaign.params.editorialMode;
-  const [queue, all] = await Promise.all([loadQueue(campaign.consultationId), listNodes(campaign.consultationId)]);
+  const [queue, all, reports] = await Promise.all([loadQueue(campaign.consultationId), listNodes(campaign.consultationId), openReports(campaign)]);
   const total = queueSize(queue);
   const recommended = queue.skeleton.filter((n) => n.review?.verdict === "release" && !n.review.flags.includes("personal_data")).length;
 
@@ -195,6 +197,47 @@ export default async function Redaktion({
         <p className="notice small">
           Die Beteiligung ist geschlossen. Was Sie jetzt noch freigeben, kommt nicht mehr zur Abstimmung und nicht ins gespeicherte Ergebnis.
         </p>
+      ) : null}
+
+      {reports.length ? (
+        <section className="rd-reports" id="meldungen" aria-label="Meldungen">
+          <h2>
+            Meldungen <span className="badge num">{reports.length}</span>
+          </h2>
+          <p className="small muted">
+            Bürgerinnen und Bürger haben gemeldet, dass hier etwas nicht stimmt. Ausblenden nimmt eine Aussage aus der Abstimmung; bei einem Zitat
+            verschwinden nur die Worte, die Stimme dahinter zählt weiter. Jede Entscheidung steht mit Grund im Protokoll.
+          </p>
+          {sp.meldung ? <p className="notice small">{sp.meldung}</p> : null}
+          {reports.map((r) => (
+            <article key={`${r.kind}${r.id}`} className="rd-report">
+              <p className="rd-report-kind small muted">
+                {r.kind === "node" ? "Aussage" : "Zitat"} · {r.count === 1 ? "einmal gemeldet" : `${r.count}-mal gemeldet`}
+              </p>
+              <blockquote>„{r.text}“</blockquote>
+              {r.context ? <p className="small muted">Gehört zur Aussage: {r.context}</p> : null}
+              <ul className="small">
+                {r.reasons.map((x, i) => (
+                  <li key={i}>
+                    {reasonLabel(x.reason)}
+                    {x.note ? `: „${x.note}“` : ""}
+                  </li>
+                ))}
+              </ul>
+              {canDecide ? (
+                <form action={decideReportAction.bind(null, id, r.kind, r.id)} className="rd-report-actions">
+                  <input name="grund" className="input" placeholder="Grund, steht im Protokoll" maxLength={500} />
+                  <button type="submit" name="entscheidung" value="ausblenden" className="btn btn-small" disabled={r.isRoot}>
+                    Ausblenden
+                  </button>
+                  <button type="submit" name="entscheidung" value="bleibt" className="btn btn-quiet btn-small">
+                    Bleibt stehen
+                  </button>
+                </form>
+              ) : null}
+            </article>
+          ))}
+        </section>
       ) : null}
 
       <div className="rd-grid">
