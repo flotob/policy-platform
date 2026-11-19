@@ -1,0 +1,22 @@
+# Weekly library updates as pull requests (roadmap: "security fixes arrive as proposals").
+# Against app/beteiligung, the branch streit.bar runs on; nothing merges by itself.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: app/beteiligung
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    labels: [dependencies]
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: app/beteiligung
+    schedule:
+      interval: monthly
