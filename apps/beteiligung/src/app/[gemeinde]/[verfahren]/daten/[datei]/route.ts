@@ -1,6 +1,8 @@
 import { sql } from "@policy/db";
 
 import { publishedBundle } from "@/lib/bericht";
+import { publicDecision } from "@/lib/beschluss";
+import { outcomeOf } from "@/lib/beschluss-words";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { hiddenOf, maskHidden } from "@/lib/meldungen";
@@ -92,6 +94,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ gemeind
         { version: bundle.version, gerechnet: bundle.createdAt, lagernamen: names, beschreibungen: bundle.naming?.descriptions ?? [], ergebnis: r },
         `ergebnis-${c.slug}.json`,
       );
+    case "beschluss.json": {
+      const d = await publicDecision(c.id);
+      if (!d) return new Response("Nicht gefunden", { status: 404 });
+      return json(
+        {
+          gremium: d.gremium,
+          sitzung: d.datum,
+          beschluss: d.summary,
+          aussagen: r.statements
+            .filter((s) => d.points[s.id])
+            .map((s) => ({ nr: s.nr, text: s.text, behandlung: outcomeOf(d.points[s.id]!.outcome)?.label, begruendung: d.points[s.id]!.reason })),
+        },
+        `beschluss-${c.slug}.json`,
+      );
+    }
     default:
       return new Response("Nicht gefunden", { status: 404 });
   }

@@ -30,7 +30,9 @@ import {
   stepCountText,
   diagnosisText,
   evidenceText,
+  firmBridge,
   headline,
+  lotSummary,
   pct,
   stepText,
   word,
@@ -44,6 +46,7 @@ export const SECTIONS = {
   beteiligung: "Wer sich beteiligt hat",
   stimmen: "Wie abgestimmt wurde",
   einig: "Worauf sich die Lager einigen",
+  vorbehalt: "Einigkeit unter Vorbehalt",
   warnung: "Vorsicht, Scheinkonsens",
   rat: "Was der Rat entscheiden muss",
   klaeren: "Was sich klären lässt",
@@ -111,6 +114,12 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     `${fmt(p.voters)} Teilnehmende haben ${fmt(p.votes)} Stimmen zu ${r.statements.length} Aussagen abgegeben${how.length ? `: ${list(how)}` : ""}.` +
       (came.length ? ` Eingegangen ${came.length === 1 && came[0]!.startsWith("1 ") ? "ist" : "sind"} ${list(came)}.` : ""),
   );
+  if (p.drawn) {
+    add(
+      "beteiligung",
+      `${fmt(p.drawn)} ${p.drawn === 1 ? "Person kam" : "Teilnehmende kamen"} mit dem Code aus einem Brief an zufällig ausgeloste Einwohnerinnen und Einwohner. Ihre Stimmen zählen wie alle anderen und werden zusätzlich getrennt ausgewertet, als Gegenprobe.`,
+    );
+  }
   if (ctx.fictional) add("beteiligung", "Dies ist ein Beispiel mit erfundenen Inhalten, kein echtes Verfahren.");
   if (r.camps) {
     const sizes = r.camps.sizes.map((n, g) => `das ${campLabel(names, g)} mit ${fmt(n)} Personen`);
@@ -122,7 +131,8 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   if (ctx.editorialMode === "ki") add("beteiligung", "Neue Punkte hat die Maschine ohne menschliche Freigabe entschieden; die Redaktion hat Stichproben geprüft.");
 
   // Einig: per step by number, the broadest three in words; the numbers stand on the results page.
-  const carried = r.statements.filter((x) => x.category === "bruecke" && x.profile === "getragen");
+  // Only bridges that passed Stephan's checks; the others follow under "Einigkeit unter Vorbehalt".
+  const carried = r.statements.filter((x) => firmBridge(x) && x.profile === "getragen");
   for (const st of [...r.steps.map((x) => ({ key: x.key as string | null, label: x.label })), { key: null, label: "" }]) {
     const ss = carried.filter((x) => (x.schritt ?? null) === st.key);
     if (!ss.length) continue;
@@ -139,7 +149,7 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   for (const s of [...carried].sort((a, b) => floor(b) - floor(a) || a.nr - b.nr).slice(0, 3)) {
     add("einig", `Besonders breit getragen: ${ref(s)}, mit ${shares(s, names)} Zustimmung.`, [s.nr]);
   }
-  const rejected = r.statements.filter((x) => x.profile === "abgelehnt");
+  const rejected = r.statements.filter((x) => x.profile === "abgelehnt" && firmBridge(x));
   if (rejected.length) {
     add(
       "einig",
@@ -147,6 +157,23 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
         ? `${k === 2 ? "Beide" : "Alle"} Lager lehnen ab: ${rejected.map((x) => ref(x)).join(", ")}.`
         : `${k === 2 ? "Beide" : "Alle"} Lager lehnen ${fmt(rejected.length)} Aussagen ab: ${rejected.map((x) => `[A${x.nr}]`).join(", ")}.`,
       rejected.map((x) => x.nr),
+    );
+  }
+  for (const s of r.statements.filter((x) => x.category === "bruecke" && !firmBridge(x))) {
+    const field = s.profile === "abgelehnt" ? "disagree" : "agree";
+    const what = s.profile === "abgelehnt" ? "Ablehnung" : "Zustimmung";
+    const why: string[] = [];
+    if (s.check && !s.check.robust) {
+      why.push(`ohne ein Zehntel der ${what} ${list(s.check.fragile.map((g) => `im ${campLabel(names, g)}`))} fiele sie unter die Schwelle`);
+    }
+    if (s.check?.lot?.status === "faellt") {
+      const low = s.check.lot.camps.flatMap((c, g) => (c.seen && c[field] / c.seen < r.params.bridgeThreshold ? [`im ${campLabel(names, g)} nur ${fmt(c[field])} von ${fmt(c.seen)}`] : []));
+      why.push(`bei den Ausgelosten ${s.profile === "abgelehnt" ? "lehnen" : "stimmen"} ${list(low)} ${s.profile === "abgelehnt" ? "ab" : "zu"}`);
+    }
+    add(
+      "vorbehalt",
+      `${k === 2 ? "Beide" : "Alle"} Lager ${s.profile === "abgelehnt" ? "lehnen" : "stimmen"} ${ref(s)} ${s.profile === "abgelehnt" ? "ab" : "zu"} (${shares(s, names, field)}), aber die Einigkeit ist nicht belastbar: ${why.join("; ")}. Sie trägt einen Beschluss nicht allein.`,
+      [s.nr],
     );
   }
   for (const s of r.statements.filter((x) => x.category === "warnung")) {
@@ -219,6 +246,31 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
       ? `Die Debatte gilt als ausgeschöpft: Die letzten ${fmt(sat.streak)} Eingaben brachten keinen neuen Punkt.`
       : `Die Debatte war nicht ausgeschöpft: Von ${fmt(sat.inputs)} Eingaben brachten ${fmt(sat.newPoints)} einen neuen Punkt, ${sat.streak ? `zuletzt ${fmt(sat.streak)} in Folge keinen` : "auch die letzte noch"}; ausgeschöpft wäre sie erst nach ${fmt(sat.window)} Eingaben ohne Neues.`,
   );
+  const bridges = r.statements.filter((x) => x.category === "bruecke" && x.check);
+  if (bridges.length) {
+    const fragile = bridges.filter((x) => !x.check!.robust);
+    add(
+      "belastbarkeit",
+      fragile.length
+        ? `${fragile.length === 1 ? "Eine Brücke hängt" : `${cap(word(fragile.length))} Brücken hängen`} an wenigen Stimmen: ${fragile.map((x) => `[A${x.nr}]`).join(", ")}. Alle anderen halten auch, wenn man in jedem Lager ein Zehntel der Stimmen herausnimmt, die sie tragen.`
+        : "Jede Brücke hält auch, wenn man in jedem Lager ein Zehntel der Stimmen herausnimmt, die sie tragen. Keine hängt an wenigen Stimmen.",
+      fragile.map((x) => x.nr),
+    );
+    const lot = lotSummary(r);
+    const num = (n: number) => (n <= 12 ? word(n) : fmt(n));
+    if (!lot) {
+      add("belastbarkeit", "Eine Gegenprobe durch Los gab es nicht. Ob die Brücken auch bei Menschen tragen, die nicht von sich aus mitgemacht haben, ist offen.");
+    } else {
+      const a = [
+        lot.firm ? `${num(lot.firm)} auch bei den Ausgelosten` : "",
+        lot.onlySelf ? `${num(lot.onlySelf)} nur bei denen, die von sich aus mitgemacht haben` : "",
+      ].filter(Boolean);
+      let text = `Gegenprobe durch Los mit ${fmt(lot.drawn)} ausgelosten Teilnehmenden: `;
+      text += a.length ? `Von ${num(lot.bridges)} Brücken tragen ${list(a)}` : `Von ${num(lot.bridges)} Brücken ließ sich keine prüfen`;
+      if (lot.tooFew) text += a.length ? `; bei ${lot.tooFew === 1 ? "einer" : num(lot.tooFew)} haben zu wenige Ausgeloste abgestimmt` : ", weil zu wenige Ausgeloste abgestimmt haben";
+      add("belastbarkeit", `${text}.`, r.statements.filter((x) => x.check?.lot?.status === "faellt").map((x) => x.nr));
+    }
+  }
   if (r.camps) {
     const s = r.camps.silhouette;
     add("belastbarkeit", s >= 0.5 ? "Die Lager sind deutlich voneinander getrennt." : s >= 0.25 ? "Die Lager sind erkennbar voneinander getrennt." : "Die Lager sind nur schwach voneinander getrennt; die Zahlen sind mit Vorsicht zu lesen.");

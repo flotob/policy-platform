@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ResultView } from "@/components/ergebnis/ResultView";
 import { PublicFrame } from "@/components/PublicFrame";
 import { publishedBundle } from "@/lib/bericht";
+import { publicDecision } from "@/lib/beschluss";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { methodParagraphs, periodOf, questionLabels, townShort } from "@/lib/ergebnis-seite";
 import { hiddenOf, maskHidden } from "@/lib/meldungen";
@@ -24,7 +25,7 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
   const bundle = await publishedBundle(c);
   if (!bundle) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;
-  const [period, hidden] = await Promise.all([periodOf(c), hiddenOf(c)]);
+  const [period, hidden, decision] = await Promise.all([periodOf(c), hiddenOf(c), publicDecision(c.id)]);
   const r = maskHidden(bundle.result, hidden);
   return (
     <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
@@ -40,6 +41,7 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
           questions={questionLabels}
           method={methodParagraphs(c, r)}
           reportable={{ gemeinde: c.tenant.slug, verfahren: c.slug }}
+          decision={decision}
           report={{ href: `${base}/bericht`, label: "Den Bericht lesen" }}
           files={[
             { href: `${base}/daten/abstimmungsmatrix.csv`, label: "Abstimmungsmatrix (CSV)" },
@@ -47,6 +49,7 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
             { href: `${base}/daten/beitraege.json`, label: "Beiträge und Zitate (JSON)" },
             { href: `${base}/daten/protokoll.json`, label: "Protokoll (JSON)" },
             { href: `${base}/daten/ergebnis.json`, label: "Ergebnis (JSON)" },
+            ...(decision ? [{ href: `${base}/daten/beschluss.json`, label: "Beschluss (JSON)" }] : []),
           ]}
         />
       </main>

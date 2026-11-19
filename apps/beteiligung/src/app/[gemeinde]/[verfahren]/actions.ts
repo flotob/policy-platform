@@ -11,13 +11,15 @@ import { castVote } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue } from "@/lib/kern";
-import { ensureParticipant, LIMITS, ParticipationError, trackingToken, within } from "@/lib/teilnahme";
+import { follow } from "@/lib/folgen";
+import { ensureParticipant, getParticipant, LIMITS, originHash, ParticipationError, redeemCode, trackingToken, within } from "@/lib/teilnahme";
 import { answerShort as answerShortCore, runShortCheck, shortByToken, storeShort } from "@/lib/tuer2";
 
 type Row = Record<string, unknown>;
 
 export interface DoorState {
   error?: string;
+  ok?: string;
   values?: Record<string, string>;
 }
 
@@ -32,13 +34,24 @@ async function open(gemeinde: string, verfahren: string) {
   return { c, base };
 }
 
-/** The entry with an invitation code (access "einladung"): the code opens a pseudonym for this browser. */
+/**
+ * The entry with a code from a letter. Access "einladung": the code opens a pseudonym for this
+ * browser. An open procedure: the code marks the pseudonym as invited by letter (the cross-check
+ * by lot); taking part never needed it.
+ */
 export async function startWithCode(gemeinde: string, verfahren: string, _prev: DoorState, form: FormData): Promise<DoorState> {
   const { c, base } = await open(gemeinde, verfahren);
+  const code = field(form, "code");
   try {
-    await ensureParticipant(c, field(form, "code"));
+    if (c.params.access === "einladung") await ensureParticipant(c, code);
+    else {
+      const p = await ensureParticipant(c);
+      const r = await redeemCode(c, p.id, code);
+      if (r === "unbekannt") return { error: "Diesen Code kennen wir nicht, oder er wurde schon benutzt. Mitmachen kannst du trotzdem.", values: { code } };
+      if (r === "schon") redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
+    }
   } catch (e) {
-    if (e instanceof ParticipationError) return { error: e.message, values: { code: field(form, "code") } };
+    if (e instanceof ParticipationError) return { error: e.message, values: { code } };
     throw e;
   }
   redirect(`${base}/abstimmen`);
@@ -177,4 +190,32 @@ export async function objectToAssignment(gemeinde: string, verfahren: string, to
     await syncDerivedVotes(db, c.consultationId);
   }
   redirect(`${base}/laufzettel/${token}?einspruch=1`);
+}
+
+/**
+ * Voluntary news by e-mail: when the result is out and when the council has decided. The links to
+ * this browser's tracking slips go with the address, so the message can say what became of them.
+ */
+export async function followCampaign(gemeinde: string, verfahren: string, token: string | null, _prev: DoorState, form: FormData): Promise<DoorState> {
+  const c = await getPublicCampaign(gemeinde, verfahren);
+  if (!c) return { error: "Dieses Verfahren gibt es nicht." };
+  const email = field(form, "email");
+  const db = getDb();
+  const me = await getParticipant(c);
+  const tokens = new Set<string>();
+  if (me) {
+    const r = await db.execute(sql`SELECT tracking_token FROM submissions WHERE participant_id = ${me.id} AND tracking_token IS NOT NULL`);
+    for (const x of r.rows as Row[]) tokens.add(x.tracking_token as string);
+  }
+  if (token) {
+    const r = await db.execute(sql`SELECT 1 FROM submissions WHERE consultation_id = ${c.consultationId} AND tracking_token = ${token}`);
+    if (r.rows.length) tokens.add(token);
+  }
+  const res = await follow(c, email, [...tokens], await originHash(c));
+  if (!res.ok) return { error: res.error, values: { email } };
+  return {
+    ok: res.already
+      ? "Diese Adresse bekommt die Nachrichten schon."
+      : "Fast geschafft: Wir haben dir eine E-Mail geschickt. Bitte bestätige den Link darin, sonst schreiben wir dir nicht.",
+  };
 }

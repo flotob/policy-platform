@@ -16,15 +16,19 @@ function Submit({ children, pending }: { children: string; pending: string }) {
   );
 }
 
-/** Access "einladung": the code from the letter opens the participation. */
-export function CodeForm({ gemeinde, verfahren }: { gemeinde: string; verfahren: string }) {
+/** The code from a letter: opens the participation (access "einladung") or marks it as invited by lot. */
+export function CodeForm({ gemeinde, verfahren, code = "", drawn = false }: { gemeinde: string; verfahren: string; code?: string; drawn?: boolean }) {
   const [state, action] = useActionState<DoorState, FormData>(startWithCode.bind(null, gemeinde, verfahren), {});
   return (
     <form action={action} className="door-form">
       <div className="field">
-        <label htmlFor="code">Dein Einladungscode</label>
-        <input id="code" name="code" className="input code-input" defaultValue={state.values?.code ?? ""} autoComplete="off" placeholder="ABCD-2345" required />
-        <span className="hint">Er steht in dem Brief, mit dem die Stadt dich eingeladen hat.</span>
+        <label htmlFor="code">{drawn ? "Dein Code aus dem Brief" : "Dein Einladungscode"}</label>
+        <input id="code" name="code" className="input code-input" defaultValue={state.values?.code ?? code} autoComplete="off" placeholder="ABCD-2345" required />
+        <span className="hint">
+          {drawn
+            ? "Du gehörst zu den Menschen, die per Los eingeladen wurden. Deine Stimmen zählen wie alle anderen und zusätzlich für die Gegenprobe."
+            : "Er steht in dem Brief, mit dem die Stadt dich eingeladen hat."}
+        </span>
       </div>
       {state.error ? <p className="error">{state.error}</p> : null}
       <Submit pending="Wird geprüft …">Mit Code starten</Submit>

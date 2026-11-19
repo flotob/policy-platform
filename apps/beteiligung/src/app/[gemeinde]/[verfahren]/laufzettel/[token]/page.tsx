@@ -5,12 +5,16 @@ import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { PublicFrame } from "@/components/PublicFrame";
+import { publishedBundle } from "@/lib/bericht";
+import { publicDecision } from "@/lib/beschluss";
+import { decisionDate, outcomeOf, type PublicDecision } from "@/lib/beschluss-words";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { QUESTIONS, STEPS } from "@/lib/params";
 import { REJECT } from "@/lib/vocab";
 
 import { objectToAssignment } from "../../actions";
+import { FollowForm } from "../../FollowForm";
 import "../../../public.css";
 import "../../tueren.css";
 
@@ -47,6 +51,7 @@ interface MoveView {
   decision: { action?: string; reason?: string; einspruch?: boolean } | null;
   decidedBy: string | null;
   node: null | {
+    id: string;
     ord: number;
     status: string;
     text: string;
@@ -64,7 +69,49 @@ interface MoveView {
 }
 
 /** What became of one argument, in the words of Stephan's Laufzettel. */
-function Fate({ m, base, token, short }: { m: MoveView; base: string; token: string; short: boolean }) {
+/** Where the procedure stands after the vote: closed, report out, council decided. */
+type After = { state: string; decision: PublicDecision | null };
+
+/**
+ * The fifth station (Stephan, paper v10, "Der Rückweg"): what the council made of the point. Before
+ * the decision it says where things stand, so the slip never ends at the report.
+ */
+function Beschluss({ n, own, after }: { n: NonNullable<MoveView["node"]>; own: boolean; after: After }) {
+  const d = after.decision;
+  const subject = own ? "Dein Punkt" : `Punkt ${n.ord}, zu dem dein Beitrag gehört,`;
+  let head: string;
+  let body: string | null = null;
+  let tone = "wait";
+  if (d) {
+    const p = d.points[n.id];
+    const when = decisionDate(d.datum);
+    head = `${subject} lag dem ${d.gremium}${when ? ` am ${when}` : ""} vor.`;
+    if (p) {
+      const o = outcomeOf(p.outcome);
+      body = `Ergebnis: ${o?.lower ?? p.outcome}${p.reason ? `. ${p.reason.replace(/\.?$/, ".")}` : "."}`;
+      tone = p.outcome === "nicht_beruecksichtigt" ? "no" : "yes";
+    } else {
+      body = `Zu diesem Punkt hat die Verwaltung nichts Eigenes vermerkt.${d.summary ? ` Beschlossen wurde: ${d.summary}` : ""}`;
+    }
+  } else if (after.state === "veroeffentlicht") {
+    head = "Der Bericht ist veröffentlicht.";
+    body = `Jetzt berät der Gemeinderat. Was er mit Punkt ${n.ord} macht, steht dann hier.`;
+  } else if (after.state === "auswertung" || after.state === "bericht") {
+    head = "Die Beteiligung ist geschlossen.";
+    body = "Die Stadt wertet aus und schreibt den Bericht. Danach berät der Gemeinderat; was er mit dem Punkt macht, steht dann hier.";
+  } else {
+    return null;
+  }
+  return (
+    <div className={`fate-council ${tone}`}>
+      <p className="fate-council-k">Station 5 · Der Beschluss</p>
+      <p className="fate-council-h">{head}</p>
+      {body ? <p>{body}</p> : null}
+    </div>
+  );
+}
+
+function Fate({ m, base, token, short, after }: { m: MoveView; base: string; token: string; short: boolean; after: After }) {
   const n = m.node;
   const own = m.own;
   let head: string;
@@ -150,6 +197,7 @@ function Fate({ m, base, token, short }: { m: MoveView; base: string; token: str
           </p>
         </div>
       ) : null}
+      {n && n.status === "released" && m.state === "verknuepft" ? <Beschluss n={n} own={own} after={after} /> : null}
       <details className="fate-diff">
         <summary>Was genau geändert wurde</summary>
         <table>
@@ -175,7 +223,7 @@ function Fate({ m, base, token, short }: { m: MoveView; base: string; token: str
           </tbody>
         </table>
       </details>
-      {m.state === "verknuepft" ? (
+      {m.state === "verknuepft" && after.state === "offen" ? (
         <form action={objectToAssignment.bind(null, base.split("/")[1]!, base.split("/")[2]!, token, m.id)}>
           <button type="submit" className="btn btn-quiet btn-small">
             Das meint mein Punkt nicht
@@ -232,6 +280,9 @@ export default async function Laufzettel({
   const busy = job?.state === "wartet" || job?.state === "laeuft";
   const reading = !moves.length && busy;
   const failed = !moves.length && job?.state === "fehler";
+  // Once the result is published, points carry the numbers of the results page (Aussage 41), not their internal order.
+  const bundle = c.state === "veroeffentlicht" ? await publishedBundle(c) : null;
+  const nrOf = new Map((bundle?.result.statements ?? []).map((x) => [x.id, x.nr]));
   const views: MoveView[] = moves.map((m) => ({
     id: m.id as string,
     quote: m.quote as string,
@@ -246,12 +297,13 @@ export default async function Laufzettel({
     match: (m.match as MoveView["match"]) ?? null,
     decision: (m.decision as MoveView["decision"]) ?? null,
     decidedBy: (m.decided_by as string | null) ?? null,
-    matchOrd: m.match_ord == null ? null : Number(m.match_ord),
+    matchOrd: m.match_ord == null ? null : (nrOf.get((m.match as { node?: string } | null)?.node ?? "") ?? Number(m.match_ord)),
     own: m.n_own === true,
     node: m.n_ord == null
       ? null
       : {
-          ord: Number(m.n_ord),
+          id: m.map_point_id as string,
+          ord: nrOf.get(m.map_point_id as string) ?? Number(m.n_ord),
           status: m.n_status as string,
           text: m.n_text as string,
           typ: m.n_typ as string,
@@ -265,6 +317,7 @@ export default async function Laufzettel({
         },
   }));
   const isShort = s.door === "statement";
+  const after: After = { state: c.state, decision: c.state === "veroeffentlicht" ? await publicDecision(c.id) : null };
   const confirmed = (s.decided as { answer?: string } | null)?.answer === "ja";
 
   return (
@@ -296,7 +349,7 @@ export default async function Laufzettel({
             <p>Sobald entschieden ist, steht es hier.</p>
           </section>
         ) : isShort ? (
-          views.map((m) => <Fate key={m.id} m={m} base={base} token={token} short />)
+          views.map((m) => <Fate key={m.id} m={m} base={base} token={token} short after={after} />)
         ) : (
           <>
             <p className="pub-lead">
@@ -307,15 +360,16 @@ export default async function Laufzettel({
             {views.map((m) => (
               <div key={m.id} className="slip-move">
                 <blockquote className="door-quote small-quote">„{m.quote.replace(/\s+/g, " ")}“</blockquote>
-                <Fate m={m} base={base} token={token} short={false} />
+                <Fate m={m} base={base} token={token} short={false} after={after} />
               </div>
             ))}
           </>
         )}
 
+        {!after.decision ? <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} token={token} after={c.state === "veroeffentlicht" ? "decision" : "result"} /> : null}
         <p className="slip-keep small muted">
           {confirmed ? "Du hast bestätigt, dass dein Punkt schon da war. " : ""}Speichere diesen Link, um später nachzusehen.{" "}
-          <Link href={`${base}/abstimmen`}>Weiter abstimmen</Link>
+          {c.state === "offen" ? <Link href={`${base}/abstimmen`}>Weiter abstimmen</Link> : c.state === "veroeffentlicht" ? <Link href={`${base}/ergebnis`}>Zum Ergebnis</Link> : null}
         </p>
       </main>
     </PublicFrame>

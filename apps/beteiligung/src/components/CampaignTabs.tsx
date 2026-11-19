@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** Setup · the live picture and the evaluation (once citizens take part) · the report (once closed) · the argument · the editorial queue. */
-export function CampaignTabs({ id, queue, showWork, live, closed }: { id: string; queue: number; showWork: boolean; live: boolean; closed: boolean }) {
+/** Setup · the live picture and the evaluation (once citizens take part) · the report (once closed) · the council's decision (once published) · the argument · the editorial queue. */
+export function CampaignTabs({ id, queue, showWork, live, closed, published = false }: { id: string; queue: number; showWork: boolean; live: boolean; closed: boolean; published?: boolean }) {
   const path = usePathname();
   const base = `/verwaltung/${id}`;
   const tabs = [
     { href: base, label: "Einrichtung" },
     ...(live ? [{ href: `${base}/lagebild`, label: "Lagebild" }, { href: `${base}/auswertung`, label: "Auswertung" }] : []),
     ...(closed ? [{ href: `${base}/bericht`, label: "Bericht" }] : []),
+    ...(published ? [{ href: `${base}/beschluss`, label: "Beschluss" }] : []),
     ...(showWork
       ? [
           { href: `${base}/punkte`, label: "Begründung und Einwände" },

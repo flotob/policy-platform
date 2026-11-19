@@ -10,6 +10,7 @@ import { getParticipant } from "@/lib/teilnahme";
 
 import { vote } from "../actions";
 import { reportFromDeck } from "../melden-actions";
+import { FollowForm } from "../FollowForm";
 import "../../public.css";
 import "../tueren.css";
 
@@ -186,6 +187,7 @@ export default async function Abstimmen({
                 </Link>
               ) : null}
             </div>
+            <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} />
             <h2>So haben die anderen bisher abgestimmt</h2>
             <ul className="done-list">
               {statements.map((s) => {

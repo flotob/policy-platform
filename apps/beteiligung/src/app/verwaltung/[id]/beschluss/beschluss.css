@@ -1,0 +1,18 @@
+/* The council's decision in the workspace: the meeting, then one row per statement. */
+.bs-form { max-width: 980px; }
+.bs-head { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px 16px; margin-bottom: 18px; }
+.bs-summary { grid-column: 1 / -1; }
+.bs-group { margin-top: 22px; }
+.bs-group h3 { font-family: var(--serif); font-size: 19px; font-weight: 600; margin-bottom: 2px; }
+.bs-row { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.bs-text { grid-row: span 2; margin: 0; line-height: 1.45; }
+.bs-nr { display: inline-block; min-width: 26px; font-weight: 600; color: var(--ink-3); }
+.bs-cat { display: block; margin-top: 4px; margin-left: 26px; font-size: 12.5px; color: var(--ink-3); }
+.bs-select, .bs-reason { width: 100%; font-size: 14px; }
+.bs-foot { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) {
+  .bs-head { grid-template-columns: 1fr; }
+  .bs-row { grid-template-columns: 1fr; }
+  .bs-text { grid-row: auto; }
+}
+.bs-fields { border: 0; padding: 0; margin: 0; min-width: 0; }

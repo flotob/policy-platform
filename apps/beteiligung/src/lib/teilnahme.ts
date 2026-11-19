@@ -113,3 +113,19 @@ export function inviteCode(): { code: string; hash: string } {
   const raw = [...randomBytes(8)].map((b) => alphabet[b % alphabet.length]).join("");
   return { code: `${raw.slice(0, 4)}-${raw.slice(4)}`, hash: hash(raw) };
 }
+
+/**
+ * An open procedure, a code from a letter (the cross-check by lot): the code joins this browser's
+ * pseudonym, once. Nothing else about the person is known — only that they came by letter.
+ */
+export async function redeemCode(c: Campaign, participantId: string, raw: string): Promise<"ok" | "unbekannt" | "schon"> {
+  const code = raw.replace(/[\s-]/g, "").toUpperCase();
+  if (!code) return "unbekannt";
+  const db = getDb();
+  const mine = await db.execute(sql`SELECT 1 FROM campaign_invites WHERE campaign_id = ${c.id} AND participant_id = ${participantId}`);
+  if (mine.rows.length) return "schon";
+  const r = await db.execute(sql`
+    UPDATE campaign_invites SET participant_id = ${participantId}, used_at = now()
+    WHERE campaign_id = ${c.id} AND code_hash = ${hash(code)} AND participant_id IS NULL RETURNING id`);
+  return r.rows.length ? "ok" : "unbekannt";
+}

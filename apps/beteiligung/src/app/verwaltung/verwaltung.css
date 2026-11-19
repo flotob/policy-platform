@@ -147,3 +147,25 @@ fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; p
 .start-steps li.done .tick { background: var(--agree); border-color: var(--agree); }
 .start-steps li.done b { color: var(--ink-3); text-decoration: line-through; }
 .start-steps p { margin: 2px 0 4px; max-width: 64ch; }
+
+/* Codes for letters, and the letters themselves (printed straight from the browser). */
+.invites-new .letters-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.letters-print { display: none; }
+@media print {
+  body > *:not(.letters-print) { display: none !important; }
+  .letters-print { display: block; color: #111; background: #fff; }
+  @page { size: A4; margin: 0; }
+}
+.letter { width: 210mm; min-height: 296mm; padding: 18mm 20mm 16mm 25mm; box-sizing: border-box; break-after: page; page-break-after: always; font-family: var(--serif); font-size: 11.5pt; line-height: 1.45; color: #111; position: relative; }
+.letter:last-child { break-after: auto; page-break-after: auto; }
+.letter-from { font-family: var(--sans); font-size: 10pt; font-weight: 600; margin: 0; }
+/* DIN 5008 address window: 45 mm from the top, 85 × 45 mm — for the label or the mail merge. */
+.letter-window { width: 85mm; height: 40mm; margin: 17mm 0 10mm; border: 0.3mm dashed #bbb; color: #bbb; font-family: var(--sans); font-size: 8pt; padding: 3mm; box-sizing: border-box; }
+.letter h1 { font-family: var(--serif); font-size: 16pt; font-weight: 600; margin: 0 0 5mm; }
+.letter p { margin: 0 0 3mm; }
+.letter-measure { padding-left: 4mm; border-left: 0.8mm solid #999; font-style: italic; }
+.letter-code { display: grid; grid-template-columns: 34mm 1fr; gap: 6mm; align-items: center; margin: 6mm 0; padding: 5mm; border: 0.4mm solid #111; border-radius: 2mm; }
+.letter-qr svg { width: 34mm; height: 34mm; display: block; }
+.letter-url { font-family: var(--sans); font-weight: 600; }
+.letter-pin { font-family: var(--sans); font-size: 18pt; font-weight: 700; letter-spacing: 0.08em; margin: 1mm 0 0; }
+.cp-hint { max-width: 72ch; margin: 0 0 10px; }

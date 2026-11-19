@@ -65,3 +65,22 @@
 .pub-report-how { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; color: var(--ink-2); font-size: 14.5px; }
 .pub-report-how h2 { font-family: var(--serif); font-size: 19px; color: var(--ink); }
 .pub-report-how summary { cursor: pointer; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+
+/* What the machine does, on the first screen. */
+.pub-machine { margin-top: 18px; padding: 10px 14px; border-left: 3px solid var(--ink-3); background: var(--panel); font-size: 14.5px; line-height: 1.55; color: var(--ink-2); max-width: 44em; }
+.pub-machine strong { color: var(--ink); font-weight: 600; }
+/* The council's decision, once published. */
+.pub-decision { margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; background: var(--agree-soft); }
+.pub-decision p { margin: 0 0 6px; font-size: 14.5px; line-height: 1.5; }
+.pub-decision-head { font-weight: 600; }
+/* A letter with a code (cross-check by lot). */
+.pub-letter { margin-top: 14px; font-size: 14px; }
+.pub-letter summary { cursor: pointer; color: var(--ink-2); }
+.pub-letter .door-form { margin-top: 10px; }
+/* Voluntary news by e-mail. */
+.follow { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.follow-head { font-size: 14.5px; line-height: 1.5; margin: 0 0 8px; }
+.follow-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.follow-row .input { flex: 1 1 200px; min-width: 0; }
+.follow-fine { margin-top: 6px; }
+.follow-ok { margin-top: 18px; padding: 10px 12px; border-radius: 8px; background: var(--agree-soft); font-size: 14.5px; }

@@ -106,3 +106,11 @@
   .fate-diff td.ki::before { content: "Maschine: "; font-weight: 600; color: var(--ga); }
   .fate-diff td.rd::before { content: "Redaktion: "; font-weight: 600; color: var(--warn); }
 }
+
+/* Station 5 of the tracking slip: what the council made of the point. */
+.fate-council { margin-top: 14px; padding: 10px 14px; border-radius: 8px; border-left: 4px solid var(--ink-3); background: var(--panel); }
+.fate-council.yes { border-left-color: var(--agree); }
+.fate-council.no { border-left-color: var(--disagree); }
+.fate-council p { margin: 0 0 4px; line-height: 1.5; }
+.fate-council-k { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.fate-council-h { font-weight: 600; }

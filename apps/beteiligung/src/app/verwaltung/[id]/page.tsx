@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getCampaign, inviteCounts, listFiles } from "@/lib/campaigns";
+import { appUrl } from "@/lib/mail";
 import { STEPS } from "@/lib/params";
 import { openingCheck } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
@@ -86,10 +87,31 @@ export default async function CampaignPage({ params, searchParams }: { params: P
         <section id="ablauf" className="cp-section">
           <h2>Ablauf</h2>
           {editable ? <ProcessForm id={campaign.id} params={campaign.params} /> : null}
-          {editable && campaign.params.access === "einladung" ? (
+          {editable && ["entwurf", "vorbereitung", "offen"].includes(campaign.state) ? (
             <>
-              <h3 className="cp-h3">Einladungscodes</h3>
-              <InviteForm id={campaign.id} total={invites.total} used={invites.used} />
+              <h3 className="cp-h3">{campaign.params.access === "einladung" ? "Einladungscodes und Gegenprobe durch Los" : "Gegenprobe durch Los"}</h3>
+              {campaign.params.access === "einladung" ? null : (
+                <p className="small muted cp-hint">
+                  Die offene Beteiligung erreicht vor allem die Schnellen, die Betroffenen und die Organisierten. Als Gegenprobe lost die Stadt
+                  Einwohnerinnen und Einwohner aus, zum Beispiel 2.000 aus dem Melderegister, und schreibt ihnen einen Brief mit persönlichem Code.
+                  Ihre Stimmen zählen wie alle anderen und werden zusätzlich getrennt ausgewertet: Eine Brücke gilt erst, wenn sie auch bei ihnen trägt.
+                </p>
+              )}
+              <InviteForm
+                id={campaign.id}
+                total={invites.total}
+                used={invites.used}
+                drawn={invites.drawn}
+                drawnUsed={invites.drawnUsed}
+                invitation={campaign.params.access === "einladung"}
+                info={{
+                  town: staff.tenant.name,
+                  question: campaign.question,
+                  measure: campaign.measure,
+                  end: campaign.params.end ? new Date(campaign.params.end).toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }) : null,
+                  url: appUrl(`/${staff.tenant.slug}/${campaign.slug}`),
+                }}
+              />
             </>
           ) : null}
         </section>

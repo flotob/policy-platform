@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { ReportText } from "@/components/ergebnis/ReportText";
 import { PublicFrame } from "@/components/PublicFrame";
 import { publishedBundle } from "@/lib/bericht";
+import { publicDecision } from "@/lib/beschluss";
+import { decisionHead, outcomeOf } from "@/lib/beschluss-words";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { periodOf } from "@/lib/ergebnis-seite";
 
@@ -26,8 +28,9 @@ export default async function Bericht({ params }: { params: Promise<{ gemeinde: 
   const bundle = await publishedBundle(c);
   if (!bundle?.report.text) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;
-  const period = await periodOf(c);
+  const [period, decision] = await Promise.all([periodOf(c), publicDecision(c.id)]);
   const { report } = bundle;
+  const decided = decision ? bundle.result.statements.filter((s) => decision.points[s.id]) : [];
   return (
     <PublicFrame town={c.tenant} campaign={{ slug: c.slug, title: c.title }} back>
       <main className="wrap pub-report">
@@ -39,6 +42,38 @@ export default async function Bericht({ params }: { params: Promise<{ gemeinde: 
         </p>
         <blockquote className="pub-measure">{c.measure}</blockquote>
         <ReportText text={report.text!} resultsHref={`${base}/ergebnis`} />
+        {decision ? (
+          <section className="pub-report-decision">
+            <h2>Nachtrag: Was der {decision.gremium} beschlossen hat</h2>
+            <p>
+              <strong>{decisionHead(decision)}</strong> {decision.summary ?? ""}
+            </p>
+            {decided.length ? (
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Aussage</th>
+                    <th scope="col">Behandlung</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {decided.map((s) => (
+                    <tr key={s.id}>
+                      <td>
+                        <span className="num">A{s.nr}</span> {s.text}
+                      </td>
+                      <td>
+                        <b>{outcomeOf(decision.points[s.id]!.outcome)?.label}</b>
+                        {decision.points[s.id]!.reason ? `. ${decision.points[s.id]!.reason}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+            <p className="small muted">Der Nachtrag ist nicht Teil des freigegebenen Berichts. Die Verwaltung hat ihn nach der Sitzung eingetragen.</p>
+          </section>
+        ) : null}
         <section className="pub-report-how">
           <h2>Wie dieser Bericht entstanden ist</h2>
           <p>

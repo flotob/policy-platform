@@ -226,20 +226,26 @@ export async function reproposeSkeleton(id: string): Promise<void> {
   redirect(`/verwaltung/${id}/punkte`);
 }
 
-/** Invitation codes for access "einladung": shown once for printing, kept only as hashes. */
+/**
+ * Codes for letters, shown once for printing, kept only as hashes: invitations (access
+ * "einladung") or the cross-check by lot (any procedure; the drawn residents' votes are also
+ * counted apart).
+ */
 export async function generateInvites(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
   const { staff, campaign } = await own(id);
+  const kind = campaign.params.access === "einladung" && field(form, "kind") !== "gelost" ? "einladung" : "gelost";
+  const values = { kind };
   const count = Math.round(Number(field(form, "count")));
-  if (!Number.isFinite(count) || count < 1 || count > 5000) return { error: "Zwischen 1 und 5000 Codes auf einmal." };
+  if (!Number.isFinite(count) || count < 1 || count > 5000) return { error: "Zwischen 1 und 5000 Codes auf einmal.", values };
   const codes = Array.from({ length: count }, () => inviteCode());
   const db = getDb();
   await db.transaction(async (tx) => {
     for (const c of codes) {
       await tx.execute(sql`
-        INSERT INTO campaign_invites (tenant_id, campaign_id, code_hash) VALUES (${staff.tenant.id}, ${campaign.id}, ${c.hash}) ON CONFLICT DO NOTHING`);
+        INSERT INTO campaign_invites (tenant_id, campaign_id, code_hash, kind) VALUES (${staff.tenant.id}, ${campaign.id}, ${c.hash}, ${kind}) ON CONFLICT DO NOTHING`);
     }
   });
-  await audit(staff.tenant.id, staff.user.id, "campaign.invites", campaign.id, { count });
+  await audit(staff.tenant.id, staff.user.id, "campaign.invites", campaign.id, { count, kind });
   revalidatePath(`/verwaltung/${id}`);
-  return { ok: codes.map((c) => c.code).join("\n") };
+  return { ok: codes.map((c) => c.code).join("\n"), values };
 }

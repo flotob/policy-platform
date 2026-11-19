@@ -66,7 +66,9 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
       SELECT v.participant_id, v.map_point_id, v.value FROM map_point_votes v
       JOIN map_points p ON p.id = v.map_point_id AND p.version = v.version
       WHERE p.consultation_id = ${c.consultationId} AND p.status = 'released' AND p.rolle IS NOT NULL`),
-    rows(sql`SELECT id, via FROM participants WHERE consultation_id = ${c.consultationId}`),
+    rows(sql`
+      SELECT p.id, p.via, EXISTS (SELECT 1 FROM campaign_invites i WHERE i.participant_id = p.id AND i.kind = 'gelost') AS drawn
+      FROM participants p WHERE p.consultation_id = ${c.consultationId}`),
     saturation(c),
     rows(sql`
       SELECT (SELECT count(*) FROM submissions WHERE consultation_id = ${c.consultationId} AND door = 'statement')::int AS short_points,
@@ -118,7 +120,7 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
       }),
     ),
     votes: votes.map((v) => ({ participant: v.participant_id as string, node: v.map_point_id as string, value: Number(v.value) as -1 | 0 | 1 })),
-    participants: participants.map((p) => ({ id: p.id as string, via: (p.via as string | null) ?? null })),
+    participants: participants.map((p) => ({ id: p.id as string, via: (p.via as string | null) ?? null, drawn: p.drawn === true })),
     context: {
       steps: STEPS.map((s) => ({ key: s.key, label: s.label, these: c.steps[s.key] ?? "" })),
       questions: QUESTIONS.map((q) => ({ key: q.key, label: q.label, steps: q.steps })),

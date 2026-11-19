@@ -4,7 +4,9 @@ import {
   attackStatus,
   categoryOf,
   evaluate,
+  lotCheck,
   profileOf,
+  robustBridge,
   supportStatus,
   verdictOf,
   type CampCount,
@@ -13,7 +15,7 @@ import {
   type VoteIn,
 } from "../src/kern/befund.ts";
 import { checkRules, conclusions } from "../src/kern/bericht.ts";
-import { countLine, headline, readingOf, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
+import { checkLines, countLine, firmBridge, headline, lotSummary, readingOf, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
 
 /** A camp of 100 with this agreement and disagreement in percent (the rest passes). */
 const camp = (agree: number, disagree = 100 - agree - 10): CampCount => ({ agree, disagree: Math.max(0, disagree), pass: 100 - agree - Math.max(0, disagree), seen: 100 });
@@ -88,7 +90,7 @@ describe("evaluate", () => {
   const A: Record<string, -1 | 0 | 1> = { root: 1, fact: 1, value: 1, attack: -1, skill: 1, frist: 1, speicher: 1, kosten: 1 };
   const B: Record<string, -1 | 0 | 1> = { root: -1, fact: 1, value: -1, attack: 1, skill: 1, frist: 1, speicher: 1, kosten: 1 };
   const votes: VoteIn[] = [];
-  const participants = [];
+  const participants: { id: string; via: string }[] = [];
   for (let i = 0; i < 24; i++) {
     const id = `p${String(i).padStart(2, "0")}`;
     participants.push({ id, via: "tuer" });
@@ -127,6 +129,76 @@ describe("evaluate", () => {
   };
   const r = evaluate(input);
   const by = (id: string) => r.statements.find((s) => s.id === id)!;
+
+  describe("Stephan's checks on a bridge", () => {
+    it("a bridge far above the threshold does not hang on a few votes", () => {
+      expect(robustBridge([camp(85), camp(80)], T, "getragen")).toEqual({ robust: true, fragile: [] });
+    });
+    it("a bridge just above the threshold falls when a tenth of its votes go", () => {
+      // 62 of 100 agree in camp B: without 7 of them, 55 of 93 = 59 %.
+      expect(robustBridge([camp(85), camp(62)], T, "getragen")).toEqual({ robust: false, fragile: [1] });
+    });
+    it("a joint rejection is checked on the rejecting votes", () => {
+      expect(robustBridge([camp(5, 90), camp(10, 80)], T, "abgelehnt").robust).toBe(true);
+    });
+    it("the cross-check by lot needs five drawn voters per camp", () => {
+      const c = (agree: number, seen: number): CampCount => ({ agree, disagree: seen - agree, pass: 0, seen });
+      expect(lotCheck([c(5, 6), c(3, 4)], T, "getragen").status).toBe("zu_wenige");
+      expect(lotCheck([c(5, 6), c(4, 5)], T, "getragen").status).toBe("haelt");
+      expect(lotCheck([c(5, 6), c(2, 6)], T, "getragen").status).toBe("faellt");
+    });
+    it("without a drawn group every bridge says so, and the report says the cross-check is missing", () => {
+      expect(by("fact").check).toEqual({ robust: true, fragile: [], lot: null });
+      expect(lotSummary(r)).toBeNull();
+      expect(checkLines(by("fact"), r, null).map((l) => l.ok)).toEqual([true, true, null]);
+      const report = conclusions(r, null, { town: "X", measure: "X", questions: [], fictional: false, editorialMode: "mensch", resultVersion: 1 });
+      expect(report.some((x) => x.text.startsWith("Eine Gegenprobe durch Los gab es nicht"))).toBe(true);
+    });
+    it("drawn voters are counted and every bridge is checked among them", () => {
+      const drawn = new Set(["p00", "p01", "p02", "p03", "p04", "p05", "p14", "p15", "p16", "p17", "p18", "p19"]);
+      const withLot = evaluate({ ...input, participants: participants.map((p) => ({ ...p, drawn: drawn.has(p.id) })) });
+      expect(withLot.participation.drawn).toBe(12);
+      const fact = withLot.statements.find((s) => s.id === "fact")!;
+      expect(fact.check?.lot).toEqual({ status: "haelt", camps: [{ agree: 6, disagree: 0, pass: 0, seen: 6 }, { agree: 6, disagree: 0, pass: 0, seen: 6 }] });
+      expect(firmBridge(fact)).toBe(true);
+      expect(lotSummary(withLot)).toMatchObject({ drawn: 12, firm: withLot.statements.filter((s) => s.category === "bruecke").length, onlySelf: 0 });
+    });
+    it("a bridge the drawn residents of one camp do not share is not firm, and the report says so", () => {
+      const skill = by("skill");
+      expect(skill.category).toBe("bruecke");
+      const patched = {
+        ...r,
+        participation: { ...r.participation, drawn: 12 },
+        statements: r.statements.map((s) =>
+          s.category !== "bruecke"
+            ? s
+            : {
+                ...s,
+                check: {
+                  robust: true,
+                  fragile: [],
+                  lot:
+                    s.id === "skill"
+                      ? { status: "faellt" as const, camps: [{ agree: 6, disagree: 0, pass: 0, seen: 6 }, { agree: 1, disagree: 5, pass: 0, seen: 6 }] }
+                      : { status: "haelt" as const, camps: [{ agree: 6, disagree: 0, pass: 0, seen: 6 }, { agree: 6, disagree: 0, pass: 0, seen: 6 }] },
+                },
+              },
+        ),
+      };
+      const s2 = patched.statements.find((s) => s.id === "skill")!;
+      expect(firmBridge(s2)).toBe(false);
+      expect(checkLines(s2, patched, ["Klima", "Kosten"])[2]!.title).toBe("Hält nur bei den Selbstgewählten");
+      const report = conclusions(patched, ["Klima", "Kosten"], { town: "X", measure: "X", questions: [], fictional: false, editorialMode: "mensch", resultVersion: 1 });
+      const vorbehalt = report.filter((x) => x.section === "vorbehalt");
+      expect(vorbehalt).toHaveLength(1);
+      expect(vorbehalt[0]!.refs).toEqual([s2.nr]);
+      expect(vorbehalt[0]!.text).toContain("bei den Ausgelosten stimmen im Lager „Kosten“ nur 1 von 6 zu");
+      expect(checkLines(s2, patched, ["Klima", "Kosten"])[2]!.text).toBe("Von denen, die per Los eingeladen wurden, stimmen im Lager „Kosten“ nur 1 von 6 zu (im Lager „Klima“ 6 von 6). Wer von sich aus mitgemacht hat, sieht das anders als die Stichprobe.");
+      expect(report.find((x) => x.section === "einig" && x.text.includes(`[A${s2.nr}]`))).toBeUndefined();
+      expect(report.find((x) => x.text.startsWith("Gegenprobe durch Los mit 12 ausgelosten Teilnehmenden"))?.text).toMatch(/tragen \S+ auch bei den Ausgelosten und eine nur bei denen, die von sich aus mitgemacht haben\.$/);
+      expect(report.some((x) => x.text.includes("Teilnehmende kamen mit dem Code aus einem Brief"))).toBe(true);
+    });
+  });
 
   describe("too few people for camps", () => {
     // The same procedure with four voters and a camp threshold of 50: counts and arguments, no verdicts.

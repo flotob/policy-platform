@@ -5,9 +5,11 @@ import {
   campLabel,
   campName,
   categoryWords,
+  checkLines,
   conclusionText,
   countLine,
   evidenceText,
+  firmBridge,
   gapTexts,
   headline,
   ORDER,
@@ -32,6 +34,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ReportBox } from "@/components/ReportBox";
+import { decisionHead, outcomeOf, outcomeSentence, type PublicDecision } from "@/lib/beschluss-words";
 import { STEPS } from "@/lib/params";
 
 /**
@@ -59,6 +62,8 @@ export interface ResultViewProps {
   files?: { href: string; label: string }[];
   /** On the public page: citizens can report a statement or a quote ("Hier stimmt etwas nicht"). */
   reportable?: { gemeinde: string; verfahren: string } | null;
+  /** The council's decision, once the town published it (the way back). */
+  decision?: PublicDecision | null;
 }
 
 const W = 640;
@@ -112,6 +117,7 @@ const VOTE: Record<string, string> = { a: "stimmt zu", d: "lehnt ab", p: "enthä
 
 export function ResultView(props: ResultViewProps) {
   const { names } = props;
+  const dec = props.decision ?? null;
   // Step names as they read today (a stored result keeps the words of its day; the meaning of each key is unchanged).
   const r = useMemo(() => ({ ...props.r, steps: props.r.steps.map((s) => ({ ...s, label: STEPS.find((x) => x.key === s.key)?.label ?? s.label })) }), [props.r]);
   const k = r.camps?.k ?? 0;
@@ -192,6 +198,8 @@ export function ResultView(props: ResultViewProps) {
       <button key={key ?? s.nr} type="button" className="item" aria-current={s.nr === sel ? "true" : "false"} onClick={() => select(s.nr)}>
         {head}
         <div className="t">{s.text}</div>
+        {!small && s.category === "bruecke" && !firmBridge(s) ? <div className="vb">Brücke unter Vorbehalt</div> : null}
+        {dec?.points[s.id] ? <div className={`bt o-${dec.points[s.id]!.outcome}`}>Beschluss: {outcomeOf(dec.points[s.id]!.outcome)?.lower}</div> : null}
         {foot}
         {small && s.total.seen ? (
           <>
@@ -482,6 +490,7 @@ export function ResultView(props: ResultViewProps) {
       </div>
     ) : null;
   const ev = cur.typ === "T" ? evidenceText(cur) : null;
+  const checks = small ? [] : checkLines(cur, r, names);
   const reading = readingOf(cur, r, names);
   const idx = r.statements.indexOf(cur);
   const prev = r.statements[(idx + N - 1) % N]!;
@@ -553,6 +562,34 @@ export function ResultView(props: ResultViewProps) {
           <span>Belege</span>
           {ev}
         </p>
+      ) : null}
+      {checks.length ? (
+        <div className="checks">
+          <span className="eyebrow">Trägt die Brücke? Drei Prüfungen</span>
+          <ul>
+            {checks.map((c) => (
+              <li key={c.title} className={c.ok === true ? "ok" : c.ok === false ? "bad" : "grey"}>
+                <span className="mk" aria-hidden>
+                  {c.ok === true ? "✓" : c.ok === false ? "✗" : "–"}
+                </span>
+                <span>
+                  <b>{c.title}.</b> {c.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {dec?.points[cur.id] ? (
+        <div className={`council o-${dec.points[cur.id]!.outcome}`}>
+          <span className="eyebrow">Was der {dec.gremium} daraus gemacht hat</span>
+          <p>{outcomeSentence(dec.points[cur.id]!)}</p>
+        </div>
+      ) : dec && cur.rolle === "schluss" && dec.summary ? (
+        <div className="council">
+          <span className="eyebrow">{decisionHead(dec)}</span>
+          <p>{dec.summary}</p>
+        </div>
       ) : null}
       {cur.quotes.length ? (
         <div className="quotes">
@@ -657,6 +694,11 @@ export function ResultView(props: ResultViewProps) {
             )}
           </p>
         </div>
+        {dec ? (
+          <div className="erg-decision">
+            <b>{decisionHead(dec)}</b> {dec.summary ?? ""} <span>Bei jeder Aussage steht, was aus ihr geworden ist.</span>
+          </div>
+        ) : null}
         {small ? <p className="erg-notice">{smallNote(r)}</p> : null}
         {props.notice ? <p className="erg-notice">{props.notice}</p> : null}
         <div className="eyebrow" style={{ marginTop: 8 }}>

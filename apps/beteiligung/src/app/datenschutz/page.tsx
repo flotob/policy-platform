@@ -36,6 +36,15 @@ export default function Datenschutz() {
             Ihre IP-Adresse nur als nicht umkehrbare Prüfsumme, um Missbrauch zu begrenzen (zu viele Teilnahmen von einem Anschluss). Die Adresse
             selbst speichern wir in der Anwendung nicht.
           </li>
+          <li>
+            Wenn Sie mit einem Code aus einem Brief teilnehmen (Gegenprobe durch Los): dass Ihre Teilnahme über einen solchen Brief kam. Ihren
+            Namen und Ihre Anschrift kennt nur die Kommune, die die Briefe verschickt; bei uns werden sie nicht gespeichert.
+          </li>
+          <li>
+            Wenn Sie freiwillig Ihre E-Mail-Adresse angeben, um zu erfahren, was aus der Beteiligung wird: die Adresse und die Links zu Ihren
+            Laufzetteln, getrennt von Ihren Stimmen. Wir schreiben Ihnen erst, nachdem Sie die Adresse über einen Link bestätigt haben, und höchstens
+            zweimal (Ergebnis, Beschluss). Jede Nachricht enthält einen Link zum Abmelden; danach löschen wir die Adresse.
+          </li>
         </ul>
         <p>
           Texte können persönliche Angaben enthalten. Die Redaktion der Kommune prüft die Beiträge; Stellen, die eine Privatperson nennen oder
@@ -63,8 +72,8 @@ export default function Datenschutz() {
             <b>TypeSafe</b> (USA): Ein zweites Modell (Jev) prüft Zuordnungen und den Bericht. Dafür werden Textausschnitte übermittelt.
           </li>
           <li>
-            <b>Resend</b> (USA, Versand über Server in der EU) verschickt E-Mails an Mitarbeiterinnen und Mitarbeiter der Verwaltung, etwa
-            Einladungen und Links zum Zurücksetzen des Passworts.
+            <b>Resend</b> (USA, Versand über Server in der EU) verschickt E-Mails: an Mitarbeiterinnen und Mitarbeiter der Verwaltung, etwa
+            Einladungen und Links zum Zurücksetzen des Passworts, und an Teilnehmende, die um eine Nachricht gebeten haben.
           </li>
         </ul>
         <p>

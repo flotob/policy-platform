@@ -7,13 +7,15 @@ import { AutoRefresh } from "./AutoRefresh";
 const sum = (jobs: Job[], k: string) => jobs.reduce((s, j) => s + Number((j.result as Record<string, number> | null)?.[k] ?? 0), 0);
 
 /** One line on what the machine is doing for this campaign, or what it found. */
-export function MachineStatus({ campaignId, jobs, editable }: { campaignId: string; jobs: Job[]; editable: boolean }) {
+export function MachineStatus({ campaignId, jobs, editable, quiet = false }: { campaignId: string; jobs: Job[]; editable: boolean; quiet?: boolean }) {
   if (!jobs.length) return null;
   const running = jobs.find((j) => j.state === "laeuft");
   const waiting = jobs.filter((j) => j.state === "wartet").length;
   const done = jobs.filter((j) => j.state === "fertig");
   const failed = jobs.filter((j) => j.state === "fehler");
   const busy = !!running || waiting > 0;
+  // A published procedure: nothing left for the machine to report unless it is working or something failed.
+  if (quiet && !busy && !failed.length) return null;
   const last = jobs[jobs.length - 1];
   const evaluating = last?.kind === "lagernamen" || last?.kind === "bericht";
   const read = done.filter((j) => j.kind === "zerlegen");

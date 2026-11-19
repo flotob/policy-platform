@@ -4,7 +4,7 @@
  * list (R1) use the same words, so a finding reads the same everywhere.
  */
 
-import type { BelegKey, Category, Ergebnis, Status, StatementOut, StepOut, Verdict } from "./befund.ts";
+import type { BelegKey, CampCount, Category, Ergebnis, Status, StatementOut, StepOut, Verdict } from "./befund.ts";
 
 export type CampNames = (string | null | undefined)[] | null | undefined;
 
@@ -133,6 +133,7 @@ export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): strin
     case "bruecke":
       if (s.profile === "abgelehnt") out.push(attack ? "Der Einwand überzeugt in keinem Lager." : "Die Behauptung überzeugt in keinem Lager; auf sie lässt sich die Maßnahme nicht stützen.");
       else if (attack) out.push(`Der Einwand überzeugt in ${bothDat(k)} Lagern. Ein Beschluss muss ihn beantworten.`);
+      else if (!firmBridge(s)) out.push("Die Einigkeit ist aber nicht belastbar; die Prüfungen unten zeigen, woran es hängt. Allein trägt sie keinen Beschluss.");
       else out.push(`Ein Ansatzpunkt für einen Beschluss, der in ${bothDat(k)} Lagern trägt.`);
       break;
     case "warnung":
@@ -378,4 +379,90 @@ export function stepCountText(step: StepOut): string {
   if (step.unasked.length) out.push(`${step.unasked.length === 1 ? "Einen Einwand" : `${cap(word(step.unasked.length))} Einwände`} hat niemand erhoben.`);
   out.push("Ob ein Einwand steht, lässt sich ohne Lager nicht sagen.");
   return out.join(" ");
+}
+
+// ———— Stephan's three conditions for a bridge ————
+
+/** A bridge that passed every check (an older stored result has no checks: it stands as it was). */
+export function firmBridge(s: StatementOut): boolean {
+  return s.category === "bruecke" && (!s.check || (s.check.robust && s.check.lot?.status !== "faellt"));
+}
+
+export interface CheckLine {
+  /** true: met · false: not met · null: could not be checked */
+  ok: boolean | null;
+  title: string;
+  text: string;
+}
+
+const camps1 = (names: CampNames, gs: number[]) => {
+  const xs = gs.map((g) => `im ${campLabel(names, g)}`);
+  return xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}`;
+};
+
+/** The three conditions of one bridge, in plain words (results page). Empty for anything but a bridge. */
+export function checkLines(s: StatementOut, r: Ergebnis, names: CampNames): CheckLine[] {
+  if (s.category !== "bruecke" || !s.check) return [];
+  const k = r.camps?.k ?? 0;
+  const no = s.profile === "abgelehnt";
+  const verb = no ? "lehnen ab" : "stimmen zu";
+  const out: CheckLine[] = [
+    {
+      ok: true,
+      title: `Genug Stimmen aus ${bothDat(k)} Lagern`,
+      text: `In jedem Lager haben genug Menschen abgestimmt, und das Ergebnis ist kein Zufall der kleinen Zahl.`,
+    },
+    s.check.robust
+      ? {
+          ok: true,
+          title: "Hängt nicht an wenigen Stimmen",
+          text: `Auch ohne ein Zehntel der ${no ? "Ablehnung" : "Zustimmung"} in jedem Lager bliebe es eine Brücke.`,
+        }
+      : {
+          ok: false,
+          title: "Hängt an wenigen Stimmen",
+          text: `Ohne ein Zehntel der ${no ? "Ablehnung" : "Zustimmung"} ${camps1(names, s.check.fragile)} fiele die Einigkeit unter die Schwelle. Wenige abgestimmte Stimmen könnten sie hergestellt haben.`,
+        },
+  ];
+  const lot = s.check.lot;
+  if (!lot) {
+    out.push({ ok: null, title: "Keine Gegenprobe durch Los", text: "In diesem Verfahren gab es keine ausgelosten Teilnehmenden, die per Brief eingeladen wurden." });
+  } else if (lot.status === "zu_wenige") {
+    out.push({
+      ok: null,
+      title: "Gegenprobe nicht möglich",
+      text: `Zu wenige Ausgeloste haben über diese Aussage abgestimmt (${lot.camps.map((c, g) => `${c.seen} ${campLabel(names, g).replace(/^Lager/, "im Lager")}`).join(", ")}; nötig sind je 5).`,
+    });
+  } else {
+    const field = no ? "disagree" : "agree";
+    const t = r.params.bridgeThreshold;
+    const low = (c: CampCount) => c.seen > 0 && c[field] / c.seen < t;
+    const nums = (pick: (c: CampCount) => boolean) =>
+      lot.camps.flatMap((c, g) => (pick(c) ? [`im ${campLabel(names, g)} ${c[field]} von ${c.seen}`] : [])).join(", ");
+    const [v1, v2] = verb.split(" ") as [string, string];
+    out.push(
+      lot.status === "haelt"
+        ? { ok: true, title: "Hält auch bei den Ausgelosten", text: `Von denen, die per Los eingeladen wurden, ${v1} ${nums(() => true)} ${v2}.` }
+        : {
+            ok: false,
+            title: "Hält nur bei den Selbstgewählten",
+            text: `Von denen, die per Los eingeladen wurden, ${v1} ${nums(low).replace(/(\d+ von)/g, "nur $1")} ${v2}${nums((c) => !low(c)) ? ` (${nums((c) => !low(c))})` : ""}. Wer von sich aus mitgemacht hat, sieht das anders als die Stichprobe.`,
+          },
+    );
+  }
+  return out;
+}
+
+/** The cross-check over all bridges, for the method text and the report. Null when nothing was checked. */
+export function lotSummary(r: Ergebnis): { drawn: number; firm: number; onlySelf: number; tooFew: number; bridges: number } | null {
+  const drawn = r.participation.drawn ?? 0;
+  if (!drawn) return null;
+  const bridges = r.statements.filter((s) => s.category === "bruecke" && s.check?.lot);
+  return {
+    drawn,
+    bridges: bridges.length,
+    firm: bridges.filter((s) => s.check!.lot!.status === "haelt").length,
+    onlySelf: bridges.filter((s) => s.check!.lot!.status === "faellt").length,
+    tooFew: bridges.filter((s) => s.check!.lot!.status === "zu_wenige").length,
+  };
 }

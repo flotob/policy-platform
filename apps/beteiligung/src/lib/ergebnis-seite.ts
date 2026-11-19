@@ -2,6 +2,7 @@
 
 import { sql } from "@policy/db";
 import type { Ergebnis } from "@policy/pipeline/kern";
+import { lotSummary } from "@policy/pipeline/kern/text";
 
 import type { Campaign } from "./campaigns";
 import { getDb } from "./db";
@@ -42,6 +43,15 @@ export function methodParagraphs(c: Campaign, r: Ergebnis): string[] {
       : `Für Lager haben zu wenige Menschen genug Aussagen bewertet (nötig sind ${r.needed.toLocaleString("de-DE")}). Die Zahlen sind deshalb einfach ausgezählt, über alle Teilnehmenden zusammen. Brücken, Streitpunkte und ein Urteil über die vier Stufen braucht es Lager; sie fehlen hier mit Absicht. Beim Lesen dieser Seite rechnet keine KI mehr.`,
   ];
   if (r.participation.senders) out.push("Stellungnahmen zählen als Stimmen ihrer Absender: Wer einen Punkt stützt, stimmt ihm zu; wer ihm widerspricht, lehnt ihn ab.");
+  if (r.ready && r.statements.some((s) => s.check)) {
+    const lot = lotSummary(r);
+    out.push(
+      "Eine Brücke muss drei Prüfungen bestehen: genug Stimmen aus jedem Lager; sie darf nicht an wenigen Stimmen hängen (sie hält auch, wenn in jedem Lager ein Zehntel ihrer Zustimmung wegfällt); und sie muss bei Menschen tragen, die per Los eingeladen wurden. " +
+        (lot
+          ? `${lot.drawn.toLocaleString("de-DE")} Teilnehmende kamen mit einem Code aus einem Brief an zufällig ausgeloste Einwohnerinnen und Einwohner. Ihre Stimmen zählen wie alle anderen und werden zusätzlich getrennt ausgewertet.`
+          : "Eine solche Gegenprobe durch Los gab es in diesem Verfahren nicht; die dritte Prüfung bleibt offen."),
+    );
+  }
   const fictional = c.fictional
     ? ` Alle Inhalte dieses Beispiels sind erfunden${r.participation.simulated ? `, ${r.participation.simulated.toLocaleString("de-DE")} der ${r.participation.voters.toLocaleString("de-DE")} Teilnehmenden sind simuliert` : ""}; es zeigt, wie ein echter Anhang aussähe.`
     : "";

@@ -35,8 +35,9 @@ export default async function CampaignLayout({ children, params }: { children: R
       </div>
       <CampaignTabs id={campaign.id} queue={queue} showWork={showWork} live={!["entwurf", "vorbereitung"].includes(campaign.state)}
         closed={["auswertung", "bericht", "veroeffentlicht"].includes(campaign.state)}
+        published={campaign.state === "veroeffentlicht"}
       />
-      <MachineStatus campaignId={campaign.id} jobs={jobs} editable={staff.role === "initiator"} />
+      <MachineStatus campaignId={campaign.id} jobs={jobs} editable={staff.role === "initiator"} quiet={campaign.state === "veroeffentlicht"} />
       {children}
     </div>
   );

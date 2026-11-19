@@ -8,6 +8,7 @@ import { getResult, latestResult, liveResult, namesLocked, saveResult, setCampNa
 import { getReport, latestReport, namingOf, startReport } from "@/lib/bericht";
 import { getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
+import { notifyFollowers } from "@/lib/folgen";
 import { enqueue } from "@/lib/kern";
 import { requireEditor, requireInitiator, type Staff } from "@/lib/session";
 
@@ -173,5 +174,7 @@ export async function publishReport(id: string, reportId: string): Promise<void>
   await audit(staff, "campaign.state", "campaign", c.id, { from: c.state, to: "veroeffentlicht" });
   refresh(id);
   revalidatePath(`/${staff.tenant.slug}/${c.slug}`, "layout");
+  // Who asked for news hears that the result is out (in the background).
+  await notifyFollowers({ ...c, state: "veroeffentlicht" }, "ergebnis");
   redirect(`/verwaltung/${id}/bericht`);
 }

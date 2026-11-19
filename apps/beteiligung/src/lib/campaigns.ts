@@ -106,9 +106,11 @@ export async function freeSlug(tenantId: string, base: string): Promise<string> 
   for (let i = 2; ; i++) if (!taken.has(`${base}-${i}`)) return `${base}-${i}`;
 }
 
-/** How many invitation codes exist and how many opened a participation. */
-export async function inviteCounts(campaignId: string): Promise<{ total: number; used: number }> {
+/** How many invitation codes exist, how many opened a participation, and how many went out by lot. */
+export async function inviteCounts(campaignId: string): Promise<{ total: number; used: number; drawn: number; drawnUsed: number }> {
   const r = await rows(sql`
-    SELECT count(*)::int AS total, count(participant_id)::int AS used FROM campaign_invites WHERE campaign_id = ${campaignId}`);
-  return { total: Number(r[0]?.total ?? 0), used: Number(r[0]?.used ?? 0) };
+    SELECT count(*)::int AS total, count(participant_id)::int AS used,
+      count(*) FILTER (WHERE kind = 'gelost')::int AS drawn, count(participant_id) FILTER (WHERE kind = 'gelost')::int AS drawn_used
+    FROM campaign_invites WHERE campaign_id = ${campaignId}`);
+  return { total: Number(r[0]?.total ?? 0), used: Number(r[0]?.used ?? 0), drawn: Number(r[0]?.drawn ?? 0), drawnUsed: Number(r[0]?.drawn_used ?? 0) };
 }

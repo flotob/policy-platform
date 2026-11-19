@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { EDITORIAL_MODES, STEPS, type CampaignParams, type EditorialMode, type Steps } from "@/lib/params";
 
 import { createCampaign, generateInvites, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
+import { Letters, type LetterInfo } from "./letters";
 
 export function Status({ state, pending }: { state: ActionState; pending: boolean }) {
   if (pending) return <span className="form-status muted">Wird gespeichert …</span>;
@@ -252,28 +253,56 @@ export function UploadForm({ id }: { id: string }) {
   );
 }
 
-/** Invitation codes: generated here, shown exactly once to print or send. */
-export function InviteForm({ id, total, used }: { id: string; total: number; used: number }) {
+/**
+ * Codes for letters: invitations (access "einladung") or the cross-check by lot (an open
+ * procedure: residents drawn by the town get a letter; their votes are also counted apart).
+ * Shown exactly once, to print as letters or to hand to a mail merge; kept only as hashes.
+ */
+export function InviteForm({ id, total, used, drawn, drawnUsed, invitation, info }: {
+  id: string;
+  total: number;
+  used: number;
+  drawn: number;
+  drawnUsed: number;
+  /** Access "einladung": every participant needs a code. */
+  invitation: boolean;
+  info: Omit<LetterInfo, "drawn">;
+}) {
   const [state, action] = useActionState<ActionState, FormData>(generateInvites.bind(null, id), {});
+  const [kind, setKind] = useState<"einladung" | "gelost">(invitation ? "einladung" : "gelost");
+  const codes = state.ok ? state.ok.split("\n").filter(Boolean) : [];
+  const lastKind = state.values?.kind === "gelost" ? "gelost" : state.values?.kind === "einladung" ? "einladung" : kind;
   return (
     <div className="invites">
       <p className="small muted">
-        {total ? `${total} Codes erzeugt, ${used} davon benutzt.` : "Noch keine Codes."} Jeder Code öffnet die Beteiligung für genau eine Person.
+        {invitation ? `${total - drawn} Einladungscodes erzeugt, ${used - drawnUsed} benutzt. ` : ""}
+        {drawn ? `${drawn} Codes für die Gegenprobe durch Los, ${drawnUsed} davon benutzt.` : invitation ? "" : "Noch keine Codes für die Gegenprobe."}
       </p>
       <form action={action} className="invites-form">
+        {invitation ? (
+          <select name="kind" className="input" value={kind} onChange={(e) => setKind(e.target.value as "einladung" | "gelost")} aria-label="Art der Codes">
+            <option value="einladung">Einladungen</option>
+            <option value="gelost">Gegenprobe durch Los</option>
+          </select>
+        ) : (
+          <input type="hidden" name="kind" value="gelost" />
+        )}
         <label htmlFor="count" className="small">
-          Neue Codes
+          Anzahl
         </label>
-        <input id="count" name="count" type="number" min={1} max={5000} defaultValue={100} className="input" style={{ width: 110 }} />
+        <input id="count" name="count" type="number" min={1} max={5000} defaultValue={kind === "gelost" ? 2000 : 100} className="input" style={{ width: 110 }} />
         <button type="submit" className="btn btn-quiet btn-small">
           Codes erzeugen
         </button>
       </form>
       {state.error ? <p className="error">{state.error}</p> : null}
-      {state.ok ? (
-        <div className="field">
-          <label htmlFor="codes">Die neuen Codes: jetzt kopieren oder drucken. Sie werden nicht noch einmal angezeigt.</label>
-          <textarea id="codes" className="textarea num" readOnly rows={8} value={state.ok} />
+      {codes.length ? (
+        <div className="field invites-new">
+          <label htmlFor="codes">
+            {codes.length} neue Codes. Jetzt drucken oder als Tabelle sichern: Sie werden nicht noch einmal angezeigt.
+          </label>
+          <Letters info={{ ...info, drawn: lastKind === "gelost" }} codes={codes} />
+          <textarea id="codes" className="textarea num" readOnly rows={6} value={codes.join("\n")} />
         </div>
       ) : null}
     </div>

@@ -243,3 +243,27 @@
 .erg .pill.tally-ohne { background: var(--line); color: var(--ink-2); }
 .erg .score.all { --c: var(--ink-3); }
 .erg .map-small .small-why { font-size: 12px; color: var(--ink-3); margin-top: 10px; }
+
+/* Stephan's three conditions on a bridge */
+.erg .checks { margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.erg .checks ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.erg .checks li { display: grid; grid-template-columns: 20px 1fr; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.erg .checks li b { color: var(--ink); font-weight: 600; }
+.erg .checks .mk { font-weight: 700; text-align: center; }
+.erg .checks li.ok .mk { color: var(--agree); }
+.erg .checks li.bad .mk { color: var(--disagree); }
+.erg .checks li.grey .mk { color: var(--ink-3); }
+.erg .item .vb { margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--warn); }
+/* The council's decision (the way back) */
+.erg-decision { margin-top: 14px; padding: 10px 12px; border-radius: 8px; background: var(--agree-soft); color: var(--ink); font-size: 14.5px; line-height: 1.5; max-width: 860px; }
+.erg-decision span { color: var(--ink-2); }
+.erg .council { margin-top: 14px; padding: 10px 14px; border-left: 4px solid var(--ink-3); background: var(--panel); border-radius: 0 8px 8px 0; }
+.erg .council p { margin: 4px 0 0; font-size: 14.5px; line-height: 1.5; }
+.erg .council.o-uebernommen, .erg .council.o-abgefedert, .erg .council.o-gutachten { border-left-color: var(--agree); }
+.erg .council.o-zurueckgestellt { border-left-color: var(--warn); }
+.erg .council.o-nicht_beruecksichtigt { border-left-color: var(--disagree); }
+.erg .item .bt { margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
+.erg .item .bt::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: var(--ink-3); vertical-align: 1px; }
+.erg .item .bt.o-uebernommen::before, .erg .item .bt.o-abgefedert::before, .erg .item .bt.o-gutachten::before { background: var(--agree); }
+.erg .item .bt.o-zurueckgestellt::before { background: var(--warn); }
+.erg .item .bt.o-nicht_beruecksichtigt::before { background: var(--disagree); }

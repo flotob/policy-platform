@@ -40,6 +40,10 @@ export const PROOF: readonly BelegKey[] = ["vergleichsfall", "studie", "messdate
 export const MIN_CAMP_VOTES = 3;
 /** A participant needs this many votes to be placed in a camp (Polis default). */
 const MIN_VOTES = 7;
+/** The share of a camp's carrying votes a bridge must survive losing (Stephan: "die jeweils einflussreichsten Stimmen herausrechnen"). */
+export const ROBUST_SHARE = 0.1;
+/** Drawn residents per camp who voted on a statement before the cross-check says anything about it. */
+export const LOT_MIN = 5;
 
 // ———— Input ————
 
@@ -96,6 +100,8 @@ export interface ParticipantIn {
   id: string;
   /** tuer (door 1/2), datei (a statement the town uploaded), stellungnahme (door 3), simulation (fictional demo). */
   via: string | null;
+  /** Came with a code from a letter the town sent to residents drawn by lot (the Gegenprobe). */
+  drawn?: boolean;
 }
 
 export interface Context {
@@ -167,6 +173,20 @@ export interface Quote {
   confirmedBy?: "verfasser" | "regel" | "maschine" | "redaktion";
 }
 
+/**
+ * Stephan's three conditions before a bridge goes into the report (paper v10, "Die gefälschte
+ * Brücke"): enough votes from every camp (built into carries/rejects), it does not hang on a few
+ * votes, and it carries among the residents drawn by lot.
+ */
+export interface BridgeCheck {
+  /** Still a bridge when, in every camp, a tenth of the votes that carry it are taken out. */
+  robust: boolean;
+  /** The camps where it would not be (empty when robust). */
+  fragile: number[];
+  /** The bridge among the drawn residents; null when the procedure had no drawn group. */
+  lot: null | { status: "haelt" | "faellt" | "zu_wenige"; camps: CampCount[] };
+}
+
 export interface StatementOut {
   nr: number;
   id: string;
@@ -188,6 +208,8 @@ export interface StatementOut {
   evidence: { dafuer: Partial<Record<BelegKey, number>>; dagegen: Partial<Record<BelegKey, number>> };
   entries: Entry[];
   quotes: Quote[];
+  /** Only on bridges (category bruecke). Older stored results have none. */
+  check?: BridgeCheck;
 }
 
 export interface StepOut {
@@ -244,6 +266,8 @@ export interface Ergebnis {
     /** Voted themselves at door 1. */
     direct: number;
     simulated: number;
+    /** Came with a code from a letter to residents drawn by lot (Gegenprobe); absent in older results. */
+    drawn?: number;
     /** Senders of statements (town uploads, door 3) whose contributions count as votes (assumption 3). */
     senders: number;
     votes: number;
@@ -278,6 +302,30 @@ export function carries(c: CampCount, t: number): boolean {
 }
 export function rejects(c: CampCount, t: number): boolean {
   return c.seen >= MIN_CAMP_VOTES && share(c.disagree, c.seen) >= t && isSignificant(onePropTest(c.disagree, c.seen));
+}
+
+/**
+ * Does the bridge hang on a few votes? Take out, in every camp, a tenth of the votes that carry it
+ * (at least one) — the worst case, as if exactly those had been coordinated — and ask again.
+ */
+export function robustBridge(camps: CampCount[], t: number, profile: Profile): { robust: boolean; fragile: number[] } {
+  const field = profile === "abgelehnt" ? "disagree" : "agree";
+  const fragile = camps.flatMap((c, g) => {
+    const k = Math.max(1, Math.ceil(c[field] * ROBUST_SHARE));
+    const left: CampCount = { ...c, [field]: c[field] - k, seen: c.seen - k };
+    return (profile === "abgelehnt" ? rejects(left, t) : carries(left, t)) ? [] : [g];
+  });
+  return { robust: !fragile.length, fragile };
+}
+
+/**
+ * The cross-check by lot: the same bridge among the drawn residents of each camp. Too few of them
+ * for a camp statistic; enough for a control — the share against the threshold, no significance test.
+ */
+export function lotCheck(lot: CampCount[], t: number, profile: Profile): NonNullable<BridgeCheck["lot"]> {
+  if (lot.some((c) => c.seen < LOT_MIN)) return { status: "zu_wenige", camps: lot };
+  const field = profile === "abgelehnt" ? "disagree" : "agree";
+  return { status: lot.every((c) => share(c[field], c.seen) >= t) ? "haelt" : "faellt", camps: lot };
 }
 
 /** W3: the statement across camps — two numbers per camp and the threshold. */
@@ -504,6 +552,9 @@ export function evaluate(input: EvaluateInput): Ergebnis {
   }
   const k = camps?.k ?? 0;
   const members = Array.from({ length: k }, (_, g) => new Set([...campOf].filter(([, c]) => c === g).map(([p]) => p)));
+  const drawn = new Set(input.participants.filter((p) => p.drawn).map((p) => p.id));
+  const drawnVoters = pids.filter((p) => drawn.has(p)).length;
+  const lotMembers = drawnVoters ? members.map((m) => new Set([...m].filter((p) => drawn.has(p)))) : null;
   const personOf = (p: string | null) => (p && pIndex.has(p) && campOf.has(p) ? pIndex.get(p)! + 1 : null);
 
   // W3/W4 per statement.
@@ -614,6 +665,9 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       evidence,
       entries,
       quotes,
+      ...(category === "bruecke"
+        ? { check: { ...robustBridge(cc, t, profile), lot: lotMembers ? lotCheck(lotMembers.map((m) => countIn(m, vs)), t, profile) : null } }
+        : {}),
     };
   });
 
@@ -676,6 +730,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       voters,
       direct: pids.filter((p) => via.get(p) === "tuer").length,
       simulated: pids.filter((p) => via.get(p) === "simulation").length,
+      drawn: drawnVoters,
       senders: pids.filter((p) => via.get(p) === "datei" || via.get(p) === "stellungnahme").length,
       votes: votes.length,
       ...input.inputs,

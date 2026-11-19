@@ -3,11 +3,14 @@ import { notFound } from "next/navigation";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { myVotes, participation } from "@/lib/abstimmung";
-import { getPublicCampaign } from "@/lib/campaigns";
+import { publicDecision } from "@/lib/beschluss";
+import { decisionHead } from "@/lib/beschluss-words";
+import { getPublicCampaign, inviteCounts } from "@/lib/campaigns";
 import { STEPS } from "@/lib/params";
 import { getParticipant } from "@/lib/teilnahme";
 
 import { CodeForm } from "./DoorForms";
+import { FollowForm } from "./FollowForm";
 import "../public.css";
 
 const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
@@ -29,19 +32,31 @@ export default async function Einstieg({
   searchParams,
 }: {
   params: Promise<{ gemeinde: string; verfahren: string }>;
-  searchParams: Promise<{ hinweis?: string }>;
+  searchParams: Promise<{ hinweis?: string; code?: string }>;
 }) {
   const { gemeinde, verfahren } = await params;
-  const { hinweis } = await searchParams;
+  const { hinweis, code } = await searchParams;
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const open = c.state === "offen";
   const closed = c.state === "auswertung" || c.state === "bericht" || c.state === "veroeffentlicht";
   const doors = c.params.doors;
   const base = `/${c.tenant.slug}/${c.slug}`;
-  const [stats, me] = await Promise.all([participation(c), open ? getParticipant(c) : null]);
+  const [stats, me, decision, codes] = await Promise.all([
+    participation(c),
+    open ? getParticipant(c) : null,
+    c.state === "veroeffentlicht" ? publicDecision(c.id) : null,
+    open ? inviteCounts(c.id) : null,
+  ]);
+  // A QR code on a letter to residents drawn by lot carries the code (?code=…).
+  const letterCode = open && code ? code.replace(/[^A-Za-z0-9-]/g, "").slice(0, 12) : "";
   const mine = me ? (await myVotes(c, me.id)).size : 0;
   const needsCode = open && c.params.access === "einladung" && !me;
+  // What the machine does, on the first screen (Stephan: "Dass eine KI mitarbeitet, steht auf dem ersten Bildschirm").
+  const machine =
+    c.params.editorialMode === "ki"
+      ? "Ein Sprachmodell liest jeden Beitrag und sortiert ihn ein. Über neue Punkte entscheidet es selbst; die Redaktion der Stadt prüft Stichproben. Bewerten tut es nichts: Wertungsfragen entscheiden Menschen."
+      : "Ein Sprachmodell liest jeden Beitrag und schlägt vor, wohin er gehört. Was zur Abstimmung kommt, entscheidet ein Mensch aus der Redaktion der Stadt. Wertungsfragen entscheidet die Maschine nie.";
   // A start date already past on a campaign that is not open yet says nothing useful.
   const upcoming = c.params.start && new Date(c.params.start) > new Date() ? new Date(c.params.start) : null;
   const start = upcoming ? day.format(upcoming) : null;
@@ -66,6 +81,9 @@ export default async function Einstieg({
           </p>
           <blockquote className="pub-measure">{c.measure}</blockquote>
           {c.summary ? <p className="pub-summary">{c.summary}</p> : null}
+          <p className="pub-machine">
+            <strong>Eine Maschine liest mit, ein Mensch gibt frei.</strong> {machine}
+          </p>
         </section>
 
         <aside className="pub-join" aria-labelledby="mitmachen">
@@ -82,7 +100,15 @@ export default async function Einstieg({
           {hinweis ? <p className="notice small pub-hint">{hinweis}</p> : null}
           {c.state === "veroeffentlicht" ? (
             <>
-              <p className="pub-when">Die Beteiligung ist abgeschlossen. Ergebnis und Bericht sind öffentlich.</p>
+              {decision ? (
+                <div className="pub-decision">
+                  <p className="pub-decision-head">{decisionHead(decision)}</p>
+                  {decision.summary ? <p>{decision.summary}</p> : null}
+                  <p className="small muted">Bei jeder Aussage steht im Ergebnis, was aus ihr geworden ist.</p>
+                </div>
+              ) : (
+                <p className="pub-when">Die Beteiligung ist abgeschlossen. Ergebnis und Bericht sind öffentlich. Der Gemeinderat berät darüber.</p>
+              )}
               <Link href={`${base}/ergebnis`} className="btn pub-cta">
                 Ergebnis ansehen
               </Link>
@@ -101,8 +127,8 @@ export default async function Einstieg({
                 Abstimmen starten
               </button>
             </>
-          ) : needsCode ? (
-            <CodeForm gemeinde={c.tenant.slug} verfahren={c.slug} />
+          ) : needsCode || (letterCode && !me) ? (
+            <CodeForm gemeinde={c.tenant.slug} verfahren={c.slug} code={letterCode} drawn={!!letterCode} />
           ) : (
             <>
               {end ? <p className="pub-when">Die Beteiligung läuft bis {end}.</p> : null}
@@ -116,6 +142,15 @@ export default async function Einstieg({
             </>
           )}
           {c.state === "veroeffentlicht" ? null : <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>}
+          {(open && mine) || c.state === "auswertung" || c.state === "bericht" || (c.state === "veroeffentlicht" && !decision) ? (
+            <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} after={c.state === "veroeffentlicht" ? "decision" : "result"} />
+          ) : null}
+          {open && !needsCode && !letterCode && !me && codes?.drawn ? (
+            <details className="pub-letter">
+              <summary>Du hast einen Brief mit Code bekommen?</summary>
+              <CodeForm gemeinde={c.tenant.slug} verfahren={c.slug} drawn />
+            </details>
+          ) : null}
         </aside>
 
         {STEPS.some((s) => c.steps[s.key]) ? (
