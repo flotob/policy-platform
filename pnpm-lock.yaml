@@ -57,9 +57,6 @@ importers:
       '@policy/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@policy/landkarte':
-        specifier: workspace:*
-        version: link:../../packages/landkarte
       '@policy/llm':
         specifier: workspace:*
         version: link:../../packages/llm

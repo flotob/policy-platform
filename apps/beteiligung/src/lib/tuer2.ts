@@ -89,13 +89,24 @@ export async function answerShort(c: C, s: Row, answer: "ja" | "nein"): Promise<
   if (decided.answer && decided.answer !== "offen") return;
   const db = getDb();
   const text = s.text as string;
+  // The answer is claimed once, atomically: a double click, or "Ja" and "Nein" racing, must not give a
+  // stored answer that disagrees with the recorded vote (or a duplicate-move error).
+  const claim = (tx: Pick<typeof db, "execute">, value: "ja" | "nein") =>
+    tx.execute(sql`
+      UPDATE judgments SET decided = decided || ${JSON.stringify({ answer: value })}::jsonb
+      WHERE subject_kind = 'submission' AND subject_id = ${s.id as string} AND family = ${KERN_SHORT_FAMILY}
+        AND COALESCE(decided->>'answer', 'offen') = 'offen'
+      RETURNING id`);
+  let linked = false;
   if (answer === "ja" && decided.node) {
-    await db.transaction(async (tx) => {
+    linked = await db.transaction(async (tx) => {
       const n = await tx.execute(sql`
         SELECT id, text, label, typ, schritt, frage, richtung, einwand FROM map_points
-        WHERE id = ${decided.node} AND consultation_id = ${c.consultationId} AND status = 'released'`);
+        WHERE id = ${decided.node} AND consultation_id = ${c.consultationId} AND status = 'released' FOR SHARE`);
       const node = n.rows[0] as Row | undefined;
-      if (!node) return;
+      // The point was hidden or withdrawn meanwhile: the text goes to the editors instead (below).
+      if (!node) return false;
+      if (!(await claim(tx, "ja")).rows.length) return true; // answered already
       const own = (node.richtung as string | null) ?? null;
       const richtung = decided.aim ?? (decided.stance === -1 ? flip(own) : own);
       // Names a private person: the vote counts, the words are never shown in public.
@@ -109,16 +120,13 @@ export async function answerShort(c: C, s: Row, answer: "ja" | "nein"): Promise<
                 ${(node.einwand as string | null) ?? null}, 'keine', ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(flags)}::jsonb)),
                 ${JSON.stringify(decided.match)}, ${decided.stance === -1 ? "gegenteil" : "auto"},
                 'verknuepft', ${node.id as string},
-                ${decided.stance}, 'teilnehmer', now(), ${JSON.stringify({ action: "vom_verfasser_bestaetigt" })})`);
-      await tx.execute(sql`
-        UPDATE judgments SET decided = decided || '{"answer":"ja"}'::jsonb
-        WHERE subject_kind = 'submission' AND subject_id = ${s.id as string} AND family = ${KERN_SHORT_FAMILY}`);
+                ${decided.stance}, 'teilnehmer', now(), ${JSON.stringify({ action: "vom_verfasser_bestaetigt" })})
+        ON CONFLICT (submission_id, ord) DO NOTHING`);
+      return true;
     });
-    await syncDerivedVotes(db, c.consultationId);
-  } else {
-    await db.execute(sql`
-      UPDATE judgments SET decided = decided || ${JSON.stringify({ answer: "nein" })}::jsonb
-      WHERE subject_kind = 'submission' AND subject_id = ${s.id as string} AND family = ${KERN_SHORT_FAMILY}`);
-    await enqueue(c.tenantId, c.id, "kurzaussage", null, s.id as string);
+    if (linked) await syncDerivedVotes(db, c.consultationId);
+  }
+  if (!linked) {
+    if ((await claim(db, "nein")).rows.length) await enqueue(c.tenantId, c.id, "kurzaussage", null, s.id as string);
   }
 }

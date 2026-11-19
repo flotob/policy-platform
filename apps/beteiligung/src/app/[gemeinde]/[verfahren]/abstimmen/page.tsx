@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { readNotice } from "@/lib/notice";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { lastVotedTyp, myVotes, nextFor, statementsUnderVote, type Statement } from "@/lib/abstimmung";
@@ -62,10 +63,11 @@ export default async function Abstimmen({
   searchParams,
 }: {
   params: Promise<{ gemeinde: string; verfahren: string }>;
-  searchParams: Promise<{ hinweis?: string }>;
+  searchParams: Promise<{ hinweis?: string; hs?: string }>;
 }) {
   const { gemeinde, verfahren } = await params;
-  const { hinweis } = await searchParams;
+  const q = await searchParams;
+  const hinweis = readNotice(q.hinweis, q.hs);
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;

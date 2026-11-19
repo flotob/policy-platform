@@ -12,6 +12,7 @@ import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue, kernDeps } from "@/lib/kern";
 import { follow } from "@/lib/folgen";
+import { noticeQuery } from "@/lib/notice";
 import { ensureParticipant, getParticipant, LIMITS, originHash, ParticipationError, redeemCode, trackingToken, within } from "@/lib/teilnahme";
 import { answerShort as answerShortCore, runShortCheck, shortByToken, storeShort } from "@/lib/tuer2";
 
@@ -48,7 +49,7 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
       const p = await ensureParticipant(c);
       const r = await redeemCode(c, p.id, code);
       if (r === "unbekannt") return { error: "Diesen Code kennen wir nicht, oder er wurde schon benutzt. Mitmachen kannst du trotzdem.", values: { code } };
-      if (r === "schon") redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
+      if (r === "schon") redirect(`${base}/abstimmen?${noticeQuery("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
     }
   } catch (e) {
     if (e instanceof ParticipationError) return { error: e.message, values: { code } };
@@ -64,12 +65,12 @@ export async function vote(gemeinde: string, verfahren: string, statementId: str
   try {
     p = await ensureParticipant(c);
   } catch (e) {
-    if (e instanceof ParticipationError) redirect(`${base}?hinweis=${encodeURIComponent(e.message)}`);
+    if (e instanceof ParticipationError) redirect(`${base}?${noticeQuery(e.message)}`);
     throw e;
   }
-  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
+  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?${noticeQuery("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
   const counted = await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0, Number(version) || undefined);
-  if (!counted) redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Diese Aussage wurde gerade geändert oder zurückgezogen. Deine Stimme ist nicht gezählt; sieh dir die Karte bitte noch einmal an.")}`);
+  if (!counted) redirect(`${base}/abstimmen?${noticeQuery("Diese Aussage wurde gerade geändert oder zurückgezogen. Deine Stimme ist nicht gezählt; sieh dir die Karte bitte noch einmal an.")}`);
   redirect(`${base}/abstimmen`);
 }
 
