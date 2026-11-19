@@ -15,7 +15,7 @@ export interface Mail {
 
 export type MailResult = { ok: true; logged?: boolean } | { ok: false; reason: string };
 
-const DEFAULT_FROM = "streit.bar <post@streit.bar>";
+const DEFAULT_FROM = "streit.bar <info@mail.streit.bar>";
 
 /** The public address links in emails point to (BETTER_AUTH_URL on the server, localhost in development). */
 export function appUrl(path = "/"): string {

@@ -51,7 +51,7 @@ first person registers with the code (above) or is invited by a platform admin. 
 invite their first person. The link carries a token (only its SHA-256 is stored, 7 days); it proves
 the address, so the account is created verified. Password reset by email (`/passwort-vergessen`,
 Better Auth `requestPasswordReset`, link 1 hour, other sessions end). Email goes through Resend's
-HTTP API (`src/lib/mail.ts`): `RESEND_API_KEY`, `MAIL_FROM` (default `streit.bar <post@streit.bar>`),
+HTTP API (`src/lib/mail.ts`): `RESEND_API_KEY`, `MAIL_FROM` (default `streit.bar <info@mail.streit.bar>`; Resend sends from the verified subdomain mail.streit.bar),
 `MAIL_REPLY_TO`. Without a key the mail is printed to the server log (dev) or the inviting person
 gets the link to pass on by hand (server); `.test` addresses never get mail.
 
