@@ -157,7 +157,7 @@ export default async function Punkte({ params, searchParams }: { params: Promise
               const contradicted = premises.filter((n) => n.frage === q.key && n.disagree > 0);
               return (
                 <div key={q.key} className="pk-q">
-                  <p className="pk-q-h">Prüffrage: {q.label}</p>
+                  <p className="pk-q-h">Einwand: {q.label}</p>
                   {contradicted.map((n) => (
                     <p key={n.id} className="pk-contra small">
                       {n.disagree} {n.disagree === 1 ? "Beitrag widerspricht" : "Beiträge widersprechen"} der Aussage der Gemeinde „{n.text}“
@@ -166,7 +166,7 @@ export default async function Punkte({ params, searchParams }: { params: Promise
                   {here.length ? (
                     <ul className="pt-list">{here.map(row)}</ul>
                   ) : !contradicted.length ? (
-                    <p className="gap">Diese Prüffrage hat noch niemand gestellt.</p>
+                    <p className="gap">Diesen Einwand hat noch niemand erhoben.</p>
                   ) : null}
                 </div>
               );

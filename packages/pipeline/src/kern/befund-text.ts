@@ -181,7 +181,7 @@ export function stepText(step: StepOut, r: Ergebnis): string {
   }
   const weak = c.einseitig ?? 0;
   if (weak && step.verdict !== "faellt") out.push(`${cap(word(weak))} ${pl(weak, "Stütze trägt", "Stützen tragen")} nur in einem Teil der Lager.`);
-  if (step.unasked.length) out.push(`${cap(word(step.unasked.length))} ${pl(step.unasked.length, "Prüffrage hat", "Prüffragen hat")} niemand gestellt.`);
+  if (step.unasked.length) out.push(`${step.unasked.length === 1 ? "Einen Einwand" : `${cap(word(step.unasked.length))} Einwände`} hat niemand erhoben.`);
   return out.join(" ");
 }
 
@@ -298,7 +298,7 @@ export function gapTexts(r: Ergebnis, questions: { key: string; label: string }[
   for (const g of r.gaps.unasked) {
     out.push({
       title: questionLabel(questions, g.question),
-      text: `Zu dieser Prüffrage in der Stufe „${label(g.step)}“ hat niemand etwas gesagt: weder ein Einwand noch eine Antwort. Das ist ein Ergebnis, kein Fehlen. Vor einem Beschluss zu schließen, durch die Verwaltung oder eine gezielte Nachfrage.`,
+      text: `Diesen Einwand zur Stufe „${label(g.step)}“ hat niemand erhoben, und niemand hat ihn beantwortet. Das ist ein Ergebnis, kein Fehlen. Vor einem Beschluss zu schließen, durch die Verwaltung oder eine gezielte Nachfrage.`,
     });
   }
   for (const g of r.gaps.oneSided) {
@@ -375,7 +375,7 @@ export function stepCountText(step: StepOut): string {
   const sup = step.supports ? `${cap(word(step.supports))} ${pl(step.supports, "Aussage stützt", "Aussagen stützen")} die Stufe` : "Keine Aussage stützt die Stufe";
   const att = step.attacks ? `${word(step.attacks)} ${pl(step.attacks, "greift", "greifen")} sie an` : "keine greift sie an";
   const out = [`${sup}, ${att}.`];
-  if (step.unasked.length) out.push(`${cap(word(step.unasked.length))} ${pl(step.unasked.length, "Prüffrage hat", "Prüffragen hat")} niemand gestellt.`);
+  if (step.unasked.length) out.push(`${step.unasked.length === 1 ? "Einen Einwand" : `${cap(word(step.unasked.length))} Einwände`} hat niemand erhoben.`);
   out.push("Ob ein Einwand steht, lässt sich ohne Lager nicht sagen.");
   return out.join(" ");
 }

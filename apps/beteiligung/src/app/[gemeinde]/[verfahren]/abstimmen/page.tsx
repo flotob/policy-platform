@@ -25,7 +25,7 @@ function context(s: Statement): string {
   const q = QUESTIONS.find((x) => x.key === s.frage);
   const step = STEPS.find((x) => x.key === s.schritt);
   if (s.rolle === "praemisse") parts.push(`Aus der Begründung der Stadt: ${step?.label ?? ""}`);
-  else if (q) parts.push(`Prüffrage: ${q.label}`);
+  else if (q) parts.push(s.richtung === "greift_an" ? `Einwand: ${q.label}` : `Antwort auf den Einwand: ${q.label}`);
   for (const k of ["messdaten", "studie", "vergleichsfall"] as const) {
     const n = s.evidence[k];
     if (n) parts.push(`${n} ${EVIDENCE[k][n === 1 ? 0 : 1]}`);

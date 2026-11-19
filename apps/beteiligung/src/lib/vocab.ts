@@ -28,8 +28,8 @@ export const FLAG = {
   several_claims: "Enthält vielleicht mehr als eine Behauptung.",
   not_neutral: "Ist vielleicht nicht neutral formuliert.",
   reason_clause: "Hängt vielleicht eine Begründung an; über die stimmt man getrennt ab.",
-  frage_passt_nicht: "Die Prüffrage passte nicht zum Schritt und wurde angepasst.",
-  etikett_pruefen: "Tatsache oder Wertung passt nicht zur Prüffrage.",
+  frage_passt_nicht: "Der Einwand passte nicht zum Schritt und wurde angepasst.",
+  etikett_pruefen: "Tatsache oder Wertung passt nicht zum Einwand.",
 } as const;
 
 export const REJECT = {

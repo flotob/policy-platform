@@ -63,9 +63,9 @@ function fieldsFrom(form: FormData, rolle: string): Partial<NodeFields> | string
   const richtung = field(form, "richtung") === "greift_an" ? "greift_an" : "stuetzt";
   const frage = field(form, "frage") as NodeFields["frage"];
   const q = QUESTIONS.find((x) => x.key === frage);
-  if (!q) return "Bitte wählen Sie die Prüffrage.";
+  if (!q) return "Bitte wählen Sie den Einwand.";
   if (!(q.steps as readonly string[]).includes(schritt!)) {
-    return `Die Prüffrage „${q.label}“ passt nicht zu diesem Schritt.`;
+    return `Der Einwand „${q.label}“ passt nicht zu diesem Schritt.`;
   }
   const einwand = richtung === "greift_an" ? field(form, "einwand") || null : null;
   return { text, label, typ: typ as NodeFields["typ"], schritt, frage, richtung, einwand };

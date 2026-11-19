@@ -65,7 +65,7 @@ const RESULTS = [
   { cls: "warn", title: "Mit einem Gutachten klärbar", text: "Streit über Tatsachen, Zahlen und Wirkungen. Hier hilft keine Abstimmung, sondern ein Kurzgutachten vor dem Beschluss." },
   { cls: "disagree", title: "Hier liegt der Streit", text: "Wertfragen, an denen sich die Lager scheiden. Keine Studie entscheidet sie. Das ist die Aufgabe des Rats." },
   { cls: "warn", title: "Vorsicht, Scheinkonsens", text: "Hohe Zustimmung aus unvereinbaren Gründen. Sie zerbricht bei der ersten Detailfrage, und die Landkarte zeigt das vorher." },
-  { cls: "pass", title: "Was niemand gefragt hat", text: "Prüffragen, die in der ganzen Beteiligung offen blieben. Vor einem Beschluss gezielt nachfragen." },
+  { cls: "pass", title: "Was niemand gefragt hat", text: "Einwände, die in der ganzen Beteiligung niemand erhoben oder beantwortet hat. Vor einem Beschluss gezielt nachfragen." },
 ];
 
 export default function Home() {

@@ -68,7 +68,7 @@ export const EDITORIAL_MODES: Record<EditorialMode, { label: string; text: strin
  */
 export const STEPS = [
   { key: "lage", label: "So ist die Lage", hint: "Die Tatsachen, von denen die Maßnahme ausgeht." },
-  { key: "wirkung", label: "Das bewirkt die Maßnahme", hint: "Was sich ändert, wenn die Stadt sie beschließt." },
+  { key: "wirkung", label: "Das bewirkt unser Vorhaben", hint: "Was sich ändert, wenn die Stadt sie beschließt." },
   { key: "weg", label: "So kommen wir ans Ziel", hint: "Warum der Weg gangbar ist und besser als die Alternativen." },
   { key: "eingriff", label: "Dafür lohnt sich der Eingriff", hint: "Warum die Last für die Betroffenen zumutbar ist." },
 ] as const;
@@ -76,13 +76,17 @@ export const STEPS = [
 export type StepKey = (typeof STEPS)[number]["key"];
 export type Steps = Partial<Record<StepKey, string>>;
 
-/** The five critical questions and the step each one attacks (a parameter, not code: Stephan may remap). */
+/**
+ * The five objections (critical questions) and the step each one attacks (a parameter, not code:
+ * Stephan may remap). Wording from Stephan's deck (Nov 2026) where it means the same; "lage" in the
+ * same style. His v10 model (P3 Ziel, P4 Wert, "Es lässt sich nicht umsetzen") is a later switch.
+ */
 export const QUESTIONS = [
-  { key: "lage", label: "Stimmt die Lage so?", steps: ["lage"] },
-  { key: "wirkung", label: "Bewirkt die Maßnahme, was sie soll?", steps: ["wirkung"] },
-  { key: "weg", label: "Gibt es einen besseren Weg?", steps: ["weg"] },
-  { key: "nebenfolgen", label: "Sind die Nebenfolgen tragbar?", steps: ["lage", "eingriff"] },
-  { key: "wert", label: "Ist das Ziel den Eingriff wert?", steps: ["eingriff"] },
+  { key: "lage", label: "Die Lage ist eine andere", steps: ["lage"] },
+  { key: "wirkung", label: "Die Wirkung tritt nicht ein", steps: ["wirkung"] },
+  { key: "weg", label: "Es geht auch anders", steps: ["weg"] },
+  { key: "nebenfolgen", label: "Ein anderer Wert leidet darunter", steps: ["lage", "eingriff"] },
+  { key: "wert", label: "Das ist es nicht wert", steps: ["eingriff"] },
 ] as const;
 
 export const STATES = {

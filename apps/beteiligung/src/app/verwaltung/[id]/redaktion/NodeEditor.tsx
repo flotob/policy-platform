@@ -86,7 +86,7 @@ export function NodeEditor({
                 </div>
               </fieldset>
               <div className="field">
-                <label htmlFor={`frage-${node.id}`}>Prüffrage</label>
+                <label htmlFor={`frage-${node.id}`}>Einwand</label>
                 <select id={`frage-${node.id}`} name="frage" className="select" value={frageOk} onChange={(e) => setFrage(e.target.value as typeof frage)}>
                   {questions.map((q) => (
                     <option key={q.key} value={q.key}>

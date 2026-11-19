@@ -32,6 +32,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ReportBox } from "@/components/ReportBox";
+import { STEPS } from "@/lib/params";
 
 /**
  * The results page after Stephan's design (Online-Anhang, Musterstadt),
@@ -110,7 +111,9 @@ function hullPath(pts: Pt[], pad: number): string | null {
 const VOTE: Record<string, string> = { a: "stimmt zu", d: "lehnt ab", p: "enthält sich", ".": "hat nicht abgestimmt" };
 
 export function ResultView(props: ResultViewProps) {
-  const { r, names } = props;
+  const { names } = props;
+  // Step names as they read today (a stored result keeps the words of its day; the meaning of each key is unchanged).
+  const r = useMemo(() => ({ ...props.r, steps: props.r.steps.map((s) => ({ ...s, label: STEPS.find((x) => x.key === s.key)?.label ?? s.label })) }), [props.r]);
   const k = r.camps?.k ?? 0;
   /** Too few people for camps: counts over everyone and the arguments, no verdicts (see smallNote). */
   const small = !r.ready;
@@ -352,10 +355,10 @@ export function ResultView(props: ResultViewProps) {
                 const head = e.attack ? (
                   <>
                     <div className="ang">„{e.attack}“</div>
-                    <div className="ex2">{q ? `Prüffrage: ${q} · ` : ""}Stand nach der Beteiligung:</div>
+                    <div className="ex2">{q ? `Einwand: ${q} · ` : ""}Stand nach der Beteiligung:</div>
                   </>
                 ) : q ? (
-                  <div className="ex2">Prüffrage: {q}</div>
+                  <div className="ex2">Einwand: {q}</div>
                 ) : undefined;
                 return item(
                   s,
@@ -369,7 +372,7 @@ export function ResultView(props: ResultViewProps) {
               })}
               {st.unasked.map((q) => (
                 <div key={q} className="luecke">
-                  <div className="who">Prüffrage, die niemand gestellt hat</div>
+                  <div className="who">Einwand, den niemand erhoben hat</div>
                   <div className="ang">{qLabel(q)}</div>
                   <div className="ex2">
                     {r.statements.some((s) => s.rolle === "beitrag" && s.schritt === st.key && s.frage === q)
@@ -902,7 +905,7 @@ export function ResultView(props: ResultViewProps) {
             ))
           ) : (
             <div className="gap">
-              <p>Jede Prüffrage wurde gestellt, und auf jeden Einwand gab es eine Antwort.</p>
+              <p>Jeder Einwand wurde erhoben, und auf jeden gab es eine Antwort.</p>
             </div>
           )}
         </section>

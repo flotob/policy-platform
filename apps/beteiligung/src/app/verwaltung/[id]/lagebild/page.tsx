@@ -159,7 +159,7 @@ export default async function Lagebild({ params }: { params: Promise<{ id: strin
           </ul>
         </section>
         <section className="lb-sec">
-          <h2>Prüffragen, die niemand gestellt hat</h2>
+          <h2>Einwände, die niemand erhoben hat</h2>
           {open.length ? (
             <ul className="lb-gaps">
               {open.map((g) => (
@@ -170,7 +170,7 @@ export default async function Lagebild({ params }: { params: Promise<{ id: strin
               ))}
             </ul>
           ) : (
-            <p className="small muted">Jede Prüffrage ist mindestens einmal gestellt worden.</p>
+            <p className="small muted">Jeder Einwand ist mindestens einmal erhoben worden.</p>
           )}
           <p className="small">
             <Link href={`/verwaltung/${id}/punkte`}>Begründung und Einwände ansehen</Link>

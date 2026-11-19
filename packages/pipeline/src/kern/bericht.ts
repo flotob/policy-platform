@@ -195,7 +195,7 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   const qLabel = (key: string) => ctx.questions.find((q) => q.key === key)?.label ?? key;
   const stepNo = (key: string) => r.steps.findIndex((x) => x.key === key) + 1;
   for (const g of r.gaps.unasked) {
-    add("luecken", `Zur Prüffrage „${qLabel(g.question)}“ in der Stufe ${stepNo(g.step)} hat niemand etwas gesagt, weder Einwand noch Antwort. Vor einem Beschluss zu schließen, durch die Verwaltung oder eine gezielte Nachfrage.`);
+    add("luecken", `Den Einwand „${qLabel(g.question)}“ in der Stufe ${stepNo(g.step)} hat niemand erhoben, und niemand hat ihn beantwortet. Vor einem Beschluss zu schließen, durch die Verwaltung oder eine gezielte Nachfrage.`);
   }
   const attacksOnly = r.gaps.oneSided.filter((g) => g.direction === "greift_an");
   const supportOnly = r.gaps.oneSided.filter((g) => g.direction === "stuetzt");
@@ -271,7 +271,7 @@ function smallConclusions(r: Ergebnis, ctx: ReportContext): Satz[] {
   const qLabel = (key: string) => ctx.questions.find((q) => q.key === key)?.label ?? key;
   const stepNo = (key: string) => r.steps.findIndex((x) => x.key === key) + 1;
   for (const g of r.gaps.unasked) {
-    add("luecken", `Zur Prüffrage „${qLabel(g.question)}“ in der Stufe ${stepNo(g.step)} hat niemand etwas gesagt, weder Einwand noch Antwort.`);
+    add("luecken", `Den Einwand „${qLabel(g.question)}“ in der Stufe ${stepNo(g.step)} hat niemand erhoben, und niemand hat ihn beantwortet.`);
   }
   const attacksOnly = r.gaps.oneSided.filter((g) => g.direction === "greift_an");
   if (attacksOnly.length) {
