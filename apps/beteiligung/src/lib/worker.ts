@@ -18,6 +18,7 @@ import { sql } from "@policy/db";
 import { audit, decomposeFile, decomposeShort, machineDecides, proposeCampNames, proposeSkeleton, syncDerivedVotes, writeAndCheck } from "@policy/pipeline/kern";
 
 import { getResult, setCampNames } from "./auswertung";
+import { forgetUnconfirmed } from "./folgen";
 import { getReport, namingOf } from "./bericht";
 import { getCampaign } from "./campaigns";
 import { getDb } from "./db";
@@ -146,6 +147,13 @@ export function startWorker(): void {
   if (running) return;
   running = true;
   log(`worker started (${WORKERS} side by side)`);
+  // Housekeeping, once an hour: e-mail addresses nobody confirmed within seven days are deleted.
+  const tidy = () =>
+    forgetUnconfirmed()
+      .then((n) => (n ? log(`forgot ${n} unconfirmed e-mail address(es)`) : undefined))
+      .catch((e) => log(`housekeeping: ${(e as Error).message}`));
+  setTimeout(tidy, 60_000);
+  setInterval(tidy, 60 * 60 * 1000);
   for (let w = 0; w < WORKERS; w++) {
     void (async () => {
       // Staggered, so the loops do not poll in lockstep.

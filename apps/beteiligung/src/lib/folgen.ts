@@ -78,7 +78,7 @@ du hast auf streit.bar gebeten, Nachricht zu bekommen, wie es mit der Beteiligun
 Bitte bestätige das mit diesem Link:
 ${link(f.id as string, "bestaetigen")}
 
-Warst du das nicht, dann ignoriere diese E-Mail. Ohne Bestätigung schreiben wir dir nie wieder.
+Warst du das nicht, dann ignoriere diese E-Mail. Ohne Bestätigung schreiben wir dir nie wieder und löschen die Adresse nach sieben Tagen.
 
 streit.bar`,
   });
@@ -121,6 +121,13 @@ export async function confirmFollower(id: string): Promise<void> {
 /** One click, no questions. The address itself goes too: there is nothing left to send it. */
 export async function unsubscribe(id: string): Promise<void> {
   await getDb().execute(sql`UPDATE campaign_followers SET unsubscribed_at = now(), email = 'abgemeldet:' || id::text, laufzettel = '{}' WHERE id = ${id}`);
+}
+
+/** An address nobody confirmed within seven days goes (the worker runs this every hour). */
+export async function forgetUnconfirmed(): Promise<number> {
+  const r = await getDb().execute(sql`
+    DELETE FROM campaign_followers WHERE confirmed_at IS NULL AND created_at < now() - interval '7 days' RETURNING id`);
+  return r.rows.length;
 }
 
 /** The confirmed followers of a campaign — the workspace shows the number. */

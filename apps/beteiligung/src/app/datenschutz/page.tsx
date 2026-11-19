@@ -43,7 +43,7 @@ export default function Datenschutz() {
           <li>
             Wenn Sie freiwillig Ihre E-Mail-Adresse angeben, um zu erfahren, was aus der Beteiligung wird: die Adresse und die Links zu Ihren
             Laufzetteln, getrennt von Ihren Stimmen. Wir schreiben Ihnen erst, nachdem Sie die Adresse über einen Link bestätigt haben, und höchstens
-            zweimal (Ergebnis, Beschluss). Jede Nachricht enthält einen Link zum Abmelden; danach löschen wir die Adresse.
+            zweimal (Ergebnis, Beschluss). Bestätigt niemand die Adresse, löschen wir sie nach sieben Tagen. Jede Nachricht enthält einen Link zum Abmelden; danach löschen wir die Adresse.
           </li>
         </ul>
         <p>
