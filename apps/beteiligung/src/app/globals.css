@@ -83,7 +83,17 @@ button, input, textarea, select { font: inherit; color: var(--ink); }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 
 /* Forms */
-.field { display: grid; gap: 6px; margin-bottom: 20px; }
+.field { display: grid; gap: 6px; margin-bottom: 20px; align-content: start; }
+/* A group of radios or checkboxes without the browser's frame (public pages and workspace alike). */
+fieldset.plain { border: 0; padding: 0; margin: 0 0 22px; display: grid; gap: 10px; min-width: 0; }
+fieldset.plain legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; padding: 0; }
+/* Two fields side by side (public pages and workspace alike); each keeps its own height. */
+.field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 20px; align-items: start; }
+@media (max-width: 640px) { .field-row { grid-template-columns: minmax(0, 1fr); } }
+/* File picker: a dashed drop area with a quiet button, not the browser's grey default. */
+.file-input { padding: 10px; border-style: dashed; cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.file-input::file-selector-button { font: inherit; font-size: 14px; font-weight: 600; margin-right: 12px; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--bg); color: var(--ink); cursor: pointer; }
+.file-input:hover::file-selector-button { border-color: var(--ink-3); }
 .field > label, .field > .label { font-weight: 600; font-size: 14px; }
 .field .hint { font-size: 13px; color: var(--ink-2); max-width: 62ch; }
 .input, .textarea, .select {

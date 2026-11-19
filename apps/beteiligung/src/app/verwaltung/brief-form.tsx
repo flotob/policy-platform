@@ -49,7 +49,7 @@ export function LetterForm({ id }: { id: string }) {
       </div>
       <div className="field">
         <label htmlFor="scan">Oder einen Scan anhängen</label>
-        <input id="scan" name="scan" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" />
+        <input id="scan" name="scan" type="file" className="input file-input" accept="application/pdf,image/png,image/jpeg,image/webp" />
         <span className="hint">PDF oder Foto des Briefs, bis 20 MB. Die Maschine liest ihn ab; Briefkopf und Unterschrift lässt sie weg.</span>
       </div>
       <div className="form-foot">

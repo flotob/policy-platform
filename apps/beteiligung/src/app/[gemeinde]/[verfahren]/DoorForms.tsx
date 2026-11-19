@@ -112,8 +112,8 @@ export function UploadForm({ gemeinde, verfahren, needsCode }: { gemeinde: strin
       ) : null}
       <div className="field">
         <label htmlFor="file">Datei</label>
-        <input id="file" name="file" type="file" className="input" accept=".pdf,.docx,.txt,.md,application/pdf,text/plain" required />
-        <span className="hint">PDF, Word oder Text, bis 20 MB. Eingescannte Seiten kann die Maschine noch nicht lesen.</span>
+        <input id="file" name="file" type="file" className="input file-input" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp" required />
+        <span className="hint">PDF, Word, Text oder ein Foto des Briefs, bis 20 MB. Auch eingescannte Seiten liest die Maschine.</span>
       </div>
       {needsCode ? (
         <div className="field">
@@ -122,7 +122,7 @@ export function UploadForm({ gemeinde, verfahren, needsCode }: { gemeinde: strin
         </div>
       ) : null}
       {state.error ? <p className="error">{state.error}</p> : null}
-      <Submit pending="Wird hochgeladen …">Stellungnahme einreichen</Submit>
+      <Submit pending="Wird hochgeladen und gelesen …">Stellungnahme einreichen</Submit>
     </form>
   );
 }

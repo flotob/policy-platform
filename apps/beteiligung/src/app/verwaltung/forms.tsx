@@ -221,7 +221,7 @@ export function UploadForm({ id }: { id: string }) {
         </div>
         <div className="field">
           <label htmlFor="file">Datei</label>
-          <input id="file" name="file" type="file" className="input" accept=".pdf,.docx,.doc,.txt,.odt" required />
+          <input id="file" name="file" type="file" className="input file-input" accept=".pdf,.docx,.doc,.txt,.odt,.png,.jpg,.jpeg,.webp" required />
           <span className="hint">PDF, Word oder Text, bis 20 MB.</span>
         </div>
       </div>

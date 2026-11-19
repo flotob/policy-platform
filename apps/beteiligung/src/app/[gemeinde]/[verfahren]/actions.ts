@@ -3,14 +3,14 @@
 import { createHash } from "node:crypto";
 
 import { sql } from "@policy/db";
-import { extractFileText, syncDerivedVotes, UnreadableFile } from "@policy/pipeline/kern";
+import { extractFileText, readScan, syncDerivedVotes, UnreadableFile } from "@policy/pipeline/kern";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { castVote } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
-import { enqueue } from "@/lib/kern";
+import { enqueue, kernDeps } from "@/lib/kern";
 import { follow } from "@/lib/folgen";
 import { ensureParticipant, getParticipant, LIMITS, originHash, ParticipationError, redeemCode, trackingToken, within } from "@/lib/teilnahme";
 import { answerShort as answerShortCore, runShortCheck, shortByToken, storeShort } from "@/lib/tuer2";
@@ -136,10 +136,13 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   const bytes = Buffer.from(await file.arrayBuffer());
   let text: string;
   try {
-    text = await extractFileText(new Uint8Array(bytes), file.name, file.type || null);
+    // A scan or a photo of a letter is read by the machine while the person waits; typed files need no machine.
+    const { llm } = await kernDeps((m) => console.log(`[kern] ${m}`));
+    text = await extractFileText(new Uint8Array(bytes), file.name, file.type || null, readScan(llm));
   } catch (e) {
     if (e instanceof UnreadableFile) return { error: e.message, values };
-    throw e;
+    console.error("[tuer3] reading an upload failed:", e);
+    return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuch es gleich noch einmal.", values };
   }
   const db = getDb();
   const sha = createHash("sha256").update(bytes).digest("hex");

@@ -72,7 +72,7 @@ export function LogoForm({ logo }: { logo: string | null }) {
       )}
       <div className="field">
         <label htmlFor="k-logo">{logo ? "Anderes Logo" : "Logo hochladen"}</label>
-        <input id="k-logo" name="logo" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+        <input id="k-logo" name="logo" type="file" className="input file-input" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
         <span className="hint">PNG, JPG, WebP oder SVG, bis 500 KB. Es steht klein neben dem Namen der Kommune.</span>
       </div>
       <div className="form-foot">
