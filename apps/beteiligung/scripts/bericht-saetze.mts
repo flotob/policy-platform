@@ -3,16 +3,19 @@
  * today's code, without the language model — to read the report's structure while working on it.
  * The camp names and descriptions are the ones last confirmed. Nothing is written.
  *
- * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/bericht-saetze.mts <gemeinde> <verfahren> [--stored]
+ * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/bericht-saetze.mts <gemeinde> <verfahren> [--stored] [--text]
  *   --stored: use the stored result instead of computing it fresh
+ *   --text:   also let the language model write the text (R2) and run the checks (R3), as the worker
+ *             would — printed only, nothing stored (costs one model call per attempt and Jev reads)
  */
 import { sql } from "@policy/db";
-import { conclusions, headline, SECTIONS, type SectionKey } from "@policy/pipeline/kern";
+import { conclusions, headline, SECTIONS, writeAndCheck, type SectionKey } from "@policy/pipeline/kern";
 
 import { latestResult, liveResult } from "../src/lib/auswertung.ts";
 import { namingOf } from "../src/lib/bericht.ts";
 import { getCampaign } from "../src/lib/campaigns.ts";
 import { getDb } from "../src/lib/db.ts";
+import { kernDeps } from "../src/lib/kern.ts";
 import { QUESTIONS } from "../src/lib/params.ts";
 
 const [gemeinde, verfahren] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
@@ -43,5 +46,18 @@ for (const key of Object.keys(SECTIONS) as SectionKey[]) {
   console.log(`## ${SECTIONS[key]}`);
   for (const s of ss) console.log(`${s.id}: ${s.text}`);
   console.log("");
+}
+if (process.argv.includes("--text")) {
+  const deps = await kernDeps((m) => console.error(m));
+  const { text, checks } = await writeAndCheck(deps, sentences, { town: String(x.name), measure: c.measure });
+  console.log(`\n======== TEXT (${checks.passed ? "passed" : "FAILED"}, attempts ${checks.attempts}) ========\n`);
+  let last = "";
+  for (const a of text) {
+    if (a.abschnitt !== last) console.log(`\n## ${SECTIONS[a.abschnitt]}`);
+    last = a.abschnitt;
+    console.log(`${a.text}   (${a.saetze.join(",")})\n`);
+  }
+  for (const i of checks.rules) console.log(`RULE: ${i.text}`);
+  for (const x of checks.reader.filter((y) => !y.pass)) console.log(`READER: Absatz ${x.absatz} treu ${x.treu.toFixed(2)} richtung ${x.richtung.toFixed(2)} staerke ${x.staerke.toFixed(2)}`);
 }
 process.exit(0);
