@@ -95,7 +95,7 @@ function topic(n: Node, drawn = false): [number, number, number] {
   if (has(/gerechtfertigt, wenn|Zugang für alle Kinder/i)) return drawn ? [0.84, 0.38, 0.4] : [0.93, 0.82, 0.86];
   // Apparent agreements: everyone wants the check and the time limit — for opposite reasons (the letters say which).
   if (has(/Wirtschaftlichkeitsprüfung|Wirtschaftlichkeitsuntersuchung/i))
-    return has(/keine dauerhafte|bis zum Vorliegen|nicht tragbar/i) ? [0.24, 0.86, 0.92] : [0.78, 0.84, 0.92];
+    return has(/keine dauerhafte|bis zum Vorliegen|nach Vorliegen|nicht tragbar/i) ? [0.24, 0.86, 0.92] : [0.78, 0.84, 0.92];
   if (has(/befrist/i)) return [0.8, 0.9, 0.78];
   // Selling the old plot to pay for the new pool: the renovation camp wants to keep it.
   if (has(/verkaufen|Verkauf/i)) return [0.66, 0.72, 0.16];
@@ -112,7 +112,7 @@ function topic(n: Node, drawn = false): [number, number, number] {
     return [0.9, 0.86, 0.88];
   if (has(/belastet die Unternehmen/i)) return [0.82, 0.92, 0.86];
   // "Whatever is built, but now": the impatient parents of camp A.
-  if (has(/schnelle Umsetzung|Hauptsache jetzt|wichtiger als die Entscheidung/i)) return [0.86, 0.38, 0.28];
+  if (has(/schnelle Umsetzung|Hauptsache jetzt|wichtiger als die Entscheidung|ohne (weitere )?Verzögerung/i)) return [0.86, 0.38, 0.28];
   // "Good for business too": camp A's argument, which B half accepts.
   if (has(/auch den Unternehmen|Fachkräfte|Lebensqualität/i)) return [0.88, 0.4, 0.56];
   // Common ground: children, schools, the teaching pool, access, prices.
@@ -125,7 +125,9 @@ function topic(n: Node, drawn = false): [number, number, number] {
   // Getting there: the site at the Parkstraße is far for the old and the schools — C's point, shared by some in A.
   if (has(/Stadtrand|Haltestelle|nicht erreichbar|kaum zu erreichen|schlecht erreichbar/i) && !has(/Innenstadt/i)) return [0.46, 0.5, 0.88];
   // Renovation instead of a new build (camp C), and the town's claims against it.
-  if (has(/Sanierung würde keine|keine zusätzlichen (Schwimm|Wasser)fläche|Bauzeit|beste Möglichkeit/i)) return [0.86, 0.5, 0.1];
+  if (has(/Sanierung würde keine|keine zusätzlichen (Schwimm|Wasser)fläche|Bauzeit|beste Möglichkeit/i) && !has(/Lkw|Parkstraße/i)) return [0.86, 0.5, 0.1];
+  // The old wall mosaic: the renovation camp's heart, nobody else's fight.
+  if (has(/Mosaik/i)) return [0.5, 0.6, 0.94];
   if (has(/Cafés|Einzelhandel|allein erreichen|gut erreichbar|bietet Platz|Bustransfer/i)) return [0.72, 0.76, 0.94];
   if (has(/Sanierung|sanier|Anbau|anbauen|Innenstadt|zu Fuß|fußläufig|alten Standort|bestehenden Standort|Mosaik|Sauna/i))
     return n.typ === "T" ? [0.18, 0.5, 0.92] : [0.14, 0.42, 0.92];
@@ -139,7 +141,7 @@ function topic(n: Node, drawn = false): [number, number, number] {
   if (has(/16 bis 22|Baukosten|Baupreis|Mehrkosten|teurer|Defizit|Betriebskosten|1,0 bis 1,4|300\.000|Lücke|nicht tragbar|nicht aufgeh|1,5 Millionen|2029/i))
     return attack ? [0.2, 0.84, 0.9] : [0.8, 0.3, 0.2];
   // State funding: everyone wants it — unless it is a reason to wait with the tax.
-  if (has(/Förder/i)) return has(/erst |bevor|nachdem|dauerhafte/i) ? [0.3, 0.82, 0.62] : [0.86, 0.84, 0.72];
+  if (has(/Förder/i)) return has(/erst |bevor|nachdem|dauerhafte|vor einer Entscheidung|Bescheid ab/i) ? [0.3, 0.82, 0.62] : [0.86, 0.84, 0.72];
   // Business and the Gewerbesteuer (camp B).
   if (has(/abwander|Wegzug|verlässt|verlassen die Stadt|wegziehen/i)) return attack ? [0.12, 0.86, 0.42] : [0.88, 0.2, 0.5];
   if (has(/350 Euro|nicht repräsentativ|§ ?35|Anrechnung|Hinzurechnung|Personen(unternehmen|gesellschaft)|Handwerk|Betriebe|Unternehmen|Firmen|Gewerbe|Hebesatz|Grundsteuer|Wettbewerbsdruck|Zweckbindung/i)) {
@@ -148,7 +150,7 @@ function topic(n: Node, drawn = false): [number, number, number] {
     // For: a value ("firms can carry it") is the core of the dispute; a fact (the town's example) is mostly believed.
     return value ? [0.9, 0.1, 0.4] : [0.84, 0.42, 0.62];
   }
-  if (has(/freiwillige (Aufgabe|Leistung)|nicht leisten/i)) return [0.12, 0.84, 0.62];
+  if (has(/freiwillige (Aufgabe|Leistung)|nicht leisten/i) && !has(/Familien|Schwimmkurs/i)) return [0.12, 0.84, 0.62];
   if (has(/Daseinsvorsorge|Pflichtaufgabe/i)) return [0.9, 0.2, 0.42];
   if (has(/gesellschaftlichen Wert|allen Generationen/i)) return [0.93, 0.8, 0.82];
   if (has(/Nutzen|überwiegt|zumutbar|Gemeinwohl|lohnt|gering/i)) return attack ? [0.1, 0.86, 0.62] : [0.92, 0.16, 0.36];
@@ -168,7 +170,7 @@ function topic(n: Node, drawn = false): [number, number, number] {
  * That is where the Landkarte's finding comes from: agreed on the facts, divided by a value.
  */
 const CONTESTED =
-  /16 bis 22|850\.000|Defizit|Mehrkosten|20 bis 30|8,5 bis 9|günstiger|reichen .*aus|Lücke|tragen\b|abwander|Erweiterungen|Standortnachteil|harter Faktor|günstigeren Standort|relativiert|stellen weniger ein|erneut steigen|Schwankungen|schädlichen Wettbewerb|nicht vollständig|Vormittagszeiten bieten|bessere Chancen|keine zusätzlichen|fiele .*aus|Bauwerksuntersuchung|Konjunktur|Autofahrten|Lärm|billiger|Sponsoring|nicht erreichbar|kaum zu erreichen|schlecht erreichbar|Parkplätze|Mehreinnahmen von|bremsen|weitergeben|2029|nicht tragbar|Alternative zum Neubau/i;
+  /16 bis 22|850\.000|Defizit|Mehrkosten|20 bis 30|8,5 bis 9|günstiger|reichen .*aus|Lücke|tragen\b|abwander|Erweiterungen|Standortnachteil|harter Faktor|günstigeren Standort|relativiert|stellen weniger ein|erneut steigen|Schwankungen|schädlichen Wettbewerb|nicht vollständig|Vormittagszeiten bieten|bessere Chancen|keine zusätzlichen|fiele .*aus|Bauwerksuntersuchung|Konjunktur|Autofahrten|Lärm|billiger|Sponsoring|nicht erreichbar|kaum zu erreichen|schlecht erreichbar|Parkplätze|Mehreinnahmen von|bremsen|weitergeben|2029|nicht tragbar|Alternative zum Neubau|nicht für 12 Millionen|7 bis 13|spart gegenüber|kann saniert|abwerben|erneut erhöht/i;
 
 function lean(n: Node, drawn = false): [number, number, number] {
   const p = topic(n, drawn);
