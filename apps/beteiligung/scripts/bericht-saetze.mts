@@ -9,7 +9,7 @@
  *             would — printed only, nothing stored (costs one model call per attempt and Jev reads)
  */
 import { sql } from "@policy/db";
-import { conclusions, headline, SECTIONS, writeAndCheck, type SectionKey } from "@policy/pipeline/kern";
+import { conclusions, headline, SECTIONS, smallHeadline, writeAndCheck, type SectionKey } from "@policy/pipeline/kern";
 
 import { latestResult, liveResult } from "../src/lib/auswertung.ts";
 import { namingOf } from "../src/lib/bericht.ts";
@@ -38,7 +38,7 @@ const sentences = conclusions(r, naming?.names ?? null, {
   resultVersion: saved?.version ?? 0,
   descriptions: naming?.descriptions ?? null,
 });
-const h = headline(r);
+const h = r.ready ? headline(r) : smallHeadline(r);
 console.log(`Headline: ${h.lead} ${h.rest.map((s) => s.text).join("")}\n`);
 for (const key of Object.keys(SECTIONS) as SectionKey[]) {
   const ss = sentences.filter((s) => s.section === key);

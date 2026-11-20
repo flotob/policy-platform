@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { checkDocxSize, UnreadableFile } from "../src/kern/text.ts";
 
 /** A minimal ZIP archive (deflated parts), as a Word file is one. `lie` writes a false unpacked size. */
-function zip(parts: { name: string; data: Buffer }[], lie?: number): Uint8Array {
+function zip(parts: { name: string; data: Buffer }[], lie?: number, count = parts.length): Uint8Array {
   const locals: Buffer[] = [];
   const central: Buffer[] = [];
   let offset = 0;
@@ -36,8 +36,8 @@ function zip(parts: { name: string; data: Buffer }[], lie?: number): Uint8Array 
   const cd = Buffer.concat(central);
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(parts.length, 8);
-  end.writeUInt16LE(parts.length, 10);
+  end.writeUInt16LE(count, 8);
+  end.writeUInt16LE(count, 10);
   end.writeUInt32LE(cd.length, 12);
   end.writeUInt32LE(offset, 16);
   return new Uint8Array(Buffer.concat([...locals, cd, end]));
@@ -62,6 +62,27 @@ describe("Word files: size ceiling before unpacking", () => {
   it("adds up the parts", () => {
     const parts = Array.from({ length: 4 }, (_, i) => ({ name: `p${i}.xml`, data: Buffer.alloc(400 * 1024) }));
     expect(() => checkDocxSize(zip(parts), 1024 * 1024)).toThrow(UnreadableFile);
+  });
+
+  it("walks every entry, whatever count the archive declares", () => {
+    const parts = [
+      { name: "word/styles.xml", data: Buffer.from("<w:styles/>") },
+      { name: "word/document.xml", data: Buffer.alloc(3 * 1024 * 1024) },
+    ];
+    expect(() => checkDocxSize(zip(parts, undefined, 1), 1024 * 1024)).toThrow(UnreadableFile);
+  });
+
+  it("refuses data in front of the archive", () => {
+    const z = zip([{ name: "word/document.xml", data: Buffer.from("<w:t>Hallo</w:t>") }]);
+    expect(() => checkDocxSize(new Uint8Array(Buffer.concat([Buffer.from("XXXX"), Buffer.from(z)])))).toThrow(/beschädigt/);
+  });
+
+  it("does not unpack pictures, which the text never needs", () => {
+    const parts = [
+      { name: "word/document.xml", data: Buffer.from("<w:t>Hallo</w:t>") },
+      { name: "word/media/image1.png", data: Buffer.alloc(3 * 1024 * 1024) },
+    ];
+    expect(() => checkDocxSize(zip(parts), 1024 * 1024)).not.toThrow();
   });
 
   it("calls a non-archive damaged", () => {

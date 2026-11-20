@@ -58,19 +58,35 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
         done: r.saturation.saturated,
         text: r.saturation.saturated
           ? `Die Debatte ist ausgeschöpft: Die letzten ${n(r.saturation.streak)} Eingaben brachten nichts Neues.`
-          : `Noch nicht ausgeschöpft: zuletzt ${n(r.saturation.streak)} Eingaben ohne neuen Punkt, das Fenster sind ${n(r.saturation.window)}. Schließen geht trotzdem.`,
+          : `Noch nicht ausgeschöpft: ${
+              r.saturation.streak === 0
+                ? "Die letzte Eingabe brachte noch einen neuen Punkt."
+                : r.saturation.streak === 1
+                  ? "Die letzte Eingabe brachte nichts Neues, die davor schon."
+                  : `Die letzten ${n(r.saturation.streak)} Eingaben brachten nichts Neues.`
+            } Als ausgeschöpft gilt die Debatte, wenn ${n(r.saturation.window)} Eingaben in Folge nichts Neues bringen. Schließen geht trotzdem.`,
       },
       {
         done: queue === 0,
         text: queue ? `${n(queue)} ${queue === 1 ? "Vorlage wartet" : "Vorlagen warten"} noch in der Redaktion. Was dort noch liegt, kommt nicht mehr zur Abstimmung.` : "Die Redaktion hat nichts mehr offen.",
       },
       {
-        done: reading === 0,
-        text: !reading
-          ? "Die Maschine hat alle Eingaben gelesen."
-          : reading === 1
-            ? "Eine Eingabe liest die Maschine noch. Sie wird danach einsortiert, zählt aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen soll."
-            : `${n(reading)} Eingaben liest die Maschine noch. Sie werden danach einsortiert, zählen aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen sollen.`,
+        done: reading.reading === 0 && reading.failed === 0,
+        text:
+          [
+            !reading.reading
+              ? ""
+              : reading.reading === 1
+                ? "Eine Eingabe liest die Maschine noch. Sie wird danach einsortiert, zählt aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen soll."
+                : `${n(reading.reading)} Eingaben liest die Maschine noch. Sie werden danach einsortiert, zählen aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen sollen.`,
+            !reading.failed
+              ? ""
+              : reading.failed === 1
+                ? "Eine Eingabe konnte die Maschine nicht lesen; sie zählt nicht, solange niemand sie oben erneut anstößt."
+                : `${n(reading.failed)} Eingaben konnte die Maschine nicht lesen; sie zählen nicht, solange niemand sie oben erneut anstößt.`,
+          ]
+            .filter(Boolean)
+            .join(" ") || "Die Maschine hat alle Eingaben gelesen.",
       },
     ];
     return (

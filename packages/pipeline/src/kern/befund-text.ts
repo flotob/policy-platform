@@ -4,7 +4,7 @@
  * list (R1) use the same words, so a finding reads the same everywhere.
  */
 
-import type { BelegKey, CampCount, Category, Ergebnis, Status, StatementOut, StepOut, Verdict } from "./befund.ts";
+import { diagnoseCamps, type BelegKey, type CampCount, type Category, type Diagnosis, type Ergebnis, type Status, type StatementOut, type StepOut, type Verdict } from "./befund.ts";
 import { carries, MIN_CAMP_VOTES, rejects } from "./position.ts";
 
 export type CampNames = (string | null | undefined)[] | null | undefined;
@@ -141,7 +141,8 @@ export function pairsText(r: Ergebnis, names: CampNames): string | null {
   const close = sorted[0]!;
   const far = sorted[sorted.length - 1]!;
   const two = (x: (typeof ps)[number]) => `das ${campLabel(names, x.camps[0])} und das ${campLabel(names, x.camps[1])}`;
-  const n = (x: number) => (x <= 12 ? word(x, false) : String(x));
+  // Dative after "bei": "bei keiner", "bei einer", "bei sieben".
+  const n = (x: number) => (x === 0 ? "keiner" : x === 1 ? "einer" : x <= 12 ? word(x) : String(x));
   return (
     `Am nächsten stehen sich ${two(close)}: Bei ${n(close.einig)} ${pl(close.einig, "Aussage", "Aussagen")} haben sie dieselbe Haltung, bei ${n(close.getrennt)} trennen sie sich. ` +
     `Am weitesten auseinander liegen ${two(far)}: dieselbe Haltung bei ${n(far.einig)}, getrennt bei ${n(far.getrennt)}.`
@@ -182,7 +183,7 @@ export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): strin
       break;
     case "streit":
       if (s.typ === "W") {
-        if (r.core[0] === s.nr) out.push("Hier entscheidet sich der Streit: Bei keiner anderen Wertungsfrage liegen die Lager so weit auseinander.");
+        if (overall(r).core[0] === s.nr) out.push("Hier entscheidet sich der Streit: Bei keiner anderen Wertungsfrage liegen die Lager so weit auseinander.");
         out.push("Das kann kein Gutachten beantworten. Die Frage gehört in den Rat, ausdrücklich als Wertentscheidung.");
       } else out.push("Eine Frage der Ausgestaltung: Der Rat kann sie im Beschluss regeln, hier lässt sich verhandeln.");
       break;
@@ -273,6 +274,22 @@ export function schemeConclusion(r: Ergebnis): string {
 export type Segment = { text: string } | { text: string; nr: number };
 
 /**
+ * The diagnosis across all camps and the core of the dispute. Results stored before 2026-11-20 compared
+ * only camps A and B there; for them (three or more camps) both are worked out again from the statements,
+ * so the headline never contradicts the sections.
+ */
+export function overall(r: Ergebnis): { d: Diagnosis | null; core: number[] } {
+  const k = r.camps?.k ?? 0;
+  const d = r.diagnoses[0] ?? null;
+  if (k < 3 || !d || d.camps.length === k) return { d, core: r.core };
+  const core = r.statements
+    .filter((s) => s.rolle !== "schluss" && s.typ === "W" && s.profile === "trennt")
+    .sort((a, b) => b.gap - a.gap || a.nr - b.nr)
+    .map((s) => s.nr);
+  return { d: diagnoseCamps(r.statements, Array.from({ length: k }, (_, g) => g), r.params.bridgeThreshold), core };
+}
+
+/**
  * What divides the camps, counted the way the report's sections count it: value questions and design
  * questions (the council decides) and fact questions the camps are split on (a study can settle them).
  * The measure itself is not among them; it has its own sentence.
@@ -303,9 +320,10 @@ export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
       : firm
         ? `${cap(word(firm))} von ${word(n)} Aussagen ${pl(firm, "trägt", "tragen")} in ${bothDat(k)} Lagern`
         : `Keine der ${word(n)} Aussagen trägt in ${bothDat(k)} Lagern`) + (extra.length ? `, ${andList(extra)}.` : ".");
-  const d = r.diagnoses[0];
+  const o = overall(r);
+  const d = o.d;
   if (!d) return { lead, rest: [] };
-  const core = r.core[0] ? r.statements.find((s) => s.nr === r.core[0]) : undefined;
+  const core = o.core[0] ? r.statements.find((s) => s.nr === o.core[0]) : undefined;
   const { values: vals, design, facts } = disputeCounts(r);
   const kinds = andList(
     [
@@ -350,7 +368,7 @@ export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
 
 /** W5 in words: the measure itself and what divides the camps — all of them, or the pair `i` points to. */
 export function diagnosisText(r: Ergebnis, names: CampNames, i = 0): string {
-  const d = r.diagnoses[i];
+  const d = i === 0 ? overall(r).d : r.diagnoses[i];
   if (!d) return "";
   const gs = d.camps;
   const two = gs.length === 2;
@@ -371,7 +389,8 @@ export function diagnosisText(r: Ergebnis, names: CampNames, i = 0): string {
     wertkonflikt: "Die Tatsachen sind zwischen ihnen nicht strittig; was sie trennt, sind Wertungen: ein klarer Wertkonflikt.",
     scheinfaktenstreit: "In den Wertungen trennt sie nichts; gestritten wird über Tatsachen, die sich klären lassen: ein Scheinfaktenstreit.",
     gemischt: "Sie trennen Wertungen und Tatsachen zugleich.",
-    einig: "Keine Aussage trennt sie.",
+    // Design questions are not part of the fact/value diagnosis; with all camps compared, name them if they divide.
+    einig: i === 0 && disputeCounts(r).design ? "Wertungen und Tatsachen trennen sie nicht, nur Fragen der Ausgestaltung." : i === 0 ? "Keine Aussage trennt sie." : "Keine Wertungs- oder Tatsachenfrage trennt sie.",
   }[d.art];
   return `${s} ${a}`;
 }
@@ -435,9 +454,16 @@ export function countLine(s: StatementOut): string {
 
 /** Why there are no camps, with the two numbers. */
 export function smallNote(r: Ergebnis): string {
-  const got = r.clusterable === 0 ? "hier noch niemand" : `hier ${r.clusterable === 1 ? "eine Person" : `${word(r.clusterable)} Personen`}`;
-  return `Lager zeigen sich erst, wenn mindestens ${r.needed} Menschen genug Aussagen bewertet haben; das waren ${got}. Deshalb zählt diese Seite die Stimmen aller zusammen und zeigt die Argumente, aber kein Urteil über Brücken, Streit oder die vier Stufen.`;
+  const why = alike(r)
+    ? `Lager zeigen sich hier nicht: ${r.clusterable <= 12 ? cap(word(r.clusterable, false)) : r.clusterable} Menschen haben genug Aussagen bewertet, aber so ähnlich, dass sich keine Gruppen unterscheiden lassen.`
+    : `Lager zeigen sich erst, wenn mindestens ${r.needed} Menschen genug Aussagen bewertet haben; ${
+        r.clusterable === 0 ? "das hat hier noch niemand" : r.clusterable === 1 ? "das hat hier eine Person" : `das haben hier ${word(r.clusterable)} Personen`
+      }.`;
+  return `${why} Deshalb zählt diese Seite die Stimmen aller zusammen und zeigt die Argumente, aber kein Urteil über Brücken, Streit oder die vier Stufen.`;
 }
+
+/** No camps although enough people voted: they all voted alike (k-means finds no second position). */
+export const alike = (r: Ergebnis) => !r.ready && r.clusterable >= r.needed;
 
 /** The headline without camps: how the statements split, counted over everyone. */
 export function smallHeadline(r: Ergebnis): { lead: string; rest: Segment[] } {
@@ -452,7 +478,7 @@ export function smallHeadline(r: Ergebnis): { lead: string; rest: Segment[] } {
     ohne ? `${word(ohne)} ${pl(ohne, "hat", "haben")} noch keine Stimme` : "",
   ].filter(Boolean);
   return {
-    lead: "Zu wenige Teilnehmende für Lager.",
+    lead: alike(r) ? "Keine Lager: Alle stimmen ähnlich ab." : "Zu wenige Teilnehmende für Lager.",
     rest: [{ text: parts.length ? `Gezählt über alle zusammen: ${parts.join(", ").replace(/, ([^,]*)$/, " und $1")}.` : "Noch hat niemand abgestimmt." }],
   };
 }

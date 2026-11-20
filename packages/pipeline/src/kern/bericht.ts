@@ -23,6 +23,7 @@ import { z } from "zod";
 import type { Ergebnis, StatementOut } from "./befund.ts";
 import {
   campLabel,
+  alike,
   campShares,
   conclusionText,
   countLine,
@@ -285,8 +286,11 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     {
       section: "rat",
       items: own.filter((x) => x.category === "streit" && x.typ === "W"),
-      lead: (n) =>
-        `${root?.category === "streit" ? "Außerdem trennen" : "Es trennen"} ${num(n)} ${pl(n, "Wertungsfrage", "Wertungsfragen")} die Lager. Kein Gutachten kann sie beantworten; ${pl(n, "sie gehört", "sie gehören")} in den Rat, ausdrücklich als Wertentscheidung.`,
+      lead: (n) => {
+        const what = `${n === 1 ? "eine Wertungsfrage" : `${num(n)} Wertungsfragen`} die Lager`;
+        const verb = pl(n, "trennt", "trennen");
+        return `${root?.category === "streit" ? `Außerdem ${verb} ${what}` : cap(`${what.replace(" die Lager", "")} ${verb} die Lager`)}. Kein Gutachten kann sie beantworten; ${pl(n, "sie gehört", "sie gehören")} in den Rat, ausdrücklich als Wertentscheidung.`;
+      },
     },
     {
       section: "rat",
@@ -443,10 +447,13 @@ function smallConclusions(r: Ergebnis, ctx: ReportContext): Satz[] {
   const add = (section: SectionKey, text: string, refs: number[] = []) => out.push({ section, text, refs });
   const p = r.participation;
   const h = smallHeadline(r);
-  const got = r.clusterable === 0 ? "niemand" : r.clusterable === 1 ? "eine Person" : `${num(r.clusterable, false)} Personen`;
+  const got = r.clusterable === 0 ? "hat das niemand" : r.clusterable === 1 ? "hat das eine Person" : `haben das ${num(r.clusterable, false)} Personen`;
   add(
     "ergebnis",
-    `${fmt(p.voters)} ${pl(p.voters, "Person hat", "Menschen haben")} über ${r.statements.length} Aussagen zur Maßnahme abgestimmt. Das sind zu wenige für Lager, also Gruppen, die ähnlich abstimmen: Dafür müssten mindestens ${r.needed} Menschen genug Aussagen bewertet haben, hier ${pl(r.clusterable, "hat", "haben")} das ${got}.`,
+    `${fmt(p.voters)} ${pl(p.voters, "Person hat", "Menschen haben")} über ${r.statements.length} Aussagen zur Maßnahme abgestimmt. ` +
+      (alike(r)
+        ? `Lager, also Gruppen, die ähnlich abstimmen, zeigen sich dabei nicht: ${cap(num(r.clusterable, false))} haben genug Aussagen bewertet, aber so ähnlich, dass sich keine Gruppen unterscheiden lassen.`
+        : `Das sind zu wenige für Lager, also Gruppen, die ähnlich abstimmen: Dafür müssten mindestens ${r.needed} Menschen genug Aussagen bewertet haben, hier ${got}.`),
   );
   add(
     "ergebnis",

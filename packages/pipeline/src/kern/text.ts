@@ -25,10 +25,12 @@ const clean = (t: string) => t.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n"
 export const DOCX_MAX_UNPACKED = 50 * 1024 * 1024;
 const DOCX_MAX_PARTS = 5000;
 
+
 /**
  * A Word file is a ZIP archive, and the web server itself unpacks it. A doctored file of 1 MB can unpack
- * to gigabytes and take the whole site down. So before mammoth reads it, every part is unpacked here once
- * with a hard ceiling on what comes out: the sizes the archive declares can lie, the ceiling cannot.
+ * to gigabytes and take the whole site down. So before mammoth reads it, every part it may read is unpacked
+ * here once with a hard ceiling on what comes out: the sizes and the count the archive declares can lie,
+ * the ceiling cannot.
  */
 export function checkDocxSize(bytes: Uint8Array, max = DOCX_MAX_UNPACKED): void {
   const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -44,20 +46,28 @@ export function checkDocxSize(bytes: Uint8Array, max = DOCX_MAX_UNPACKED): void 
     }
   }
   if (end < 0) throw damaged();
-  const parts = b.readUInt16LE(end + 10);
   let p = b.readUInt32LE(end + 16);
-  if (parts === 0xffff || p === 0xffffffff || parts > DOCX_MAX_PARTS) throw tooBig(); // ZIP64 or absurdly many parts: no Word file needs that
+  if (p === 0xffffffff) throw tooBig(); // ZIP64: no Word file needs it
+  // A Word file starts with its first part; data in front of the archive (which shifts every offset) is refused.
+  if (p + b.readUInt32LE(end + 12) !== end || b.readUInt32LE(0) !== 0x04034b50) throw damaged();
+  // Walk the table of contents entry by entry, as the reader (JSZip, inside mammoth) does — the declared
+  // count can lie, the entries cannot hide.
   let used = 0;
-  for (let n = 0; n < parts; n++) {
-    if (p + 46 > b.length || b.readUInt32LE(p) !== 0x02014b50) throw damaged();
+  let parts = 0;
+  while (p < end) {
+    if (p + 46 > end || b.readUInt32LE(p) !== 0x02014b50) throw damaged();
+    if (++parts > DOCX_MAX_PARTS) throw tooBig();
     const method = b.readUInt16LE(p + 10);
     const packed = b.readUInt32LE(p + 20);
+    const nameLen = b.readUInt16LE(p + 28);
     const local = b.readUInt32LE(p + 42);
+    const name = b.toString("utf8", p + 46, p + 46 + nameLen);
     if (packed === 0xffffffff || local === 0xffffffff) throw tooBig();
     if (local + 30 > b.length || b.readUInt32LE(local) !== 0x04034b50) throw damaged();
     const start = local + 30 + b.readUInt16LE(local + 26) + b.readUInt16LE(local + 28);
     if (start + packed > b.length) throw damaged();
-    if (method === 0) used += packed;
+    // Pictures and embedded files are never unpacked for the text; they count as they lie in the file.
+    if (/(^|\/)(media|embeddings)\//.test(name) || method === 0) used += packed;
     else if (method === 8) {
       try {
         used += inflateRawSync(b.subarray(start, start + packed), { maxOutputLength: Math.max(1, max - used) }).length;
@@ -66,8 +76,9 @@ export function checkDocxSize(bytes: Uint8Array, max = DOCX_MAX_UNPACKED): void 
       }
     } else throw damaged();
     if (used > max) throw tooBig();
-    p += 46 + b.readUInt16LE(p + 28) + b.readUInt16LE(p + 30) + b.readUInt16LE(p + 32);
+    p += 46 + nameLen + b.readUInt16LE(p + 30) + b.readUInt16LE(p + 32);
   }
+  if (p !== end) throw damaged();
 }
 
 /**
