@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { groupOf } from "@policy/pipeline/kern/text";
+
 import { publishedBundle } from "@/lib/bericht";
 import { getDecision } from "@/lib/beschluss";
 import { decisionDate } from "@/lib/beschluss-words";
@@ -18,6 +20,7 @@ export const metadata = { title: "Beschluss" };
 const LABEL: Record<string, string> = {
   streit: "trennt die Lager",
   klaerbar: "mit Gutachten klärbar",
+  vermittlung: "belegt, aber nicht angekommen",
   offen: "offen geblieben",
   warnung: "Scheinkonsens",
   bruecke: "Brücke",
@@ -51,7 +54,7 @@ export default async function Beschluss({ params }: { params: Promise<{ id: stri
         id: s.id,
         nr: s.nr,
         text: s.text,
-        label: r.ready ? `${s.typ === "W" ? "Wertungsfrage" : s.typ === "T" ? "Tatsachenfrage" : "Ausgestaltung"}, ${LABEL[s.category] ?? s.category}` : s.typ === "W" ? "Wertungsfrage" : s.typ === "T" ? "Tatsachenfrage" : "Ausgestaltung",
+        label: r.ready ? `${s.typ === "W" ? "Wertungsfrage" : s.typ === "T" ? "Tatsachenfrage" : "Ausgestaltung"}, ${LABEL[groupOf(s, r.params.bridgeThreshold)] ?? s.category}` : s.typ === "W" ? "Wertungsfrage" : s.typ === "T" ? "Tatsachenfrage" : "Ausgestaltung",
         outcome: d?.points[s.id]?.outcome ?? "",
         reason: d?.points[s.id]?.reason ?? "",
       } satisfies DecisionItem,

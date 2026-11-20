@@ -36,6 +36,7 @@ import {
   firmBridge,
   headline,
   lotSummary,
+  mediation,
   pct,
   stepText,
   word,
@@ -54,6 +55,7 @@ export const SECTIONS = {
   vorbehalt: "Einigkeit unter Vorbehalt",
   warnung: "Vorsicht, Scheinkonsens",
   rat: "Was der Rat entscheiden muss",
+  vermitteln: "Belegt, aber nicht angekommen",
   klaeren: "Was sich klären lässt",
   schritte: "Die Begründung Schritt für Schritt",
   luecken: "Was niemand gefragt hat",
@@ -195,7 +197,7 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
   );
   add(
     "lesart",
-    "Tatsachenfragen lassen sich prüfen, etwa durch ein Gutachten. Wertungsfragen kann kein Gutachten beantworten; sie entscheidet der Rat. Fragen der Ausgestaltung regelt der Rat im Beschluss.",
+    "Tatsachenfragen lassen sich prüfen, etwa durch ein Gutachten. Liegen Belege nur auf einer Seite und auf der anderen nur Behauptungen, braucht es kein Gutachten mehr, sondern Vermittlung: Jemand muss die Belege dem Lager erklären, das sie nicht glaubt. Wertungsfragen kann kein Gutachten beantworten; sie entscheidet der Rat. Fragen der Ausgestaltung regelt der Rat im Beschluss.",
   );
   add(
     "lesart",
@@ -283,7 +285,11 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     add("rat", `Über die Maßnahme selbst sind sich die Lager nicht einig: ${ref(root)}. ${sides(root)}.`, [root.nr]);
   }
   const own = r.statements.filter((x) => x.rolle !== "schluss");
-  const groups: { section: SectionKey; items: StatementOut[]; lead: (n: number) => string }[] = [
+  // Fact questions where proof stands on one side only (Stephan's "belegt, aber nicht angekommen"): their own section.
+  const mediated = own.filter((x) => mediation(x, t));
+  const study = (x: StatementOut) => x.category === "klaerbar" && !mediation(x, t);
+  const further = mediated.length ? " weiteren" : "";
+  const groups: { section: SectionKey; items: StatementOut[]; lead: (n: number) => string; tail?: (s: StatementOut) => string }[] = [
     {
       section: "rat",
       items: own.filter((x) => x.category === "streit" && x.typ === "W"),
@@ -299,14 +305,24 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
       lead: (n) => `${n === 1 ? "Eine Frage der Ausgestaltung trennt" : `${cap(num(n))} Fragen der Ausgestaltung trennen`} die Lager. Der Rat kann sie im Beschluss regeln.`,
     },
     {
-      section: "klaeren",
-      items: own.filter((x) => x.category === "klaerbar" && x.profile === "trennt"),
-      lead: (n) => `Bei ${n === 1 ? "einer Tatsachenfrage" : `${num(n)} Tatsachenfragen`} sind die Lager uneins. Empfehlung: ein Gutachten, das ${pl(n, "sie", "sie")} vor dem Beschluss klärt.`,
+      section: "vermitteln",
+      items: mediated,
+      lead: (n) =>
+        `Bei ${n === 1 ? "einer Tatsachenfrage" : `${num(n)} Tatsachenfragen`} liegen Belege nur auf einer Seite, auf der anderen nur Behauptungen ohne Beleg oder nichts. Trotzdem glaubt nicht jedes Lager, was belegt ist. Empfehlung: kein Gutachten, sondern Vermittlung. Jemand muss die Belege den Lagern erklären, bei denen sie nicht angekommen sind.`,
+      tail: (s) => {
+        const m = mediation(s, t)!;
+        return ` Die Belege sprechen ${m.side === "dafuer" ? "dafür" : "dagegen"}; nicht angekommen ${m.camps.length === s.camps.length ? "in keinem Lager" : `im ${list(m.camps.map((g) => campLabel(names, g)))}`}.`;
+      },
     },
     {
       section: "klaeren",
-      items: own.filter((x) => x.category === "klaerbar" && x.profile !== "trennt"),
-      lead: (n) => `Zu ${n === 1 ? "einer Tatsachenfrage" : `${num(n)} Tatsachenfragen`} liegen Belege vor, aber kein Lager hat sich festgelegt. Empfehlung: ein Gutachten.`,
+      items: own.filter((x) => study(x) && x.profile === "trennt"),
+      lead: (n) => `Bei ${n === 1 ? `einer${further} Tatsachenfrage` : `${num(n)}${further} Tatsachenfragen`} sind die Lager uneins. Empfehlung: ein Gutachten, das ${pl(n, "sie", "sie")} vor dem Beschluss klärt.`,
+    },
+    {
+      section: "klaeren",
+      items: own.filter((x) => study(x) && x.profile !== "trennt"),
+      lead: (n) => `Zu ${n === 1 ? `einer${further} Tatsachenfrage` : `${num(n)}${further} Tatsachenfragen`} liegen Belege vor, aber kein Lager hat sich festgelegt. Empfehlung: ein Gutachten.`,
     },
     {
       section: "klaeren",
@@ -320,7 +336,7 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     for (const s of g.items) {
       // Evidence counts at fact questions only (W7, I10); a value question has no proof.
       const ev = s.typ === "T" ? evidenceText(s) : null;
-      add(g.section, `${ref(s)}: ${sides(s)}.${ev ? ` Belege. ${ev}` : ""}`, [s.nr]);
+      add(g.section, `${ref(s)}: ${sides(s)}.${ev ? ` Belege. ${ev}` : ""}${g.tail?.(s) ?? ""}`, [s.nr]);
     }
   }
 

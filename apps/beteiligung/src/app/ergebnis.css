@@ -91,6 +91,8 @@
 .erg [data-cat="streit"] .dot { background: var(--disagree); }
 .erg [data-cat="warnung"] .dot, .erg [data-cat="klaerbar"] .dot { background: var(--warn); }
 .erg [data-cat="offen"] .dot { background: var(--pass); }
+/* Proof settles it, the camps have not followed yet: a green ring, not the full dot of an agreement. */
+.erg [data-cat="vermittlung"] .dot { background: transparent; box-shadow: inset 0 0 0 2px var(--agree); }
 .erg .items { display: flex; flex-direction: column; gap: 6px; }
 .erg .item { display: block; width: 100%; text-align: left; padding: 11px 12px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); transition: border-color 0.15s, background 0.15s; }
 .erg .item:hover { border-color: var(--line-2); }

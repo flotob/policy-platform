@@ -9,13 +9,29 @@ import {
   robustBridge,
   supportStatus,
   verdictOf,
+  type BelegKey,
   type CampCount,
   type EvaluateInput,
+  type MoveIn,
   type NodeIn,
   type VoteIn,
 } from "../src/kern/befund.ts";
 import { checkRules, conclusions } from "../src/kern/bericht.ts";
-import { checkLines, countLine, diagnosisText, firmBridge, headline, lotSummary, readingOf, sidesText, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
+import {
+  checkLines,
+  countLine,
+  diagnosisText,
+  firmBridge,
+  groupOf,
+  headline,
+  lotSummary,
+  mediation,
+  readingOf,
+  sidesText,
+  smallHeadline,
+  stepText,
+  tallyOf,
+} from "../src/kern/befund-text.ts";
 
 /** A camp of 100 with this agreement and disagreement in percent (the rest passes). */
 const camp = (agree: number, disagree = 100 - agree - 10): CampCount => ({ agree, disagree: Math.max(0, disagree), pass: 100 - agree - Math.max(0, disagree), seen: 100 });
@@ -351,7 +367,7 @@ describe("three camps", () => {
     { key: "weg", label: "Gibt es einen besseren Weg?", steps: ["weg" as const] },
     { key: "wert", label: "Ist das Ziel den Eingriff wert?", steps: ["eingriff" as const] },
   ];
-  const r = evaluate({
+  const input3: EvaluateInput = {
     nodes,
     moves: [],
     votes,
@@ -360,7 +376,8 @@ describe("three camps", () => {
     params: { bridgeThreshold: 0.6, minParticipants: 6 },
     saturation: { inputs: 0, newPoints: 0, streak: 0, window: 10, saturated: false, series: [] },
     inputs: { shortPoints: 0, uploads: 0, files: 0 },
-  });
+  };
+  const r = evaluate(input3);
   const by = (id: string) => r.statements.find((s) => s.id === id)!;
   const names = ["Klima zuerst", "Kosten im Blick", "Langsam, aber sicher"];
 
@@ -400,5 +417,56 @@ describe("three camps", () => {
     expect(ss.find((x) => x.section === "lager" && /Am nächsten stehen sich das Lager „Klima zuerst“ und das Lager „Langsam, aber sicher“/.test(x.text))).toBeTruthy();
     expect(ss.filter((x) => x.section === "rat").map((x) => x.text).join(" ")).toMatch(/Langsam, aber sicher/);
     expect(checkRules(ss, ss.map((x) => ({ abschnitt: x.section, text: x.text, saetze: [x.id] })))).toEqual([]);
+  });
+
+  // Stephan's deck, slides 16–17: proof on one side only → explain it, no expert report.
+  describe("belegt, aber nicht angekommen", () => {
+    const ctx = { town: "Stadt Musterstadt", measure: "X", questions, fictional: false, editorialMode: "mensch" as const, resultVersion: 1 };
+    const proof = (stance: 1 | -1, beleg: BelegKey): MoveIn => ({
+      id: `m${stance}${beleg}`,
+      node: "split",
+      stance,
+      richtung: "stuetzt",
+      schritt: "wirkung",
+      frage: "wirkung",
+      beleg,
+      aussage: "Speicher senken die Kosten.",
+      quote: "Speicher senken die Kosten.",
+      participant: null,
+      sender: "Stadtwerke",
+      source: null,
+    });
+    const run = (moves: MoveIn[]) => evaluate({ ...input3, moves });
+    const split = (x: ReturnType<typeof evaluate>) => x.statements.find((s) => s.id === "split")!;
+
+    it("a study for the statement: the camp that does not carry it is named", () => {
+      const r2 = run([proof(1, "studie"), proof(-1, "behauptung")]);
+      expect(split(r2).category).toBe("klaerbar");
+      expect(mediation(split(r2), 0.6)).toEqual({ side: "dafuer", camps: [1] });
+      expect(groupOf(split(r2), 0.6)).toBe("vermittlung");
+      expect(readingOf(split(r2), r2, names).join(" ")).toMatch(
+        /Für die Aussage gibt es Belege, dagegen nur Behauptungen ohne Beleg\. Im Lager „Kosten im Blick“ ist das nicht angekommen\. Ein Gutachten braucht es nicht, sondern Vermittlung: Jemand muss dem Lager „Kosten im Blick“ die Belege erklären\./,
+      );
+    });
+    it("proof against it: the camps that still believe it", () => {
+      expect(mediation(split(run([proof(-1, "messdaten")])), 0.6)).toEqual({ side: "dagegen", camps: [0, 2] });
+    });
+    it("proof on both sides, or on none, stays a question for an expert report", () => {
+      expect(mediation(split(run([proof(1, "studie"), proof(-1, "vergleichsfall")])), 0.6)).toBeNull();
+      expect(mediation(by("split"), 0.6)).toBeNull();
+      expect(groupOf(by("split"), 0.6)).toBe("klaerbar");
+      expect(readingOf(by("split"), r, names).join(" ")).toMatch(/Ein Gutachten kann sie klären\./);
+    });
+    it("the report gives it its own section, counts it in the headline, and passes the R3 rules", () => {
+      const r2 = run([proof(1, "studie")]);
+      const ss = conclusions(r2, names, ctx);
+      const v = ss.filter((x) => x.section === "vermitteln");
+      expect(v).toHaveLength(2);
+      expect(v[0]!.text).toMatch(/^Bei einer Tatsachenfrage liegen Belege nur auf einer Seite/);
+      expect(v[1]!.text).toMatch(/Die Belege sprechen dafür; nicht angekommen im Lager „Kosten im Blick“\.$/);
+      expect(ss.some((x) => x.section === "klaeren")).toBe(false);
+      expect(headline(r2).rest.map((x) => x.text).join("")).toMatch(/Bei der Tatsachenfrage liegen die Belege schon auf einer Seite; sie müssen erklärt, nicht begutachtet werden\./);
+      expect(checkRules(ss, ss.map((x) => ({ abschnitt: x.section, text: x.text, saetze: [x.id] })))).toEqual([]);
+    });
   });
 });

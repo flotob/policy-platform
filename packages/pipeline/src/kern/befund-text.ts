@@ -44,10 +44,10 @@ export function categoryWords(c: Category, k: number): { label: string; pill: st
 }
 
 /** The pill of one statement — a joint rejection is a bridge too, but says so. */
-export function pillOf(s: StatementOut, k: number): string {
+export function pillOf(s: StatementOut, k: number, t: number): string {
   if (s.profile === "abgelehnt") return `${cap(both(k))} Lager lehnen ab`;
   if (s.category === "offen" && s.typ === "T" && !proven(s)) return "Ohne Beleg geblieben";
-  return categoryWords(s.category, k).pill;
+  return groupWords(groupOf(s, t), k).pill;
 }
 
 export const ORDER: Category[] = ["streit", "warnung", "klaerbar", "offen", "bruecke"];
@@ -60,7 +60,7 @@ export function statusWords(s: Status, k: number): { text: string; tone: "ok" | 
     case "abgewehrt":
       return { text: "abgewehrt", tone: "ok" };
     case "klaerbar":
-      return { text: "durch Gutachten klärbar", tone: "warn" };
+      return { text: "klärbar", tone: "warn" };
     case "offen":
       return { text: "offen", tone: "grey" };
     case "haelt":
@@ -93,7 +93,49 @@ export const BELEG_WORDS: Record<BelegKey, string> = {
 };
 const BELEG_ORDER: BelegKey[] = ["messdaten", "studie", "vergleichsfall", "behauptung", "keine"];
 
-export const proven = (s: StatementOut) => (["messdaten", "studie", "vergleichsfall"] as const).some((b) => (s.evidence.dafuer[b] ?? 0) + (s.evidence.dagegen[b] ?? 0) > 0);
+/** Evidence that is more than a claim (PROOF in befund.ts, repeated so this file stays browser-safe). */
+const PROOF_KEYS = ["messdaten", "studie", "vergleichsfall"] as const;
+const hasProof = (e: Partial<Record<BelegKey, number>>) => PROOF_KEYS.some((b) => (e[b] ?? 0) > 0);
+
+export const proven = (s: StatementOut) => hasProof(s.evidence.dafuer) || hasProof(s.evidence.dagegen);
+
+/**
+ * "Belegt, aber nicht angekommen" (Stephan's deck, slides 16–17): a fact question the camps are not agreed on,
+ * where proof — own figures, a study, a comparable case — stands on one side only and the other side only
+ * asserts, or says nothing. No expert report is needed; someone has to explain the evidence to the camps it
+ * has not reached. By class, not by head count (I10): one study outweighs any number of bare repetitions.
+ * Proof on both sides, or on none, stays a question for an expert report.
+ *   side   where the proof stands: for the statement, or against it
+ *   camps  the camps it has not reached: for proof in favour those who do not carry the statement, for proof
+ *          against it those who do not reject it (camps with too few votes are left out)
+ */
+export function mediation(s: StatementOut, t: number): { side: "dafuer" | "dagegen"; camps: number[] } | null {
+  if (s.typ !== "T" || s.category !== "klaerbar") return null;
+  const pro = hasProof(s.evidence.dafuer);
+  if (pro === hasProof(s.evidence.dagegen)) return null;
+  const camps = s.camps.flatMap((c, g) => (c.seen >= MIN_CAMP_VOTES && !(pro ? carries(c, t) : rejects(c, t)) ? [g] : []));
+  return camps.length ? { side: pro ? "dafuer" : "dagegen", camps } : null;
+}
+
+/** The groups of "Nach Befund": the five findings, the fact questions with one-sided proof apart. */
+export type Group = Category | "vermittlung";
+export const GROUP_ORDER: Group[] = ["streit", "warnung", "vermittlung", "klaerbar", "offen", "bruecke"];
+export const groupOf = (s: StatementOut, t: number): Group => (mediation(s, t) ? "vermittlung" : s.category);
+export function groupWords(g: Group, k: number): { label: string; pill: string } {
+  return g === "vermittlung" ? { label: "Belegt, aber nicht angekommen", pill: "Vermittlung statt Gutachten" } : categoryWords(g, k);
+}
+
+/** "Für die Aussage gibt es Belege, dagegen keine. Im Lager „A“ ist das nicht angekommen. …" */
+function mediationText(s: StatementOut, m: { side: "dafuer" | "dagegen"; camps: number[] }, names: CampNames): string {
+  const pro = m.side === "dafuer";
+  const other = pro ? s.evidence.dagegen : s.evidence.dafuer;
+  const asserted = Object.values(other).some((n) => (n ?? 0) > 0);
+  const proof = `${pro ? "Für" : "Gegen"} die Aussage gibt es Belege, ${pro ? "dagegen" : "dafür"} ${asserted ? "nur Behauptungen ohne Beleg" : "keine"}.`;
+  const all = m.camps.length === s.camps.length;
+  const where = all ? "Angekommen ist das in keinem Lager." : `${cap(andList(m.camps.map((g) => `im ${campLabel(names, g)}`)))} ist das nicht angekommen.`;
+  const whom = all ? (s.camps.length === 2 ? "beiden Lagern" : "allen Lagern") : andList(m.camps.map((g) => `dem ${campLabel(names, g)}`));
+  return `${proof} ${where} Ein Gutachten braucht es nicht, sondern Vermittlung: Jemand muss ${whom} die Belege erklären.`;
+}
 
 /** W7: "1 × eigene Zahlen, 2 × behauptet" — evidence by class, the strong classes first. */
 export function evidenceText(s: StatementOut): string | null {
@@ -187,13 +229,19 @@ export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): strin
         out.push("Das kann kein Gutachten beantworten. Die Frage gehört in den Rat, ausdrücklich als Wertentscheidung.");
       } else out.push("Eine Frage der Ausgestaltung: Der Rat kann sie im Beschluss regeln, hier lässt sich verhandeln.");
       break;
-    case "klaerbar":
+    case "klaerbar": {
+      const m = mediation(s, r.params.bridgeThreshold);
+      if (m) {
+        out.push(`${s.profile === "trennt" ? "Eine Tatsachenfrage, über die die Lager uneins sind." : "Eine Tatsachenfrage, zu der sich noch kein Lager festgelegt hat."} ${mediationText(s, m, names)}`);
+        break;
+      }
       out.push(
         s.profile === "trennt"
-          ? `Eine Tatsachenfrage, über die die Lager uneins sind. Ein Gutachten kann sie klären${proven(s) ? "; Belege dazu liegen teils schon vor" : ""}.`
+          ? `Eine Tatsachenfrage, über die die Lager uneins sind. Ein Gutachten kann sie klären${proven(s) ? (hasProof(s.evidence.dafuer) && hasProof(s.evidence.dagegen) ? "; Belege liegen auf beiden Seiten vor" : "; Belege dazu liegen teils schon vor") : ""}.`
           : "Eine Tatsachenfrage, zu der Belege vorliegen, aber noch kein Lager hat sich festgelegt. Ein Gutachten kann sie klären.",
       );
       break;
+    }
     case "offen":
       if (s.typ === "T") out.push(proven(s) ? "Belege liegen vor, aber sie haben kein Lager überzeugt. Vor einem Beschluss zu prüfen." : "Im Verfahren ohne Beleg geblieben. Vor einem Beschluss nachzuliefern.");
       else out.push("Keines der Lager hat dazu eine klare Meinung.");
@@ -209,7 +257,7 @@ export function stepText(step: StepOut, r: Ergebnis): string {
   // [count, verb (one), verb (many), rest] — the first part names the attacks, the others continue it.
   const raw: [number, string, string, string][] = [
     [n("abgewehrt"), "ist", "sind", "abgewehrt"],
-    [n("klaerbar"), "lässt", "lassen", "sich mit einem Gutachten klären"],
+    [n("klaerbar"), "lässt", "lassen", "sich klären"],
     [n("offen"), "ist", "sind", "offen"],
     [n("haelt"), "steht", "stehen", ""],
     [n("verdeckt"), "versteckt", "verstecken", "sich hinter einer Zustimmung"],
@@ -294,13 +342,24 @@ export function overall(r: Ergebnis): { d: Diagnosis | null; core: number[] } {
  * questions (the council decides) and fact questions the camps are split on (a study can settle them).
  * The measure itself is not among them; it has its own sentence.
  */
-export function disputeCounts(r: Ergebnis): { values: number; design: number; facts: number } {
+export function disputeCounts(r: Ergebnis): { values: number; design: number; facts: number; mediate: number } {
   const own = r.statements.filter((s) => s.rolle !== "schluss");
+  const facts = own.filter((s) => s.category === "klaerbar" && s.profile === "trennt");
   return {
     values: own.filter((s) => s.category === "streit" && s.typ === "W").length,
     design: own.filter((s) => s.category === "streit" && s.typ !== "W").length,
-    facts: own.filter((s) => s.category === "klaerbar" && s.profile === "trennt").length,
+    facts: facts.length,
+    // Of those, the ones where proof stands on one side only: explained, not studied.
+    mediate: facts.filter((s) => mediation(s, r.params.bridgeThreshold)).length,
   };
+}
+
+/** Who settles the fact questions: an expert report — or, where proof stands on one side only, explaining it. */
+function factsLine(facts: number, mediate: number, council: string): string {
+  if (!mediate) return `Die Tatsachen kann ein Gutachten klären, ${council} entscheidet der Rat.`;
+  const explained = "liegen die Belege schon auf einer Seite; sie müssen erklärt, nicht begutachtet werden.";
+  if (mediate === facts) return `Bei ${facts === 1 ? "der Tatsachenfrage" : "den Tatsachenfragen"} ${explained} ${cap(council)} entscheidet der Rat.`;
+  return `Bei ${mediate === 1 ? "einer" : word(mediate)} der Tatsachenfragen ${explained} Die übrigen kann ein Gutachten klären, ${council} entscheidet der Rat.`;
 }
 
 /** The headline under the title: how many statements carry, and what the dispute comes down to. */
@@ -324,7 +383,7 @@ export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
   const d = o.d;
   if (!d) return { lead, rest: [] };
   const core = o.core[0] ? r.statements.find((s) => s.nr === o.core[0]) : undefined;
-  const { values: vals, design, facts } = disputeCounts(r);
+  const { values: vals, design, facts, mediate } = disputeCounts(r);
   const kinds = andList(
     [
       vals ? `${word(vals)} ${pl(vals, "Wertungsfrage", "Wertungsfragen")}` : "",
@@ -352,14 +411,18 @@ export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
         lead,
         rest: [
           {
-            text: `Gestritten wird über Tatsachen: ${word(facts)} ${pl(facts, "Frage lässt", "Fragen lassen")} sich mit einem Gutachten klären. In den Wertungen sind sich die Lager näher, als es scheint.${designNote}`,
+            text: `Gestritten wird über Tatsachen: ${
+              mediate
+                ? `Bei ${mediate === 1 ? "einer" : word(mediate)} von ${word(facts)} ${pl(facts, "Frage", "Fragen")} liegen die Belege schon auf einer Seite und müssen nur erklärt werden${facts > mediate ? `, ${word(facts - mediate)} ${pl(facts - mediate, "lässt", "lassen")} sich mit einem Gutachten klären` : ""}.`
+                : `${word(facts)} ${pl(facts, "Frage lässt", "Fragen lassen")} sich mit einem Gutachten klären.`
+            } In den Wertungen sind sich die Lager näher, als es scheint.${designNote}`,
           },
         ],
       };
     case "gemischt":
       return {
         lead,
-        rest: [{ text: `Die Lager trennen ${kinds}. Die Tatsachen kann ein Gutachten klären, ${design ? "Wertungen und Ausgestaltung" : "die Wertungen"} entscheidet der Rat. ` }, ...coreSegs],
+        rest: [{ text: `Die Lager trennen ${kinds}. ${factsLine(facts, mediate, design ? "Wertungen und Ausgestaltung" : "die Wertungen")} ` }, ...coreSegs],
       };
     default:
       return { lead, rest: [{ text: design ? `Die Lager trennen nur ${kinds}. Der Rat kann sie im Beschluss regeln.` : "Keine Aussage trennt die Lager." }] };

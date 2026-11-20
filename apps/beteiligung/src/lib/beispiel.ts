@@ -5,7 +5,7 @@
  */
 import { sql } from "@policy/db";
 import type { Ergebnis, StatementOut } from "@policy/pipeline/kern";
-import { campName, categoryWords, checkLines, firmBridge, overall, readingOf } from "@policy/pipeline/kern/text";
+import { campName, categoryWords, checkLines, firmBridge, groupOf, groupWords, overall, readingOf } from "@policy/pipeline/kern/text";
 
 import { namingOf } from "./bericht";
 import { getPublicCampaign } from "./campaigns";
@@ -77,7 +77,7 @@ function build(r: Ergebnis, names: string[] | null, hidden: Set<string>, base: s
 
   const word = (s: StatementOut): Pick<ExampleStatement, "label" | "tone"> => {
     if (s.category === "bruecke") return firmBridge(s) ? { label: categoryWords("bruecke", k).label, tone: "agree" } : { label: "Einigkeit unter Vorbehalt", tone: "warn" };
-    return { label: categoryWords(s.category, k).label, tone: s.category === "streit" ? "disagree" : "warn" };
+    return { label: groupWords(groupOf(s, r.params.bridgeThreshold), k).label, tone: s.category === "streit" ? "disagree" : "warn" };
   };
   return {
     href: base,

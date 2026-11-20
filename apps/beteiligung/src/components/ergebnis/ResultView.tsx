@@ -1,18 +1,20 @@
 "use client";
 
-import type { Category, Entry, Ergebnis, Quote, StatementOut } from "@policy/pipeline/kern";
+import type { Entry, Ergebnis, Quote, StatementOut } from "@policy/pipeline/kern";
 import {
   campLabel,
   campName,
-  categoryWords,
   checkLines,
   conclusionText,
   countLine,
   evidenceText,
   firmBridge,
   gapTexts,
+  GROUP_ORDER,
+  groupOf,
+  groupWords,
+  type Group,
   headline,
-  ORDER,
   pct,
   pillOf,
   readingOf,
@@ -128,7 +130,7 @@ export function ResultView(props: ResultViewProps) {
   const initial = r.core[0] ?? r.statements.find((s) => s.category === "streit")?.nr ?? r.statements[0]?.nr ?? 1;
   const [sel, setSel] = useState(initial);
   const [view, setView] = useState<"befund" | "argument">("befund");
-  const [filter, setFilter] = useState<Category | "alle">("alle");
+  const [filter, setFilter] = useState<Group | "alle">("alle");
   const [tallyFilter, setTallyFilter] = useState<Tally | "alle">("alle");
   const [mapMode, setMapMode] = useState<"vote" | "camp">("vote");
   const [sheet, setSheet] = useState(false);
@@ -247,8 +249,10 @@ export function ResultView(props: ResultViewProps) {
   const reads = (e: Entry) => (e.camp !== null ? <span className={`lgr c${e.camp}`}>so liest es das {campLabel(names, e.camp)}</span> : null);
 
   // ———— Lists ————
-  const counts = new Map<Category, number>();
-  for (const s of r.statements) counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+  // "Nach Befund": the five findings, with the fact questions where proof stands on one side only apart.
+  const t = r.params.bridgeThreshold;
+  const counts = new Map<Group, number>();
+  for (const s of r.statements) counts.set(groupOf(s, t), (counts.get(groupOf(s, t)) ?? 0) + 1);
 
   const tallies = new Map<Tally, number>();
   for (const s of r.statements) tallies.set(tallyOf(s), (tallies.get(tallyOf(s)) ?? 0) + 1);
@@ -283,20 +287,20 @@ export function ResultView(props: ResultViewProps) {
         <button type="button" className="chip" aria-pressed={filter === "alle"} onClick={() => setFilter("alle")}>
           Alle Aussagen<span className="n num">{N}</span>
         </button>
-        {ORDER.filter((c) => counts.get(c)).map((c) => (
+        {GROUP_ORDER.filter((c) => counts.get(c)).map((c) => (
           <button key={c} type="button" className="chip" aria-pressed={filter === c} onClick={() => setFilter(c)}>
-            {categoryWords(c, k).label}
+            {groupWords(c, k).label}
             <span className="n num">{counts.get(c)}</span>
           </button>
         ))}
       </div>
-      {ORDER.filter((c) => (filter === "alle" || filter === c) && counts.get(c)).map((c) => (
+      {GROUP_ORDER.filter((c) => (filter === "alle" || filter === c) && counts.get(c)).map((c) => (
         <section key={c} className="group" data-cat={c}>
           <h3>
             <span className="dot" />
-            {categoryWords(c, k).label}
+            {groupWords(c, k).label}
           </h3>
-          <div className="items">{r.statements.filter((s) => s.category === c).map((s) => item(s))}</div>
+          <div className="items">{r.statements.filter((s) => groupOf(s, t) === c).map((s) => item(s))}</div>
         </section>
       ))}
     </>
@@ -466,7 +470,7 @@ export function ResultView(props: ResultViewProps) {
   );
 
   // ———— Detail ————
-  const pillCls = cur.profile === "abgelehnt" ? "bruecke" : cur.category;
+  const pillCls = cur.profile === "abgelehnt" ? "bruecke" : groupOf(cur, t);
   const where =
     cur.rolle === "schluss" ? (
       <div className="where">
@@ -504,7 +508,7 @@ export function ResultView(props: ResultViewProps) {
         {small ? (
           <span className={`pill tally-${tallyOf(cur)}`}>{TALLY_WORDS[tallyOf(cur)]}</span>
         ) : (
-          <span className={`pill ${pillCls}`}>{pillOf(cur, k)}</span>
+          <span className={`pill ${pillCls}`}>{pillOf(cur, k, t)}</span>
         )}
         <span className="typ">{TYP_WORDS[cur.typ]}</span>
       </div>
