@@ -11,7 +11,7 @@
  * proposed. Anything with personal data or a "please check" stays in the
  * queue for a person.
  *
- * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/open-demo.mts
+ * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/open-demo.mts [--verfahren <slug>]
  */
 import { createDb, sql } from "@policy/db";
 import { confirmMove, rejectNode, releaseNode, syncDerivedVotes } from "@policy/pipeline/kern";
@@ -19,9 +19,12 @@ import { confirmMove, rejectNode, releaseNode, syncDerivedVotes } from "@policy/
 const db = createDb(process.env.DATABASE_URL!);
 const rows = async (q: ReturnType<typeof sql>) => (await db.execute(q)).rows as Record<string, unknown>[];
 
+// Another Musterstadt procedure (the town is the fiction): --verfahren neues-schwimmbad
+const vi = process.argv.indexOf("--verfahren");
+const verfahren = vi > 0 ? process.argv[vi + 1]! : "solarpflicht";
 const [c] = await rows(sql`
   SELECT c.id, c.tenant_id, c.consultation_id FROM campaigns c JOIN tenants t ON t.id = c.tenant_id
-  WHERE t.slug = 'musterstadt' AND c.slug = 'solarpflicht' AND c.fictional`);
+  WHERE t.slug = 'musterstadt' AND c.slug = ${verfahren} AND (c.fictional OR ${verfahren} <> 'solarpflicht')`);
 if (!c) throw new Error("no fictional demo campaign");
 const busy = await rows(sql`SELECT 1 FROM campaign_jobs WHERE campaign_id = ${c.id as string} AND state IN ('wartet', 'laeuft')`);
 if (busy.length) throw new Error("the machine is still working on the demo — wait until its jobs are done");

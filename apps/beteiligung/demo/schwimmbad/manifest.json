@@ -1,0 +1,18 @@
+[
+  { "file": "01-schwimmverein.txt", "sender": "Schwimmverein Musterstadt 1921 e. V.", "senderType": "verband", "door": "stadt", "lager": "A", "datum": "2026-10-29" },
+  { "file": "02-rettungsschwimmer.txt", "sender": "Rettungsschwimmer Musterstadt e. V.", "senderType": "verband", "door": "stadt", "lager": "A", "datum": "2026-11-03" },
+  { "file": "03-schulleitungen.txt", "sender": "Die Schulleitungen der Grundschulen in Musterstadt", "senderType": "behoerde", "door": "stadt", "lager": "A", "datum": "2026-11-05" },
+  { "file": "04-stadtsportverband.txt", "sender": "Stadtsportverband Musterstadt e. V.", "senderType": "verband", "door": "stadt", "lager": "A", "datum": "2026-11-10" },
+  { "file": "05-seniorenbeirat.txt", "sender": "Seniorenbeirat der Stadt Musterstadt", "senderType": "politik", "door": "stadt", "lager": "A", "datum": "2026-11-04" },
+  { "file": "06-unternehmerverband.txt", "sender": "Unternehmerverband Musterstadt e. V.", "senderType": "verband", "door": "stadt", "lager": "B", "datum": "2026-11-02" },
+  { "file": "07-kreishandwerkerschaft.txt", "sender": "Kreishandwerkerschaft Musterkreis", "senderType": "verband", "door": "stadt", "lager": "B", "datum": "2026-11-09" },
+  { "file": "08-gemeinde-beispielhausen.txt", "sender": "Gemeinde Beispielhausen, Der Bürgermeister", "senderType": "behoerde", "door": "stadt", "lager": "B", "datum": "2026-11-12" },
+  { "file": "09-steuerzahler-initiative.txt", "sender": "Steuerzahler-Initiative Musterstadt", "senderType": "verband", "door": "stadt", "lager": "C", "datum": "2026-10-30" },
+  { "file": "10-foerderverein-hallenbad.txt", "sender": "Förderverein Hallenbad Innenstadt e. V.", "senderType": "verband", "door": "stadt", "lager": "C", "datum": "2026-11-06" },
+  { "file": "11-naturschutzgruppe.txt", "sender": "Naturschutzgruppe Musterstadt e. V.", "senderType": "verband", "door": "stadt", "lager": "C", "datum": "2026-11-11" },
+  { "file": "12-kinder-und-jugendparlament.txt", "sender": "Kinder- und Jugendparlament Musterstadt", "senderType": "politik", "door": "tuer3", "lager": "A", "datum": "2026-11-13" },
+  { "file": "13-anwohnerinitiative-parkstrasse.txt", "sender": "Anwohnerinitiative Parkstraße", "senderType": "verband", "door": "tuer3", "lager": "C", "datum": "2026-11-16" },
+  { "file": "14-privat-eltern.txt", "sender": "", "senderType": "privat", "door": "tuer3", "lager": "A", "datum": "2026-10-28" },
+  { "file": "15-privat-tischlerei.txt", "sender": "", "senderType": "privat", "door": "tuer3", "lager": "B", "datum": "2026-11-17" },
+  { "file": "16-privat-bauingenieur.txt", "sender": "", "senderType": "privat", "door": "tuer3", "lager": "C", "datum": "2026-11-18" }
+]

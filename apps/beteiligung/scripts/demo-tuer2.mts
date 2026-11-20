@@ -10,7 +10,7 @@
  * 'simulation'.
  *
  * Usage (from apps/beteiligung, server running for the machine's jobs):
- *   set -a && source .env.local && set +a && tsx scripts/demo-tuer2.mts --phase 1|2 [--dry]
+ *   set -a && source .env.local && set +a && tsx scripts/demo-tuer2.mts --phase 1|2 [--dry] [--verfahren <slug> --file <json>]
  *   --dry  only Jev's check and the answer it would lead to; nothing is stored
  */
 import { readFileSync } from "node:fs";
@@ -22,9 +22,11 @@ import { getDb } from "../src/lib/db.ts";
 import { releasedNodes } from "../src/lib/kern.ts";
 import { answerShort, runShortCheck, storeShort } from "../src/lib/tuer2.ts";
 
+type Lager = "A" | "B" | "C";
+
 interface Punkt {
   phase: number;
-  lager: "A" | "B";
+  lager: Lager;
   quelle: string;
   t: string;
   ziel: string[] | "neu" | "kein";
@@ -37,11 +39,14 @@ const arg = (k: string) => {
 const phase = Number(arg("phase") ?? 1);
 const dry = process.argv.includes("--dry");
 
-const file = JSON.parse(readFileSync(new URL("../demo/kurzaussagen.json", import.meta.url), "utf8")) as { punkte: Punkt[] };
+// Another Musterstadt procedure (the town is the fiction): --verfahren neues-schwimmbad --file demo/schwimmbad/kurzaussagen.json
+const verfahren = arg("verfahren") ?? "solarpflicht";
+const fileArg = arg("file");
+const file = JSON.parse(readFileSync(fileArg ?? new URL("../demo/kurzaussagen.json", import.meta.url), "utf8")) as { punkte: Punkt[] };
 const punkte = file.punkte.filter((p) => p.phase === phase);
 
-const c = await getPublicCampaign("musterstadt", "solarpflicht");
-if (!c || !c.fictional) throw new Error("no fictional demo campaign");
+const c = await getPublicCampaign("musterstadt", verfahren);
+if (!c || (verfahren === "solarpflicht" && !c.fictional)) throw new Error("no demo campaign");
 if (!dry && c.state !== "offen") throw new Error(`the demo is "${c.state}" — open it first (scripts/open-demo.mts)`);
 const db = getDb();
 const rows = async (q: ReturnType<typeof sql>) => (await db.execute(q)).rows as Record<string, unknown>[];
@@ -52,14 +57,14 @@ const people = await rows(sql`
     (SELECT COALESCE(sum(v.value), 0) FROM map_point_votes v JOIN map_points n ON n.id = v.map_point_id
      WHERE v.participant_id = p.id AND (n.rolle = 'schluss' OR (n.rolle = 'praemisse' AND n.typ = 'W')))::int AS lean,
     EXISTS (SELECT 1 FROM submissions s WHERE s.participant_id = p.id) AS used
-  FROM participants p WHERE p.consultation_id = ${c.consultationId} AND p.via = 'simulation' ORDER BY p.source_ref`);
-const campOf = (p: Record<string, unknown>): "A" | "B" => {
-  const m = /:([AB])$/.exec(p.source_ref as string);
-  return m ? (m[1] as "A" | "B") : Number(p.lean) >= 0 ? "A" : "B";
+  FROM participants p WHERE p.consultation_id = ${c.consultationId} AND p.via = 'simulation' AND p.source_ref LIKE 'simulation:%' ORDER BY p.source_ref`);
+const campOf = (p: Record<string, unknown>): Lager => {
+  const m = /:([ABC])$/.exec(p.source_ref as string);
+  return m ? (m[1] as Lager) : Number(p.lean) >= 0 ? "A" : "B";
 };
 const used = new Set(people.filter((p) => p.used).map((p) => p.id as string));
 
-async function person(lager: "A" | "B", node: string | null, stance: number): Promise<string> {
+async function person(lager: Lager, node: string | null, stance: number): Promise<string> {
   const free = people.filter((p) => campOf(p) === lager && !used.has(p.id as string));
   if (!free.length) throw new Error(`no simulated person left in camp ${lager}`);
   // Someone whose own vote on that point fits what they now say, if there is one.
