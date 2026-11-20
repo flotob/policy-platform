@@ -1,80 +1,42 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import type { Example } from "@/lib/beispiel";
+
 /**
- * The opinion space (Meinungsraum) after Stephan's results page: every dot a
- * person, two clouds = two camps. Choosing a statement colours every dot by
- * that person's vote — the moment Polis does best, here with the reading the
- * Landkarte adds (bridge, real dispute, false consensus).
- *
- * Demo data from Stephan's fictional Musterstadt example; the votes are drawn
- * deterministically from the camp values, so the picture is the same on
- * every load.
+ * The opinion space (Meinungsraum) after Stephan's results page: every dot a person of the published
+ * example, one cloud per camp. Choosing a statement colours every dot by that person's vote — the moment
+ * Polis does best, here with the reading the Landkarte adds (bridge, real dispute, false consensus).
  */
 
-export interface DemoStatement {
-  id: number;
-  text: string;
-  /** Agreement in camp A and B, percent. */
-  a: number;
-  b: number;
-  kind: "bruecke" | "streit" | "warnung" | "klaerbar";
-  reading: string;
-}
-
-const KIND = {
-  bruecke: { label: "Darauf einigen sich beide Lager", cls: "agree" },
-  streit: { label: "Hier liegt der Streit", cls: "disagree" },
-  warnung: { label: "Vorsicht, Scheinkonsens", cls: "warn" },
-  klaerbar: { label: "Mit einem Gutachten klärbar", cls: "warn" },
-} as const;
-
-const CAMPS = { A: { name: "Klima zuerst", n: 500 }, B: { name: "Kosten & Freiheit", n: 363 } };
 const W = 640;
 const H = 300;
+const TOP = 46;
+const CAMP_VARS = ["--ga", "--gb", "--gc", "--gd", "--ge"];
+const VOTE = { a: "agree", d: "disagree", p: "pass", ".": "none" } as const;
 
-function rng(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
-function gauss(r: () => number) {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = r();
-  while (v === 0) v = r();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-
-interface Person {
-  i: number;
-  g: "A" | "B";
+interface Dot {
   x: number;
   y: number;
+  camp: number;
+  v: string;
 }
 
-function people(): Person[] {
-  const r = rng(2026);
-  const out: Person[] = [];
-  for (let i = 0; i < CAMPS.A.n + CAMPS.B.n; i++) {
-    const g = i < CAMPS.A.n ? "A" : "B";
-    const [cx, cy, sx, sy] = g === "A" ? [215, 160, 78, 52] : [445, 166, 66, 50];
-    const x = cx + gauss(r) * sx * (0.55 + 0.45 * r());
-    const y = cy + gauss(r) * sy * (0.55 + 0.45 * r());
-    out.push({ i, g, x: Math.round(Math.max(12, Math.min(W - 12, x)) * 10) / 10, y: Math.round(Math.max(40, Math.min(H - 12, y)) * 10) / 10 });
-  }
-  return out;
-}
+const round = (n: number) => Math.round(n * 10) / 10;
 
-/** Convex hull, padded and smoothed: the outline of a camp. */
-function hullPath(pts: Person[], pad: number): string {
-  const p = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
-  const cross = (o: Person, a: Person, b: Person) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-  const lo: Person[] = [];
-  const up: Person[] = [];
+/** Convex hull of the core of a camp (the 90 % closest to its centre), padded and smoothed. */
+function hullPath(all: Dot[], pad: number): string {
+  if (all.length < 3) return "";
+  const mx = all.reduce((s, q) => s + q.x, 0) / all.length;
+  const my = all.reduce((s, q) => s + q.y, 0) / all.length;
+  const dist = (q: Dot) => Math.hypot(q.x - mx, q.y - my);
+  const cut = all.map(dist).sort((a, b) => a - b)[Math.floor(all.length * 0.9)] ?? Infinity;
+  const p = all.filter((q) => dist(q) <= cut).sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Dot, a: Dot, b: Dot) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo: Dot[] = [];
+  const up: Dot[] = [];
   for (const q of p) {
     while (lo.length >= 2 && cross(lo[lo.length - 2]!, lo[lo.length - 1]!, q) <= 0) lo.pop();
     lo.push(q);
@@ -84,98 +46,110 @@ function hullPath(pts: Person[], pad: number): string {
     up.push(q);
   }
   const h = lo.slice(0, -1).concat(up.slice(0, -1));
+  if (h.length < 3) return "";
   const cx = h.reduce((s, q) => s + q.x, 0) / h.length;
   const cy = h.reduce((s, q) => s + q.y, 0) / h.length;
   const e = h.map((q) => {
-    const dx = q.x - cx;
-    const dy = q.y - cy;
-    const l = Math.hypot(dx, dy) || 1;
-    return { x: q.x + (dx / l) * pad, y: q.y + (dy / l) * pad };
+    const l = Math.hypot(q.x - cx, q.y - cy) || 1;
+    return { x: q.x + ((q.x - cx) / l) * pad, y: q.y + ((q.y - cy) / l) * pad };
   });
-  const r = (n: number) => Math.round(n * 10) / 10;
   let d = "";
   for (let i = 0; i < e.length; i++) {
     const p0 = e[i]!;
     const p1 = e[(i + 1) % e.length]!;
     const p2 = e[(i + 2) % e.length]!;
-    if (i === 0) d += `M${r((p0.x + p1.x) / 2)},${r((p0.y + p1.y) / 2)}`;
-    d += `Q${r(p1.x)},${r(p1.y)} ${r((p1.x + p2.x) / 2)},${r((p1.y + p2.y) / 2)}`;
+    if (i === 0) d += `M${round((p0.x + p1.x) / 2)},${round((p0.y + p1.y) / 2)}`;
+    d += `Q${round(p1.x)},${round(p1.y)} ${round((p1.x + p2.x) / 2)},${round((p1.y + p2.y) / 2)}`;
   }
   return `${d}Z`;
 }
 
-type Vote = "agree" | "disagree" | "pass";
+const pctOf = (n: number, of: number) => (of ? Math.round((100 * n) / of) : 0);
 
-function votesFor(s: DemoStatement, ps: Person[]): Vote[] {
-  const r = rng(s.id * 7919 + 11);
-  return ps.map((p) => {
-    const pa = (p.g === "A" ? s.a : s.b) / 100;
-    const x = r();
-    if (x < pa) return "agree";
-    const passShare = 0.25 + 0.15 * r();
-    return (x - pa) / (1 - pa) < passShare ? "pass" : "disagree";
-  });
-}
-
-export function OpinionSpace({ statements }: { statements: DemoStatement[] }) {
-  // Dots are drawn on the client only: Math.log/cos may differ by one ULP
-  // between server and browser and would break hydration.
-  const [ready, setReady] = useState(false);
+export function OpinionSpace({ example }: { example: Example }) {
+  const { camps, statements } = example;
   const [sel, setSel] = useState<number | null>(null);
-  const ps = useMemo(() => (ready ? people() : []), [ready]);
-  const hulls = useMemo(
-    () => (ps.length ? { A: hullPath(ps.filter((p) => p.g === "A"), 12), B: hullPath(ps.filter((p) => p.g === "B"), 12) } : null),
-    [ps],
+  // Positions come rounded from the server (0–1000), so server and browser draw the same picture.
+  const dots = useMemo<Dot[]>(
+    () =>
+      example.people.map((p) => ({
+        x: round(14 + (p.x / 1000) * (W - 28)),
+        y: round(TOP + (p.y / 1000) * (H - TOP - 12)),
+        camp: p.camp,
+        v: p.v,
+      })),
+    [example.people],
   );
-  const cur = sel == null ? null : statements[sel]!;
-  const votes = useMemo(() => (cur ? votesFor(cur, ps) : null), [cur, ps]);
+  const groups = useMemo(() => camps.map((_, g) => dots.filter((d) => d.camp === g)), [camps, dots]);
+  const hulls = useMemo(() => groups.map((g) => hullPath(g, 10)), [groups]);
+  const labelX = useMemo(() => {
+    // Each camp's name above its cloud, kept apart and inside the picture.
+    const xs = groups.map((g, i) => ({ i, x: g.length ? g.reduce((s, d) => s + d.x, 0) / g.length : ((i + 0.5) * W) / camps.length }));
+    xs.sort((a, b) => a.x - b.x);
+    const gap = Math.min(170, (W - 40) / Math.max(1, camps.length));
+    for (let j = 0; j < xs.length; j++) {
+      const lo = j ? xs[j - 1]!.x + gap : 20 + gap / 2;
+      xs[j]!.x = Math.max(xs[j]!.x, lo);
+    }
+    for (let j = xs.length - 1; j >= 0; j--) {
+      const hi = j < xs.length - 1 ? xs[j + 1]!.x - gap : W - 20 - gap / 2;
+      xs[j]!.x = Math.min(xs[j]!.x, hi);
+    }
+    const out: number[] = [];
+    for (const x of xs) out[x.i] = round(x.x);
+    return out;
+  }, [groups, camps.length]);
 
   useEffect(() => {
-    setReady(true);
     // The one orchestrated moment: the cloud appears grey, then takes sides.
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const t = window.setTimeout(() => setSel(0), reduce ? 0 : 900);
     return () => window.clearTimeout(t);
   }, []);
 
-  const count = (g: "A" | "B") => (votes ? ps.filter((p, i) => p.g === g && votes[i] === "agree").length : 0);
+  // The numbers below read in the same order as the clouds above, left to right.
+  const order = useMemo(() => camps.map((_, g) => g).sort((a, b) => (labelX[a] ?? 0) - (labelX[b] ?? 0)), [camps, labelX]);
+  const cur = sel == null ? null : statements[sel]!;
+  const total = camps.reduce((s, c) => s + c.n, 0);
+  const campWord = camps.length === 2 ? "zwei Lager" : camps.length === 3 ? "drei Lager" : `${camps.length} Lager`;
 
   return (
     <figure className="os">
       <div className="os-map">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={cur ? `Meinungsraum: ${cur.text}. ${cur.a} Prozent im Lager ${CAMPS.A.name}, ${cur.b} Prozent im Lager ${CAMPS.B.name} stimmen zu.` : "Meinungsraum mit 863 Teilnehmenden in zwei Lagern"}>
-          {hulls ? (
-            <>
-              <path d={hulls.A} className="os-hull" />
-              <path d={hulls.B} className="os-hull" />
-            </>
-          ) : null}
-          <text x={215} y={20} textAnchor="middle" className="os-lbl">
-            Lager „{CAMPS.A.name}“
-          </text>
-          <text x={215} y={34} textAnchor="middle" className="os-lbl2">
-            {CAMPS.A.n} Personen
-          </text>
-          <text x={445} y={20} textAnchor="middle" className="os-lbl">
-            Lager „{CAMPS.B.name}“
-          </text>
-          <text x={445} y={34} textAnchor="middle" className="os-lbl2">
-            {CAMPS.B.n} Personen
-          </text>
-          {ps.map((p, i) => (
-            <circle key={p.i} cx={p.x} cy={p.y} r={2.9} className={`os-dot ${votes ? votes[i] : "pass"}`} />
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={
+            cur
+              ? `Meinungsraum: ${cur.text}. ${camps.map((c, g) => `${pctOf(cur.camps[g]?.agree ?? 0, cur.camps[g]?.seen ?? 0)} Prozent im Lager ${c.name}`).join(", ")} stimmen zu.`
+              : `Meinungsraum mit ${total} Menschen in ${campWord}`
+          }
+        >
+          {hulls.map((d, g) => (d ? <path key={g} d={d} className="os-hull" /> : null))}
+          {camps.map((c, g) => (
+            <g key={g}>
+              <text x={labelX[g]} y={18} textAnchor="middle" className="os-lbl">
+                {c.name}
+              </text>
+              <text x={labelX[g]} y={32} textAnchor="middle" className="os-lbl2">
+                {c.n} Personen
+              </text>
+            </g>
+          ))}
+          {dots.map((d, i) => (
+            <circle key={i} cx={d.x} cy={d.y} r={2.9} className={`os-dot ${cur ? VOTE[(d.v[sel!] ?? ".") as keyof typeof VOTE] : "pass"}`} />
           ))}
         </svg>
         <ul className="os-legend" aria-hidden>
           <li><i className="agree" /> stimmt zu</li>
           <li><i className="disagree" /> lehnt ab</li>
-          <li><i className="pass" /> enthält sich</li>
+          <li><i className="pass" /> enthält sich oder nicht abgestimmt</li>
         </ul>
       </div>
 
       <div className="os-pick" role="group" aria-label="Aussage wählen">
         {statements.map((s, i) => (
-          <button key={s.id} type="button" className="os-chip" aria-pressed={sel === i} onClick={() => setSel(i)}>
+          <button key={s.text} type="button" className="os-chip" aria-pressed={sel === i} onClick={() => setSel(i)}>
             {s.text}
           </button>
         ))}
@@ -184,24 +158,31 @@ export function OpinionSpace({ statements }: { statements: DemoStatement[] }) {
       <figcaption className="os-cap" aria-live="polite">
         {cur ? (
           <>
-            <p className={`os-kind ${KIND[cur.kind].cls}`}>{KIND[cur.kind].label}</p>
-            <div className="os-scores">
-              <div className="os-score a">
-                <span className="os-who">{CAMPS.A.name}</span>
-                <span className="os-big num">{cur.a}<small> %</small></span>
-                <span className="os-abs num">{count("A")} von {CAMPS.A.n} stimmen zu</span>
-              </div>
-              <div className="os-score b">
-                <span className="os-who">{CAMPS.B.name}</span>
-                <span className="os-big num">{cur.b}<small> %</small></span>
-                <span className="os-abs num">{count("B")} von {CAMPS.B.n} stimmen zu</span>
-              </div>
+            <p className={`os-kind ${cur.tone}`}>{cur.label}</p>
+            <div className="os-scores" style={{ gridTemplateColumns: `repeat(${camps.length}, 1fr)` }}>
+              {order.map((g) => ({ c: camps[g]!, g })).map(({ c, g }) => (
+                <div key={g} className="os-score" style={{ borderTopColor: `var(${CAMP_VARS[g] ?? "--ink-3"})` }}>
+                  <span className="os-who">{c.name}</span>
+                  <span className="os-big num">
+                    {pctOf(cur.camps[g]?.agree ?? 0, cur.camps[g]?.seen ?? 0)}
+                    <small> %</small>
+                  </span>
+                  <span className="os-abs num">
+                    {cur.camps[g]?.agree ?? 0} von {cur.camps[g]?.seen ?? 0} stimmen zu
+                  </span>
+                </div>
+              ))}
             </div>
             <p className="os-reading">{cur.reading}</p>
           </>
         ) : (
-          <p className="os-reading muted">863 Menschen aus Musterstadt, zwei Lager. Wählen Sie eine Aussage.</p>
+          <p className="os-reading muted">
+            {total} Menschen, {campWord}. Wählen Sie eine Aussage.
+          </p>
         )}
+        <p className="small os-more">
+          <Link href={`${example.href}/ergebnis`}>Das ganze Ergebnis ansehen</Link>
+        </p>
       </figcaption>
     </figure>
   );

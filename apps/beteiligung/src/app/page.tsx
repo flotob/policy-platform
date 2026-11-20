@@ -1,45 +1,13 @@
 import Link from "next/link";
 
-import { OpinionSpace, type DemoStatement } from "@/components/OpinionSpace";
+import { OpinionSpace } from "@/components/OpinionSpace";
 import { SiteHeader } from "@/components/SiteHeader";
+import { landingExample } from "@/lib/beispiel";
 
 import "./landing.css";
 
-/** Stephan's fictional Musterstadt example (camp values from his results page). */
-const DEMO: DemoStatement[] = [
-  {
-    id: 14,
-    text: "Mehrkosten von 1,5 bis 2 Prozent der Bausumme sind Bauherren zumutbar.",
-    a: 72,
-    b: 18,
-    kind: "streit",
-    reading: "Eine Wertfrage, und an ihr hängt der ganze Streit. Kein Gutachten kann sie beantworten. Sie gehört in den Rat, ausdrücklich als Wertentscheidung.",
-  },
-  {
-    id: 4,
-    text: "Der Fachkräftemangel gefährdet die Umsetzung.",
-    a: 81,
-    b: 77,
-    kind: "bruecke",
-    reading: "Beide Lager teilen die Sorge, und aus demselben Grund. Darauf lässt sich ein Beschluss bauen, der in beiden Lagern trägt.",
-  },
-  {
-    id: 17,
-    text: "Übergangsfristen sind sinnvoll.",
-    a: 84,
-    b: 79,
-    kind: "warnung",
-    reading: "Die höchste Zustimmung des Verfahrens, und sie trägt nicht. Die einen wollen Fristen, damit die Pflicht sicher kommt, die anderen, damit sie sich erledigt.",
-  },
-  {
-    id: 9,
-    text: "Die Mehrkosten liegen bei etwa 1,5 bis 2 Prozent der Bausumme.",
-    a: 69,
-    b: 63,
-    kind: "klaerbar",
-    reading: "Eine Tatsachenfrage. Ein Kurzgutachten von vier bis sechs Wochen nimmt den letzten Zahlenstreit aus der Debatte.",
-  },
-];
+/** The example in the opening picture is read from the published Musterstadt result on every visit (kept in memory per report). */
+export const dynamic = "force-dynamic";
 
 const STEPS = [
   {
@@ -68,7 +36,8 @@ const RESULTS = [
   { cls: "pass", title: "Was niemand gefragt hat", text: "Einwände, die in der ganzen Beteiligung niemand erhoben oder beantwortet hat. Vor einem Beschluss gezielt nachfragen." },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const example = await landingExample();
   return (
     <>
       <SiteHeader />
@@ -90,10 +59,12 @@ export default function Home() {
               </Link>
             </div>
           </div>
-          <div className="hero-map">
-            <OpinionSpace statements={DEMO} />
-            <p className="small muted hero-note">Beispiel mit erfundenen Zahlen: eine Solarpflicht für Neubauten in Musterstadt.</p>
-          </div>
+          {example ? (
+            <div className="hero-map">
+              <OpinionSpace example={example} />
+              <p className="small muted hero-note">Beispiel mit erfundenen Zahlen: {example.title}</p>
+            </div>
+          ) : null}
         </section>
 
         <section className="band" id="ablauf" aria-labelledby="ablauf-h">

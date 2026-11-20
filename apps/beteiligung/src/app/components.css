@@ -22,6 +22,7 @@
 .os-dot.agree { fill: var(--agree); }
 .os-dot.disagree { fill: var(--disagree); }
 .os-dot.pass { fill: var(--pass); fill-opacity: 0.6; }
+.os-dot.none { fill: var(--pass); fill-opacity: 0.3; }
 .os-legend { display: flex; gap: 16px; justify-content: flex-end; list-style: none; margin: 4px 4px 0; padding: 0; font-size: 12.5px; color: var(--ink-2); }
 .os-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .os-legend i.agree { background: var(--agree); }
@@ -46,6 +47,7 @@
 .os-big { font-family: var(--serif); font-size: 34px; line-height: 1.05; font-weight: 600; }
 .os-big small { font-size: 16px; font-weight: 400; color: var(--ink-3); }
 .os-abs { font-size: 13px; color: var(--ink-3); }
+.os-more { margin: 10px 0 0; }
 .os-reading { margin-top: 12px; font-family: var(--serif); font-size: 17px; line-height: 1.45; max-width: 60ch; }
 @media (prefers-reduced-motion: reduce) { .os-dot { transition: none; } }
 
