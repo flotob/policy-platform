@@ -8,7 +8,7 @@ import { latestReport, namingOf } from "@/lib/bericht";
 import { hiddenOf, maskHidden } from "@/lib/meldungen";
 import { getCampaign } from "@/lib/campaigns";
 import { methodParagraphs, periodOf, questionLabels, townShort } from "@/lib/ergebnis-seite";
-import { countQueue } from "@/lib/redaktion";
+import { countQueue, countReading } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 
 import { closeParticipation, makeReport, reopenParticipation, reproposeNames } from "../../auswertung-actions";
@@ -46,7 +46,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
   const town = townShort(staff.tenant.name);
 
   if (c.state === "offen") {
-    const [r, queue] = await Promise.all([liveResult(c), countQueue(c.consultationId)]);
+    const [r, queue, reading] = await Promise.all([liveResult(c), countQueue(c.consultationId), countReading(c.id)]);
     const checks = [
       {
         done: r.ready,
@@ -63,6 +63,14 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
       {
         done: queue === 0,
         text: queue ? `${n(queue)} ${queue === 1 ? "Vorlage wartet" : "Vorlagen warten"} noch in der Redaktion. Was dort noch liegt, kommt nicht mehr zur Abstimmung.` : "Die Redaktion hat nichts mehr offen.",
+      },
+      {
+        done: reading === 0,
+        text: !reading
+          ? "Die Maschine hat alle Eingaben gelesen."
+          : reading === 1
+            ? "Eine Eingabe liest die Maschine noch. Sie wird danach einsortiert, zählt aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen soll."
+            : `${n(reading)} Eingaben liest die Maschine noch. Sie werden danach einsortiert, zählen aber nicht mehr im Ergebnis. Warten Sie ein paar Minuten, wenn sie mitzählen sollen.`,
       },
     ];
     return (

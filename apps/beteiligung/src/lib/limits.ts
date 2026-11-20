@@ -27,8 +27,13 @@ export function allow(key: string, max: number, windowMs: number): boolean {
   return true;
 }
 
-/** The client's address as the proxy reports it (only for counting, never stored). */
+/**
+ * The client's address as our own proxy reports it (only for counting, never stored). The LAST entry of
+ * X-Forwarded-For is the one the proxy in front of the app wrote; anything before it came with the
+ * request and can be made up (Traefik drops such entries today, a CDN in front would keep them).
+ */
 export async function clientIp(): Promise<string> {
   const h = await headers();
-  return (h.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || h.get("x-real-ip") || "local";
+  const chain = (h.get("x-forwarded-for") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return chain.at(-1) || h.get("x-real-ip") || "local";
 }

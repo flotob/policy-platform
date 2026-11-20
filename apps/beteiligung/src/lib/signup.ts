@@ -13,9 +13,9 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import { sql } from "@policy/db";
 import { hashPassword } from "better-auth/crypto";
-import { headers } from "next/headers";
 
 import { getDb } from "./db";
+import { clientIp } from "./limits";
 
 export type SignupMode = "open" | "code" | "closed";
 
@@ -35,11 +35,6 @@ const TOTAL = 200;
 const HOUR = 3_600_000;
 const wrong = new Map<string, { n: number; until: number }>();
 let total = { n: 0, until: 0 };
-
-async function clientIp(): Promise<string> {
-  const h = await headers();
-  return (h.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || h.get("x-real-ip") || "local";
-}
 
 export type CodeCheck = "ok" | "wrong" | "limited";
 

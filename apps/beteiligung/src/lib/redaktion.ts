@@ -210,6 +210,14 @@ export async function loadQueue(consultationId: string): Promise<Queue> {
 
 export const queueSize = (q: Queue) => q.skeleton.length + q.proposals.length + q.uncertain.length + q.samples.length;
 
+/** Texts the machine has not finished reading yet (letters, uploads, citizens' own points): they miss a result stored now. */
+export async function countReading(campaignId: string): Promise<number> {
+  const r = await rows(sql`
+    SELECT count(*) AS n FROM campaign_jobs
+    WHERE campaign_id = ${campaignId} AND kind IN ('zerlegen', 'kurzaussage') AND state IN ('wartet', 'laeuft')`);
+  return Number(r[0]!.n);
+}
+
 export async function countQueue(consultationId: string): Promise<number> {
   const r = await rows(sql`
     SELECT

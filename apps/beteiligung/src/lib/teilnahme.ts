@@ -9,10 +9,11 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { sql } from "@policy/db";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 
 import type { Campaign } from "./campaigns";
 import { getDb } from "./db";
+import { clientIp } from "./limits";
 
 type Row = Record<string, unknown>;
 
@@ -34,8 +35,7 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
  * participant through the connection it came from).
  */
 export async function originHash(c: Campaign, purpose = ""): Promise<string> {
-  const h = await headers();
-  const ip = (h.get("x-forwarded-for") ?? "").split(",")[0]!.trim() || h.get("x-real-ip") || "local";
+  const ip = await clientIp();
   return hash(`${ip}|${c.id}|${purpose ? `${purpose}|` : ""}${process.env.BETTER_AUTH_SECRET ?? ""}`).slice(0, 32);
 }
 
