@@ -204,6 +204,8 @@ export async function setState(id: string, to: CampaignState): Promise<void> {
 export async function openCampaign(id: string): Promise<void> {
   const { staff, campaign } = await own(id);
   if (campaign.state !== "vorbereitung") redirect(`/verwaltung/${id}`);
+  // Public in the town's name only with a confirmed address (lib/bestaetigen.ts).
+  if (!staff.user.emailVerified) redirect(`/verwaltung/${id}?fehler=bestaetigen#freischalten`);
   const c = await openingCheck(campaign.consultationId);
   if (!(c.hasSkeleton && c.skeletonOpen === 0 && c.rootReleased && c.stepsCovered === 4)) redirect(`/verwaltung/${id}#freischalten`);
   await getDb().execute(sql`UPDATE campaigns SET state = 'offen', updated_at = now() WHERE id = ${campaign.id}`);

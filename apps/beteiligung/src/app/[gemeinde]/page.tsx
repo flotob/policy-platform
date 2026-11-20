@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { PublicFrame } from "@/components/PublicFrame";
+import { confirmedTown } from "@/lib/bestaetigen";
+import { ownTeam } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { STATES, type CampaignState } from "@/lib/params";
 import { RESERVED } from "@/lib/slug";
@@ -14,8 +16,11 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
   const { gemeinde } = await params;
   if (RESERVED.has(gemeinde)) notFound();
   const db = getDb();
-  const t = (await db.execute(sql`SELECT id, name, slug FROM tenants WHERE slug = ${gemeinde}`)).rows[0] as { id: string; name: string; slug: string } | undefined;
-  if (!t) notFound();
+  const t = (await db.execute(sql`SELECT t.id, t.name, t.slug, ${confirmedTown("t")} AS confirmed FROM tenants t WHERE t.slug = ${gemeinde}`)).rows[0] as
+    | { id: string; name: string; slug: string; confirmed: boolean }
+    | undefined;
+  // A town nobody has confirmed an address for is seen by its own team only (lib/bestaetigen.ts).
+  if (!t || (!t.confirmed && !(await ownTeam(t.id)))) notFound();
   const campaigns = (
     await db.execute(sql`
       SELECT slug, title, question, state FROM campaigns WHERE tenant_id = ${t.id} AND state <> 'entwurf' ORDER BY updated_at DESC`)

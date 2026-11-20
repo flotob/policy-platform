@@ -4,6 +4,7 @@
 .pub-crumbs { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; }
 .pub-town { font-weight: 600; text-decoration: none; color: var(--ink-2); }
 .pub-town:hover { color: var(--ink); text-decoration: underline; }
+.pub-preview { grid-column: 1 / -1; }
 .pub-main {
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);

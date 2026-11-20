@@ -76,6 +76,11 @@ export default async function Einstieg({
   return (
     <PublicFrame town={c.tenant}>
       <main className="wrap pub-main">
+        {c.preview ? (
+          <p className="notice pub-preview">
+            Vorschau für Ihr Team: Öffentlich sichtbar wird diese Seite, sobald jemand aus Ihrem Team die E-Mail-Adresse bestätigt hat.
+          </p>
+        ) : null}
         <section className="pub-intro">
           <h1>{c.question}</h1>
           <p className="pub-lead">

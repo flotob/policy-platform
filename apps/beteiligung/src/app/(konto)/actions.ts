@@ -6,10 +6,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/lib/auth";
+import { confirmAddress, sendConfirmation } from "@/lib/bestaetigen";
 import { allow, clientIp, recent, record } from "@/lib/limits";
 import { demoLogin } from "@/lib/demo-login";
 import { getDb } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { getSession, getStaff } from "@/lib/session";
 import { checkSignupCode, createAccount, signupMode } from "@/lib/signup";
 import { acceptInvite, createTenant, looksLikeEmail, normEmail, readInvite } from "@/lib/team";
 
@@ -58,6 +59,10 @@ export async function register(_prev: FormState, form: FormData): Promise<FormSt
     }
     if (!userId) return { error: "Zu dieser E-Mail-Adresse gibt es schon ein Konto. Melden Sie sich an.", values };
     await auth.api.signInEmail({ body: { email: normEmail(values.email), password }, headers: await headers() });
+    // In at once; freischalten and inviting wait until the address is confirmed (lib/bestaetigen.ts).
+    record(`confirm:acc:${userId}`);
+    const sent = await sendConfirmation({ id: userId, name: values.name, email: normEmail(values.email) });
+    if (!sent.ok) console.error(`[registrieren] confirmation mail not sent (${sent.reason})`);
   }
   await createMunicipality(userId, values.kommune);
   redirect("/verwaltung");
@@ -161,4 +166,28 @@ export async function acceptInvitation(_prev: FormState, form: FormData): Promis
     redirect("/anmelden?einladung=angenommen");
   }
   redirect("/verwaltung?willkommen=1");
+}
+
+/** The button on /adresse-bestaetigen: the link is checked again, then the address counts as confirmed. */
+export async function confirmMyAddress(userId: string, at: string, token: string): Promise<void> {
+  await confirmAddress(userId, at, token);
+  redirect(`/adresse-bestaetigen?u=${encodeURIComponent(userId)}&z=${encodeURIComponent(at)}&t=${encodeURIComponent(token)}`);
+}
+
+export interface ResendState {
+  ok?: string;
+  error?: string;
+}
+
+/** "Mail erneut senden" in the workspace banner: at most three an hour per account. */
+export async function resendConfirmation(_prev: ResendState): Promise<ResendState> {
+  const staff = await getStaff();
+  if (!staff) redirect("/anmelden");
+  if (staff.user.emailVerified) return { ok: "Ihre Adresse ist schon bestätigt." };
+  if (!allow(`confirm:acc:${staff.user.id}`, 3, 60 * MIN)) {
+    return { error: "In der letzten Stunde gingen schon drei Mails an Sie. Bitte schauen Sie auch im Spam-Ordner nach und versuchen Sie es später noch einmal." };
+  }
+  const sent = await sendConfirmation(staff.user);
+  if (!sent.ok) return { error: "Die Mail ließ sich gerade nicht verschicken. Bitte versuchen Sie es in ein paar Minuten noch einmal." };
+  return { ok: `Eine neue Mail ist an ${staff.user.email} unterwegs.` };
 }

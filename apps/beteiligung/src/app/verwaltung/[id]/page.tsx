@@ -49,6 +49,10 @@ export default async function CampaignPage({ params, searchParams }: { params: P
     { done: open.hasSkeleton && open.skeletonOpen === 0, text: open.hasSkeleton ? `Die Redaktion hat über das Startgerüst entschieden${open.skeletonOpen ? ` (noch ${open.skeletonOpen} offen)` : ""}.` : "Die Maschine hat das Startgerüst noch nicht vorgeschlagen." },
     { done: open.rootReleased, text: "Die Entscheidungsfrage selbst steht als Aussage zur Abstimmung." },
     { done: open.stepsCovered === 4, text: `Jeder der vier Schritte hat mindestens eine freigegebene Aussage (${open.stepsCovered} von 4).` },
+    // Public in the town's name only with a confirmed address; listed only while it is missing.
+    ...(staff.user.emailVerified
+      ? []
+      : [{ done: false, text: `Ihre E-Mail-Adresse ist bestätigt. Den Link haben wir an ${staff.user.email} geschickt; oben auf der Seite können Sie eine neue Mail anfordern.` }]),
   ];
   const ready = opening.every((c) => c.done);
 
@@ -171,6 +175,9 @@ export default async function CampaignPage({ params, searchParams }: { params: P
 
         <section id="freischalten" className="cp-section">
           <h2>Vorbereiten und freischalten</h2>
+          {fehler === "bestaetigen" ? (
+            <p className="notice">Freischalten können Sie, sobald Ihre E-Mail-Adresse bestätigt ist. Den Link finden Sie in Ihrer Mail.</p>
+          ) : null}
           {campaign.state === "entwurf" ? (
             <>
               <ul className="checklist">
