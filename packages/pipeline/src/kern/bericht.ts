@@ -101,7 +101,8 @@ function participationSentences(r: Ergebnis): { took: string; how: string | null
   const inputs = p.uploads + p.files;
   const came = [
     p.shortPoints ? `${fmt(p.shortPoints)} ${pl(p.shortPoints, "eigener Punkt", "eigene Punkte")} von Teilnehmenden` : "",
-    inputs ? `${fmt(inputs)} ${pl(inputs, "Stellungnahme", "Stellungnahmen")}` : "",
+    // Counted by sender since several files can come from one (a statement and its attachments).
+    inputs ? `Stellungnahmen von ${inputs === 1 ? "einem Absender" : `${fmt(inputs)} Absendern`}` : "",
   ].filter(Boolean);
   const fromTown = r.statements.filter((s) => s.rolle !== "beitrag").length;
   const fromInputs = r.statements.length - fromTown;
@@ -109,7 +110,7 @@ function participationSentences(r: Ergebnis): { took: string; how: string | null
     took: `${fmt(p.voters)} ${pl(p.voters, "Person hat", "Teilnehmende haben")} ${fmt(p.votes)} Stimmen zu ${r.statements.length} Aussagen abgegeben, jeweils Zustimmung, Ablehnung oder Enthaltung.`,
     how: how.length ? `${cap(list(how))}.` : null,
     came: came.length
-      ? `Eingegangen ${came.length === 1 && /^1 /.test(came[0]!) ? "ist" : "sind"} ${list(came)}. Aus ihnen und aus der Begründung der Stadt stammen die Aussagen, über die abgestimmt wurde: ${num(fromTown)} aus der Begründung, ${num(fromInputs)} aus den Eingaben.`
+      ? `Eingegangen ${came.length === 1 && /^1 eigener/.test(came[0]!) ? "ist" : "sind"} ${list(came)}. Aus ihnen und aus der Begründung der Stadt stammen die Aussagen, über die abgestimmt wurde: ${num(fromTown)} aus der Begründung, ${num(fromInputs)} aus den Eingaben.`
       : null,
   };
 }
