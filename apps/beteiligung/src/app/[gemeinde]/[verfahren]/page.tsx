@@ -86,7 +86,7 @@ export default async function Einstieg({
           <p className="pub-lead">
             {c.tenant.name} stellt diese Maßnahme zur Diskussion.
             {open && stats.statements
-              ? ` ${n(stats.statements)} Punkte liegen auf dem Tisch${stats.voters ? `, ${n(stats.voters)} ${stats.voters === 1 ? "Mensch hat" : "Menschen haben"} schon abgestimmt` : ""}.`
+              ? ` ${n(stats.statements)} Punkte liegen auf dem Tisch${stats.voters ? `, ${n(stats.voters)} ${stats.voters === 1 ? "Mensch hat" : "Menschen haben"} schon abgestimmt${stats.simulated ? `, davon ${n(stats.simulated)} simuliert` : ""}` : ""}.`
               : ""}
           </p>
           <blockquote className="pub-measure">{c.measure}</blockquote>

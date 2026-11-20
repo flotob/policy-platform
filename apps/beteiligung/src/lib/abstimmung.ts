@@ -115,13 +115,18 @@ export async function castVote(c: Campaign, participantId: string, statementId: 
   return r.rows.length > 0;
 }
 
-/** For the entry page: how many statements are on the table, how many people have voted. */
-export async function participation(c: Campaign): Promise<{ statements: number; voters: number }> {
+/**
+ * For the entry page: how many statements are on the table, how many people have voted. Simulated
+ * voters (the demo town only) count as voters and are named apart, as on the results page.
+ */
+export async function participation(c: Campaign): Promise<{ statements: number; voters: number; simulated: number }> {
   const r = await getDb().execute(sql`
     SELECT
       (SELECT count(*) FROM map_points WHERE consultation_id = ${c.consultationId} AND rolle IS NOT NULL AND status = 'released')::int AS statements,
       (SELECT count(DISTINCT v.participant_id) FROM map_point_votes v JOIN map_points p ON p.id = v.map_point_id
-        WHERE p.consultation_id = ${c.consultationId} AND v.method = 'real')::int AS voters`);
+        WHERE p.consultation_id = ${c.consultationId} AND v.method IN ('real', 'simulation'))::int AS voters,
+      (SELECT count(DISTINCT v.participant_id) FROM map_point_votes v JOIN map_points p ON p.id = v.map_point_id
+        WHERE p.consultation_id = ${c.consultationId} AND v.method = 'simulation')::int AS simulated`);
   const x = r.rows[0] as Row;
-  return { statements: Number(x.statements), voters: Number(x.voters) };
+  return { statements: Number(x.statements), voters: Number(x.voters), simulated: Number(x.simulated) };
 }
