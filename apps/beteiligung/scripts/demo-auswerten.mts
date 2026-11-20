@@ -6,7 +6,7 @@
  * model and Jev), release (R4) and publish (R5). A council decision, if one was entered, is
  * dropped: it belonged to the old result (demo-beschluss.mts writes it again).
  *
- * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/demo-auswerten.mts
+ * Usage (from apps/beteiligung): set -a && source .env.local && set +a && tsx scripts/demo-auswerten.mts [--verfahren <slug>]
  * Needs the language model and Jev (the report). A closed or published demo is opened again first.
  */
 import { sql } from "@policy/db";
@@ -23,10 +23,15 @@ const rows = async (q: ReturnType<typeof sql>) => (await db.execute(q)).rows as 
 const audit = (tenant: string, action: string, kind: string, id: string, payload: unknown) =>
   db.execute(sql`INSERT INTO audit_log (tenant_id, actor, action, subject_kind, subject_id, payload) VALUES (${tenant}, 'demo', ${action}, ${kind}, ${id}, ${JSON.stringify(payload)})`);
 
+// Another Musterstadt procedure (the town is the fiction): --verfahren neues-schwimmbad
+const vi = process.argv.indexOf("--verfahren");
+const verfahren = vi > 0 ? process.argv[vi + 1]! : "solarpflicht";
+const t0 = Date.now();
+const took = () => `${Math.round((Date.now() - t0) / 1000)} s`;
 const [x] = await rows(sql`
   SELECT c.id, c.tenant_id, t.name FROM campaigns c JOIN tenants t ON t.id = c.tenant_id
-  WHERE t.slug = 'musterstadt' AND c.slug = 'solarpflicht' AND c.fictional`);
-if (!x) throw new Error("no fictional demo campaign");
+  WHERE t.slug = 'musterstadt' AND c.slug = ${verfahren} AND (c.fictional OR ${verfahren} <> 'solarpflicht')`);
+if (!x) throw new Error("no demo campaign");
 const c = (await getCampaign(x.tenant_id as string, x.id as string))!;
 const busy = await rows(sql`SELECT 1 FROM campaign_jobs WHERE campaign_id = ${c.id} AND state IN ('wartet', 'laeuft')`);
 if (busy.length) throw new Error("the machine is still working on the demo — wait until its jobs are done");
@@ -69,7 +74,7 @@ if (r.camps) {
     const proposal = namingOf(n?.camp_names)?.proposal;
     if (!proposal) throw new Error("the machine proposed no camp names");
     await setCampNames(saved.id, { names: proposal.names, descriptions: proposal.descriptions, proposal, confirmedBy: "demo", confirmedAt: new Date().toISOString() });
-    console.log(`camp names proposed and taken: ${proposal.names.join(" / ")}`);
+    console.log(`camp names proposed and taken (${took()}): ${proposal.names.join(" / ")}`);
   }
 }
 
@@ -92,7 +97,7 @@ while (Date.now() < until) {
   }
   await new Promise((r) => setTimeout(r, 3000));
 }
-console.log(`report v${report.version}: ${report.state}`);
+console.log(`report v${report.version}: ${report.state} (${took()}, ${report.checks?.attempts ?? "?"} attempt(s))`);
 if (report.state !== "geprueft") throw new Error(`the report did not pass its checks (${report.state}) — look at it in the workspace`);
 await db.execute(sql`UPDATE campaign_reports SET state = 'freigegeben', decided_by = 'demo', decided_at = now(), updated_at = now() WHERE id = ${report.id}`);
 await audit(c.tenantId, "report.freigegeben", "campaign_report", report.id, { version: report.version });

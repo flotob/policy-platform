@@ -12,9 +12,12 @@
  *   upload               the 16 letters in demo/schwimmbad (manifest.json), queue the machine's reading
  *   voters [--n 520]     simulated voters on every released statement (replaces earlier ones)
  *   top-up               existing simulated voters vote on statements none of them has seen yet
+ *   revote               after a change to the voter model: cast the simulated votes again (people and their points stay)
  *   los [--drawn 140] [--letters 2500]   the cross-check by lot (replaces an earlier one)
  *   remove               simulated voters, their own points and the drawn residents
+ *   redaktion            the editors' pass: release what only has wording questions, confirm assignments
  *   status               what is there
+ *   lean                 the voter model per statement (A B C agreement, percent)
  * Order: upload → (machine reads) → voters → demo-tuer2.mts --verfahren neues-schwimmbad --file … →
  * (machine sorts in) → open-demo.mts --verfahren neues-schwimmbad → top-up → los.
  */
@@ -24,7 +27,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { sql } from "@policy/db";
-import { extractFileText } from "@policy/pipeline/kern";
+import { confirmMove, extractFileText, releaseNode, syncDerivedVotes } from "@policy/pipeline/kern";
 
 import { getDb } from "../src/lib/db.ts";
 import { enqueue } from "../src/lib/kern.ts";
@@ -82,53 +85,95 @@ interface Node {
  * Topic rules first (the wording comes from the machine, so they look for word stems), then a default
  * from the statement's kind and direction. `drawn`: residents drawn by lot, who are not the engaged ones.
  */
-function lean(n: Node, drawn = false): [number, number, number] {
+function topic(n: Node, drawn = false): [number, number, number] {
   const t = n.text;
   const has = (re: RegExp) => re.test(t);
   const attack = n.richtung === "greift_an";
+  const value = n.typ === "W";
   if (n.rolle === "schluss") return [0.9, 0.22, 0.14];
   // The cross-check: those who came on their own like swimming; the drawn are less sure the spending is justified.
-  if (has(/gerechtfertigt, wenn|Zugang für alle Kinder/i)) return drawn ? [0.84, 0.36, 0.4] : [0.92, 0.72, 0.72];
+  if (has(/gerechtfertigt, wenn|Zugang für alle Kinder/i)) return drawn ? [0.84, 0.38, 0.4] : [0.93, 0.82, 0.86];
   // Apparent agreements: everyone wants the check and the time limit — for opposite reasons (the letters say which).
-  if (has(/Wirtschaftlichkeitsprüfung|Wirtschaftlichkeitsuntersuchung/i)) return [0.78, 0.84, 0.92];
-  if (has(/befrist/i)) return [0.7, 0.88, 0.72];
+  if (has(/Wirtschaftlichkeitsprüfung|Wirtschaftlichkeitsuntersuchung/i))
+    return has(/keine dauerhafte|bis zum Vorliegen|nicht tragbar/i) ? [0.24, 0.86, 0.92] : [0.78, 0.84, 0.92];
+  if (has(/befrist/i)) return [0.8, 0.9, 0.78];
+  // Selling the old plot to pay for the new pool: the renovation camp wants to keep it.
+  if (has(/verkaufen|Verkauf/i)) return [0.66, 0.72, 0.16];
+  if (has(/Sponsor/i)) return [0.46, 0.8, 0.6];
+  // Paying another way (camp B).
+  if (has(/Grundsteuer|statt über die Gewerbesteuer|Nutzerinnen und Nutzer|allen Gewerbesteuerzahlern|allein den Gewerbe/i)) return [0.2, 0.88, 0.5];
+  // The town's value premise: the core of the dispute.
+  if (has(/überwiegt/i)) return attack ? [0.08, 0.9, 0.6] : [0.94, 0.08, 0.36];
+  // Neighbours: cooperation instead of an own pool (B), and the town's claim that it would not suffice.
+  if (has(/Nachbargemeinde|Beispielhausen|Zweckverband|Kooperation|Zusammenarbeit|Abstand von acht/i))
+    return !attack && has(/nicht vollständig|nicht decken|keine verlässliche|ausgebucht/i) ? [0.86, 0.24, 0.5] : [0.22, 0.86, 0.5];
+  // Facts nobody disputes.
+  if (has(/sanierungsbedürftig|Haushaltsmittel|Baggersee|richtig schwimmen|Energieverbraucher|in Betrieb bleiben|Training|Grundschulalter|nachholen/i))
+    return [0.9, 0.86, 0.88];
+  if (has(/belastet die Unternehmen/i)) return [0.82, 0.92, 0.86];
+  // "Whatever is built, but now": the impatient parents of camp A.
+  if (has(/schnelle Umsetzung|Hauptsache jetzt|wichtiger als die Entscheidung/i)) return [0.86, 0.38, 0.28];
+  // "Good for business too": camp A's argument, which B half accepts.
+  if (has(/auch den Unternehmen|Fachkräfte|Lebensqualität/i)) return [0.88, 0.4, 0.56];
   // Common ground: children, schools, the teaching pool, access, prices.
+  if (has(/jedes Kind .*öffentliche Aufgabe/i)) return [0.92, 0.56, 0.72];
   if (has(/schwimmen (zu )?(können|lernen)|Schwimmfähigkeit|sicher schwimmen|Nichtschwimmer|grundlegende Fähigkeit|überlebenswichtig/i) && !attack)
     return [0.93, 0.84, 0.88];
   if (has(/Lehrschwimmbecken|Hubboden/i) && !has(/Anbau|anbauen|Sanierung|saniert/i)) return [0.9, 0.8, 0.9];
-  if (has(/Schulschwimm|Schulzeiten|Schwimmunterricht|Schwimmstunden|Wasserzeiten/i) && !has(/Sanierung|Bauzeit/i)) return [0.9, 0.78, 0.86];
-  if (has(/barrierefrei|Aufzug|sozial|Eintritt|bezahlbar|Sozialpass|geringem Einkommen|Rehasport|Warteliste/i)) return [0.88, 0.72, 0.82];
+  if (has(/Schulschwimm|Schulzeiten|Schwimmunterricht|Schwimmstunden|Wasserzeiten|Bahnstunden|Vereine/i) && !has(/Sanierung|Bauzeit|Stadtrand|erreich|zahlen/i)) return [0.9, 0.8, 0.86];
+  if (has(/barrierefrei|Aufzug|sozial|Eintritt|bezahlbar|Sozialpass|geringem Einkommen|Rehasport|Warteliste|Wartezeit/i)) return [0.88, 0.76, 0.84];
+  // Getting there: the site at the Parkstraße is far for the old and the schools — C's point, shared by some in A.
+  if (has(/Stadtrand|Haltestelle|nicht erreichbar|kaum zu erreichen|schlecht erreichbar/i) && !has(/Innenstadt/i)) return [0.46, 0.5, 0.88];
   // Renovation instead of a new build (camp C), and the town's claims against it.
   if (has(/Sanierung würde keine|keine zusätzlichen (Schwimm|Wasser)fläche|Bauzeit|beste Möglichkeit/i)) return [0.86, 0.5, 0.1];
-  if (has(/Sanierung|sanier|Anbau|anbauen|Innenstadt|zu Fuß|fußläufig|alten Standort|Mosaik|Sauna/i)) return [0.14, 0.42, 0.92];
+  if (has(/Cafés|Einzelhandel|allein erreichen|gut erreichbar|bietet Platz|Bustransfer/i)) return [0.72, 0.76, 0.94];
+  if (has(/Sanierung|sanier|Anbau|anbauen|Innenstadt|zu Fuß|fußläufig|alten Standort|bestehenden Standort|Mosaik|Sauna/i))
+    return n.typ === "T" ? [0.18, 0.5, 0.92] : [0.14, 0.42, 0.92];
   // The site at the Parkstraße.
-  if (has(/Bäume|Baumbestand|Kaltluft|Stadtpark|Grünfläche|Verkehr|Autofahrten|Parkpl|Stellpl|Lärm|Sportzentrum Nord/i)) return [0.24, 0.4, 0.9];
+  if (has(/Bäume|Baumbestand|Kaltluft|Stadtpark|Grünfläche|Verkehr|Autofahrten|Parkpl|Stellpl|Lärm|Sportzentrum Nord|Fledermä|Gutachten/i))
+    return n.typ === "T" ? [0.3, 0.5, 0.9] : [0.24, 0.42, 0.9];
+  if (has(/Erdgas|Wärmepumpe|Photovoltaik|Wärmenetz/i)) return [0.78, 0.76, 0.88];
   // Money: the cost estimates and the gap — B and C doubt them, A trusts the town.
   if (has(/Mehreinnahmen reichen|reichen .*aus, um die Finanzierungskosten/i)) return [0.8, 0.18, 0.12];
+  if (has(/Konjunktur/i)) return [0.55, 0.9, 0.76];
   if (has(/16 bis 22|Baukosten|Baupreis|Mehrkosten|teurer|Defizit|Betriebskosten|1,0 bis 1,4|300\.000|Lücke|nicht tragbar|nicht aufgeh|1,5 Millionen|2029/i))
     return attack ? [0.2, 0.84, 0.9] : [0.8, 0.3, 0.2];
-  if (has(/Förder|Landesförder/i)) return attack ? [0.3, 0.8, 0.6] : [0.86, 0.6, 0.55];
-  // Neighbours: cooperation instead of an own pool (B), and the town's claim that it would not suffice.
-  if (has(/Nachbargemeinde|Beispielhausen|Zweckverband|Kooperation|Zusammenarbeit/i))
-    return !attack && has(/nicht vollständig|nicht decken|keine verlässliche|ausgebucht/i) ? [0.86, 0.24, 0.5] : [0.22, 0.86, 0.5];
+  // State funding: everyone wants it — unless it is a reason to wait with the tax.
+  if (has(/Förder/i)) return has(/erst |bevor|nachdem|dauerhafte/i) ? [0.3, 0.82, 0.62] : [0.86, 0.84, 0.72];
   // Business and the Gewerbesteuer (camp B).
   if (has(/abwander|Wegzug|verlässt|verlassen die Stadt|wegziehen/i)) return attack ? [0.12, 0.86, 0.42] : [0.88, 0.2, 0.5];
-  if (has(/350 Euro|nicht repräsentativ|§ ?35|Anrechnung|Hinzurechnung|Personen(unternehmen|gesellschaft)|Handwerk|Betriebe|Unternehmen|Gewerbe|Hebesatz|Grundsteuer|Wettbewerbsdruck/i)) {
-    if (attack) return [0.14, 0.9, 0.4];
-    // Supporting: a value ("firms can carry it") splits like the core; a fact (the town's example) is mostly believed.
-    return n.typ === "W" ? [0.9, 0.12, 0.38] : [0.84, 0.42, 0.62];
+  if (has(/350 Euro|nicht repräsentativ|§ ?35|Anrechnung|Hinzurechnung|Personen(unternehmen|gesellschaft)|Handwerk|Betriebe|Unternehmen|Firmen|Gewerbe|Hebesatz|Grundsteuer|Wettbewerbsdruck|Zweckbindung/i)) {
+    // Against: a value ("not fair to the firms") splits hard; a fact about their costs is believed more widely.
+    if (attack) return value ? [0.12, 0.9, 0.42] : [0.4, 0.9, 0.56];
+    // For: a value ("firms can carry it") is the core of the dispute; a fact (the town's example) is mostly believed.
+    return value ? [0.9, 0.1, 0.4] : [0.84, 0.42, 0.62];
   }
-  if (has(/freiwillige (Aufgabe|Leistung)|nicht leisten/i)) return [0.1, 0.86, 0.66];
-  if (has(/Daseinsvorsorge|öffentliche Aufgabe|Pflichtaufgabe/i)) return [0.9, 0.2, 0.42];
-  if (has(/Nutzen|überwiegt|zumutbar|Gemeinwohl|gesellschaftlichen Wert|lohnt/i)) return attack ? [0.1, 0.86, 0.62] : [0.92, 0.16, 0.36];
+  if (has(/freiwillige (Aufgabe|Leistung)|nicht leisten/i)) return [0.12, 0.84, 0.62];
+  if (has(/Daseinsvorsorge|Pflichtaufgabe/i)) return [0.9, 0.2, 0.42];
+  if (has(/gesellschaftlichen Wert|allen Generationen/i)) return [0.93, 0.8, 0.82];
+  if (has(/Nutzen|überwiegt|zumutbar|Gemeinwohl|lohnt|gering/i)) return attack ? [0.1, 0.86, 0.62] : [0.92, 0.16, 0.36];
   // Smaller wishes from door 2 and the letters.
   if (has(/Freibad/i)) return [0.12, 0.46, 0.4];
   if (has(/Sponsor|Bistro|Fitness|Vereine .*zahlen|Bürgerentscheid/i)) return [0.4, 0.74, 0.62];
-  if (has(/Rutsche|Jugend|Frühschwimm|Schicht|Frauen|Ganztag|Container|Öffnungszeit/i)) return [0.82, 0.5, 0.58];
+  if (has(/Rutsche|Jugend|Frühschwimm|Schicht|Frauen|Ganztag|Container|Öffnungszeit|geöffnet/i)) return [0.82, 0.5, 0.58];
   // Defaults from the kind of statement.
-  if (n.typ === "W") return attack ? [0.14, 0.78, 0.66] : [0.88, 0.3, 0.4];
-  if (n.typ === "verfahren") return attack ? [0.42, 0.76, 0.72] : [0.8, 0.66, 0.68];
-  return attack ? [0.26, 0.72, 0.74] : [0.86, 0.64, 0.6];
+  if (value) return attack ? [0.14, 0.78, 0.66] : has(/Neubau|neue[sn]? (Hallen|Schwimm)bad/i) ? [0.9, 0.72, 0.4] : [0.9, 0.74, 0.76];
+  if (n.typ === "verfahren") return attack ? [0.42, 0.78, 0.74] : [0.84, 0.74, 0.74];
+  return attack ? [0.26, 0.72, 0.74] : has(/Neubau|neue[sn]? (Hallen|Schwimm)bad/i) ? [0.88, 0.72, 0.42] : [0.88, 0.76, 0.74];
+}
+
+/**
+ * Facts that are only descriptions (a bus takes 45 minutes, 23 trees stand on the plot, the tax rules) are
+ * believed in every camp, whoever brought them; only claims about costs, forecasts and effects are disputed.
+ * That is where the Landkarte's finding comes from: agreed on the facts, divided by a value.
+ */
+const CONTESTED =
+  /16 bis 22|850\.000|Defizit|Mehrkosten|20 bis 30|8,5 bis 9|günstiger|reichen .*aus|Lücke|tragen\b|abwander|Erweiterungen|Standortnachteil|harter Faktor|günstigeren Standort|relativiert|stellen weniger ein|erneut steigen|Schwankungen|schädlichen Wettbewerb|nicht vollständig|Vormittagszeiten bieten|bessere Chancen|keine zusätzlichen|fiele .*aus|Bauwerksuntersuchung|Konjunktur|Autofahrten|Lärm|billiger|Sponsoring|nicht erreichbar|kaum zu erreichen|schlecht erreichbar|Parkplätze|Mehreinnahmen von|bremsen|weitergeben|2029|nicht tragbar|Alternative zum Neubau/i;
+
+function lean(n: Node, drawn = false): [number, number, number] {
+  const p = topic(n, drawn);
+  if (n.typ !== "T" || n.rolle === "schluss" || CONTESTED.test(n.text)) return p;
+  return p.map((x) => Math.round((0.72 + 0.24 * x) * 100) / 100) as [number, number, number];
 }
 
 const nodesNow = async () =>
@@ -325,7 +370,47 @@ async function status() {
   console.log(`${c!.state as string}:`, x);
 }
 
+/**
+ * The editors' pass (recorded as "demo", like open-demo.mts): the machine's open questions about wording
+ * ("several claims", "reason clause", ...) are released as they are; anything with personal data stays in the
+ * queue for a person, as it would. Uncertain assignments to released points are confirmed.
+ */
+async function redaktion() {
+  const busy = await rows(sql`SELECT 1 FROM campaign_jobs WHERE campaign_id = ${campaignId} AND state IN ('wartet', 'laeuft')`);
+  if (busy.length) throw new Error("the machine is still working — wait until its jobs are done");
+  const drafts = await rows(sql`
+    SELECT id FROM map_points WHERE consultation_id = ${consultationId} AND status = 'draft' AND rolle = 'beitrag'
+      AND COALESCE(review->>'verdict', '') <> 'reject' AND NOT COALESCE(review->'flags', '[]'::jsonb) ? 'personal_data' ORDER BY ord`);
+  for (const n of drafts) await releaseNode(db, { tenantId, nodeId: n.id as string, actor: "demo" });
+  const waiting = await rows(sql`
+    SELECT m.id FROM moves m JOIN map_points p ON p.id = m.map_point_id
+    WHERE m.consultation_id = ${consultationId} AND m.state = 'vorgelegt' AND p.status = 'released'
+      AND m.route IN ('unsicher', 'gegenteil') AND NOT COALESCE((m.decision->>'einspruch')::boolean, false)`);
+  for (const m of waiting) await confirmMove(db, { tenantId, moveId: m.id as string, actor: "demo" });
+  await syncDerivedVotes(db, consultationId);
+  const [left] = await rows(sql`SELECT count(*)::int AS n FROM map_points WHERE consultation_id = ${consultationId} AND status = 'draft'`);
+  console.log(`editors: ${drafts.length} points released, ${waiting.length} assignments confirmed, ${left!.n} left in the queue`);
+}
+
+/** After a change to the voter model: the simulated people keep who they are and what they sent; their simulated votes are cast again. */
+async function revote() {
+  const nodes = await nodesNow();
+  const people = await rows(sql`
+    SELECT id, source_ref FROM participants WHERE consultation_id = ${consultationId} AND via = 'simulation' ORDER BY source_ref`);
+  await db.execute(sql`
+    DELETE FROM map_point_votes WHERE method = 'simulation' AND participant_id IN
+      (SELECT id FROM participants WHERE consultation_id = ${consultationId} AND via = 'simulation')`);
+  let votes = 0;
+  for (const p of people) {
+    const ref = p.source_ref as string;
+    votes += await castVotes(p.id as string, campOfRef(ref), nodes, ref, ref.startsWith("simulation-los:"));
+  }
+  console.log(`revote: ${votes} votes from ${people.length} simulated people on ${nodes.length} statements`);
+}
+
 if (step === "upload") await upload();
+else if (step === "revote") await revote();
+else if (step === "redaktion") await redaktion();
 else if (step === "voters") await voters();
 else if (step === "top-up") await topUp();
 else if (step === "los") await los();
@@ -334,5 +419,13 @@ else if (step === "remove") {
   await removeDrawn();
   console.log(`simulated voters and drawn residents removed (${n} own points with them)`);
 } else if (step === "status") await status();
-else throw new Error("step: upload | voters | top-up | los | remove | status");
+else if (step === "lean") {
+  // What the simulated camps think of each statement (to read the voter model against the machine's wording).
+  for (const n of await nodesNow()) {
+    const [a, b, cc] = lean(n).map((x) => String(Math.round(x * 100)).padStart(3));
+    const d = lean(n, true)[1] !== lean(n)[1] ? " (Los anders)" : "";
+    console.log(`${a}${b}${cc}  ${n.rolle.slice(0, 4)} ${n.typ.padEnd(9)} ${(n.richtung ?? "").padEnd(9)} ${n.text.slice(0, 110)}${d}`);
+  }
+}
+else throw new Error("step: upload | redaktion | voters | top-up | los | remove | status | lean");
 process.exit(0);
