@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "ml-matrix": "^6.11.0"
+    "ml-matrix": "^6.15.1"
   },
   "devDependencies": {
     "vitest": "^3.0.0"
