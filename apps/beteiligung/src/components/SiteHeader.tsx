@@ -20,13 +20,13 @@ export async function SiteHeader() {
           <Link href="/musterstadt/solarpflicht">Beispiel</Link>
           {staff ? (
             <Link href="/verwaltung" className="btn btn-small">
-              Zur Verwaltung
+              Meine Kommune
             </Link>
           ) : (
             <>
               <Link href="/anmelden">Anmelden</Link>
               <Link href="/registrieren" className="btn btn-small">
-                Verfahren anlegen
+                Für Kommunen
               </Link>
             </>
           )}
