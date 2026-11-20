@@ -4,8 +4,8 @@
  * list (R1) use the same words, so a finding reads the same everywhere.
  */
 
-import { diagnoseCamps, type BelegKey, type CampCount, type Category, type Diagnosis, type Ergebnis, type Status, type StatementOut, type StepOut, type Verdict } from "./befund.ts";
-import { carries, MIN_CAMP_VOTES, rejects } from "./position.ts";
+import type { BelegKey, CampCount, Category, Diagnosis, Ergebnis, Status, StatementOut, StepOut, Verdict } from "./befund.ts";
+import { carries, diagnoseCamps, MIN_CAMP_VOTES, rejects } from "./position.ts";
 
 export type CampNames = (string | null | undefined)[] | null | undefined;
 
