@@ -36,7 +36,7 @@ const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", ye
 export const normEmail = (e: string) => e.trim().toLowerCase();
 export const looksLikeEmail = (e: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
-const isDemo = (email: string) => normEmail(email) === normEmail(demoLogin()?.email ?? "");
+export const isDemo = (email: string) => normEmail(email) === normEmail(demoLogin()?.email ?? "");
 
 /**
  * Platform admins (env PLATFORM_ADMINS, comma-separated email addresses) set up new municipalities.
@@ -137,11 +137,15 @@ export type InviteResult =
   | { ok: true; email: string; mailed: boolean; link?: string }
   | { ok: false; error: string };
 
-async function sendInvite(opts: { tenantName: string; email: string; role: Role; inviterName: string; token: string; expiresAt: Date; newTown: boolean }) {
+export type Inviter = { id: string; name: string; email: string };
+
+async function sendInvite(opts: { tenantName: string; email: string; role: Role; inviter: Inviter; token: string; expiresAt: Date; newTown: boolean }) {
   const link = appUrl(`/einladung/${opts.token}`);
+  // Name and town are typed in by the sender; the address is the one they confirmed. So the recipient sees who really writes.
+  const who = `${opts.inviter.name} (${normEmail(opts.inviter.email)})`;
   const intro = opts.newTown
-    ? `${opts.inviterName} hat für ${opts.tenantName} einen Zugang zu streit.bar eingerichtet und lädt Sie als Erste oder Ersten ein. Sie legen dort Verfahren an, eröffnen sie und laden Ihr Team ein.`
-    : `${opts.inviterName} lädt Sie ein, im Team von ${opts.tenantName} auf streit.bar mitzuarbeiten. Ihre Rolle: ${ROLE_LABEL[opts.role]} (${ROLE_TEXT[opts.role]}).`;
+    ? `${who} hat für ${opts.tenantName} einen Zugang zu streit.bar eingerichtet und lädt Sie als Erste oder Ersten ein. Sie legen dort Verfahren an, eröffnen sie und laden Ihr Team ein.`
+    : `${who} lädt Sie ein, im Team von ${opts.tenantName} auf streit.bar mitzuarbeiten. Ihre Rolle: ${ROLE_LABEL[opts.role]} (${ROLE_TEXT[opts.role]}).`;
   const r = await sendMail({
     to: opts.email,
     subject: `Einladung: ${opts.tenantName} auf streit.bar`,
@@ -164,7 +168,7 @@ export async function invite(opts: {
   tenantId: string;
   email: string;
   role: Role;
-  inviter: { id: string; name: string };
+  inviter: Inviter;
   newTown?: boolean;
 }): Promise<InviteResult> {
   const email = normEmail(opts.email);
@@ -191,14 +195,14 @@ export async function invite(opts: {
     return (r.rows[0] as { id: string }).id;
   });
   await audit(opts.tenantId, `user:${opts.inviter.id}`, "team.invite", "staff_invite", id, { email, role: opts.role });
-  const sent = await sendInvite({ tenantName: t.name, email, role: opts.role, inviterName: opts.inviter.name, token, expiresAt, newTown: !!opts.newTown });
+  const sent = await sendInvite({ tenantName: t.name, email, role: opts.role, inviter: opts.inviter, token, expiresAt, newTown: !!opts.newTown });
   if (sent.mailed) await db.execute(sql`UPDATE staff_invites SET sent_at = now() WHERE id = ${id}`);
   // Without a working mail sender the person who invites passes the link on by hand.
   return { ok: true, email, mailed: sent.mailed, link: sent.mailed ? undefined : sent.link };
 }
 
 /** Send an open invitation again: a fresh link (the old one stops working) and a fresh period. */
-export async function resendInvite(tenantId: string, inviteId: string, inviter: { id: string; name: string }): Promise<InviteResult> {
+export async function resendInvite(tenantId: string, inviteId: string, inviter: Inviter): Promise<InviteResult> {
   const db = getDb();
   const r = await db.execute(sql`
     SELECT i.email, i.role, t.name AS "tenantName",
@@ -213,7 +217,7 @@ export async function resendInvite(tenantId: string, inviteId: string, inviter: 
     UPDATE staff_invites SET token_hash = ${hashToken(token)}, expires_at = ${expiresAt.toISOString()}, sent_at = NULL
     WHERE id = ${inviteId}`);
   await audit(tenantId, `user:${inviter.id}`, "team.invite_resend", "staff_invite", inviteId, { email: inv.email });
-  const sent = await sendInvite({ tenantName: inv.tenantName, email: inv.email, role: inv.role, inviterName: inviter.name, token, expiresAt, newTown: inv.newTown });
+  const sent = await sendInvite({ tenantName: inv.tenantName, email: inv.email, role: inv.role, inviter, token, expiresAt, newTown: inv.newTown });
   if (sent.mailed) await db.execute(sql`UPDATE staff_invites SET sent_at = now() WHERE id = ${inviteId}`);
   return { ok: true, email: inv.email, mailed: sent.mailed, link: sent.mailed ? undefined : sent.link };
 }

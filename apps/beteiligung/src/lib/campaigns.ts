@@ -1,5 +1,6 @@
 import { sql } from "@policy/db";
 
+import { confirmedTown } from "./bestaetigen";
 import { getDb } from "./db";
 import { paramsOf, type CampaignParams, type CampaignState, type Steps } from "./params";
 
@@ -72,13 +73,27 @@ export async function getCampaign(tenantId: string, id: string): Promise<Campaig
   return r[0] ? toCampaign(r[0]) : null;
 }
 
-/** The public view of a campaign: by the municipality's and the campaign's slug, never a draft. */
+/**
+ * The public view of a campaign: by the municipality's and the campaign's slug, never a draft. A town in
+ * which nobody has confirmed their address yet (lib/bestaetigen.ts) is seen by its own team only, marked
+ * `preview` — nobody else sees a procedure in the name of an unconfirmed address.
+ */
 export async function getPublicCampaign(tenantSlug: string, slug: string) {
   const r = await rows(sql`
-    SELECT c.*, t.name AS tenant_name, t.slug AS tenant_slug FROM campaigns c JOIN tenants t ON t.id = c.tenant_id
+    SELECT c.*, t.name AS tenant_name, t.slug AS tenant_slug, ${confirmedTown("t")} AS confirmed
+    FROM campaigns c JOIN tenants t ON t.id = c.tenant_id
     WHERE t.slug = ${tenantSlug} AND c.slug = ${slug} AND c.state <> 'entwurf'`);
   const x = r[0];
-  return x ? { ...toCampaign(x), tenant: { name: x.tenant_name as string, slug: x.tenant_slug as string } } : null;
+  if (!x) return null;
+  const preview = x.confirmed !== true;
+  if (preview && !(await ownTeam(x.tenant_id as string))) return null;
+  return { ...toCampaign(x), tenant: { name: x.tenant_name as string, slug: x.tenant_slug as string }, preview };
+}
+
+/** Whether the logged-in staff member belongs to this town (session loaded only when needed: scripts import this file). */
+export async function ownTeam(tenantId: string): Promise<boolean> {
+  const { getStaff } = await import("./session");
+  return (await getStaff())?.tenant.id === tenantId;
 }
 
 export async function listFiles(campaignId: string): Promise<CampaignFile[]> {

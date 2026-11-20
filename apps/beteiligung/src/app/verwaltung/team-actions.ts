@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import type { Role } from "@/lib/session";
+import type { Role, Staff } from "@/lib/session";
 import { requireInitiator, requireStaff } from "@/lib/session";
 import { changeRole, createTenant, invite, isPlatformAdmin, removeMember, resendInvite, withdrawInvite, type InviteResult } from "@/lib/team";
 
@@ -25,17 +25,25 @@ function inviteMessage(r: InviteResult, values?: Record<string, string>): Invite
   };
 }
 
+/** Inviting goes out in the town's name: only with a confirmed address (lib/bestaetigen.ts). */
+const UNCONFIRMED =
+  "Einladen können Sie, sobald Ihre E-Mail-Adresse bestätigt ist. Den Link finden Sie in Ihrer Mail; oben auf der Seite können Sie eine neue anfordern.";
+
+const inviterOf = (staff: Staff) => ({ id: staff.user.id, name: staff.user.name, email: staff.user.email });
+
 export async function inviteColleague(_prev: InviteState, form: FormData): Promise<InviteState> {
   const staff = await requireInitiator();
   const values = { email: field(form, "email"), role: field(form, "role") };
-  const r = await invite({ tenantId: staff.tenant.id, email: values.email, role: values.role as Role, inviter: { id: staff.user.id, name: staff.user.name } });
+  if (!staff.user.emailVerified) return { error: UNCONFIRMED, values };
+  const r = await invite({ tenantId: staff.tenant.id, email: values.email, role: values.role as Role, inviter: inviterOf(staff) });
   revalidatePath("/verwaltung/team");
   return inviteMessage(r, values);
 }
 
 export async function resendInvitation(inviteId: string, _prev: InviteState): Promise<InviteState> {
   const staff = await requireInitiator();
-  const r = await resendInvite(staff.tenant.id, inviteId, { id: staff.user.id, name: staff.user.name });
+  if (!staff.user.emailVerified) return { error: UNCONFIRMED };
+  const r = await resendInvite(staff.tenant.id, inviteId, inviterOf(staff));
   revalidatePath("/verwaltung/team");
   return inviteMessage(r);
 }
@@ -68,7 +76,7 @@ export async function createMunicipalityWithInvite(_prev: InviteState, form: For
   if (values.name.length < 3) return { error: "Bitte geben Sie den Namen der Kommune an.", values };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email)) return { error: "Diese E-Mail-Adresse sieht nicht vollständig aus.", values };
   const t = await createTenant(values.name, staff.user.id);
-  const r = await invite({ tenantId: t.id, email: values.email, role: "initiator", inviter: { id: staff.user.id, name: staff.user.name }, newTown: true });
+  const r = await invite({ tenantId: t.id, email: values.email, role: "initiator", inviter: inviterOf(staff), newTown: true });
   revalidatePath("/verwaltung/kommunen");
   const m = inviteMessage(r, values);
   return m.ok ? { ok: `${values.name} ist angelegt (streit.bar/${t.slug}). ${m.ok}` } : m;
@@ -77,7 +85,7 @@ export async function createMunicipalityWithInvite(_prev: InviteState, form: For
 export async function resendTownInvitation(tenantId: string, inviteId: string, _prev: InviteState): Promise<InviteState> {
   const staff = await requireStaff();
   if (!isPlatformAdmin(staff.user)) redirect("/verwaltung");
-  const r = await resendInvite(tenantId, inviteId, { id: staff.user.id, name: staff.user.name });
+  const r = await resendInvite(tenantId, inviteId, inviterOf(staff));
   revalidatePath("/verwaltung/kommunen");
   return inviteMessage(r);
 }
