@@ -1,12 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 
+import { senderKey } from "@policy/pipeline/kern/absender";
+
+import { FilePicker } from "@/components/FilePicker";
+import type { KnownSender } from "@/lib/absender";
+import { READABLE_ACCEPT } from "@/lib/files";
 import { EDITORIAL_MODES, STEPS, type CampaignParams, type EditorialMode, type Steps } from "@/lib/params";
 
 import { createCampaign, generateInvites, saveBasics, saveJustification, saveProcess, uploadFile, type ActionState } from "./actions";
 import { Letters, type LetterInfo } from "./letters";
-import { READABLE_ACCEPT } from "@/lib/files";
 
 export function Status({ state, pending }: { state: ActionState; pending: boolean }) {
   if (pending) return <span className="form-status muted">Wird gespeichert …</span>;
@@ -207,34 +211,65 @@ export function ProcessForm({ id, params }: { id: string; params: CampaignParams
   );
 }
 
-export function UploadForm({ id }: { id: string }) {
+/**
+ * Upload: one file or several at once (a statement and its attachments). Several statements of one
+ * sender count as one participant — said in the form, and shown when the typed name is already known.
+ */
+export function UploadForm({ id, senders }: { id: string; senders: KnownSender[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(uploadFile.bind(null, id), {});
+  // After an upload the fields start empty again; after an error they keep what was typed.
+  const formKey = useMemo(() => (state.ok ? Math.random() : 0), [state]);
   return (
-    <form action={action} className="ws-form upload-form">
+    <form action={action} className="ws-form upload-form" key={formKey}>
+      <UploadFields values={state.values ?? {}} senders={senders} />
+      <div className="form-foot">
+        <button type="submit" className="btn" disabled={pending}>
+          Hochladen
+        </button>
+        <Status state={state} pending={pending} />
+      </div>
+    </form>
+  );
+}
+
+function UploadFields({ values, senders }: { values: Record<string, string>; senders: KnownSender[] }) {
+  const [role, setRole] = useState(values.role ?? "stellungnahme");
+  const [sender, setSender] = useState(values.sender ?? "");
+  const [senderType, setSenderType] = useState(values.senderType ?? "");
+  const statement = role === "stellungnahme";
+  return (
+    <>
       <div className="field-row">
         <div className="field">
           <label htmlFor="role">Was ist das?</label>
-          <select id="role" name="role" className="select" defaultValue={state.values?.role ?? "stellungnahme"} key={state.values?.role ?? "r"}>
+          <select id="role" name="role" className="select" value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="entwurf">Entwurf (Satzung, Vorlage)</option>
             <option value="unterlage">Unterlage (Gutachten, Daten)</option>
             <option value="stellungnahme">Eingegangene Stellungnahme</option>
           </select>
         </div>
-        <div className="field">
-          <label htmlFor="file">Datei</label>
-          <input id="file" name="file" type="file" className="input file-input" accept={READABLE_ACCEPT} required />
-          <span className="hint">PDF, Word (.docx), Text oder ein Scan bzw. Foto, bis 20 MB. Ältere Word-Dateien (.doc) bitte als .docx oder PDF speichern.</span>
-        </div>
+        <FilePicker
+          id="file"
+          name="file"
+          label="Dateien"
+          accept={READABLE_ACCEPT}
+          required
+          together={statement ? "Sie zählen als ein Absender." : undefined}
+          hint={
+            <>
+              Mehrere Dateien desselben Absenders auf einmal hochladen: Stellungnahme und Anlagen zählen als ein Absender. PDF, Word (.docx), Text
+              oder ein Scan bzw. Foto, je bis 20 MB. Ältere Word-Dateien (.doc) bitte als .docx oder PDF speichern.
+            </>
+          }
+        />
       </div>
       <div className="field-row">
-        <div className="field">
-          <label htmlFor="sender">Absender (bei Stellungnahmen)</label>
-          <input id="sender" name="sender" className="input" placeholder="Stadtwerke Musterstadt" defaultValue={state.values?.sender} />
-          <span className="hint">Bei einer Privatperson erscheint der Name nirgends öffentlich, nur „Privatperson“.</span>
-        </div>
+        <SenderField id="sender" name="sender" label="Absender (bei Stellungnahmen)" placeholder="Stadtwerke Musterstadt" value={sender} onChange={setSender}
+          senders={senders} active={statement && senderType !== "privat"}
+          hint="Bei einer Privatperson erscheint der Name nirgends öffentlich, nur „Privatperson“." />
         <div className="field">
           <label htmlFor="senderType">Art des Absenders</label>
-          <select id="senderType" name="senderType" className="select" defaultValue={state.values?.senderType ?? ""} key={state.values?.senderType ?? "t"}>
+          <select id="senderType" name="senderType" className="select" value={senderType} onChange={(e) => setSenderType(e.target.value)}>
             <option value="">Keine Angabe</option>
             <option value="verband">Verband oder Verein</option>
             <option value="unternehmen">Unternehmen</option>
@@ -245,13 +280,51 @@ export function UploadForm({ id }: { id: string }) {
           </select>
         </div>
       </div>
-      <div className="form-foot">
-        <button type="submit" className="btn" disabled={pending}>
-          Hochladen
-        </button>
-        <Status state={state} pending={pending} />
-      </div>
-    </form>
+    </>
+  );
+}
+
+/** The sender's name, with the names already on file to pick from, and a word when it is one of them. */
+export function SenderField(props: {
+  id: string;
+  name: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  senders: KnownSender[];
+  /** Only organisations are matched by name. */
+  active: boolean;
+  hint: string;
+}) {
+  const known = props.active && props.value.trim() ? props.senders.find((s) => senderKey(s.name) === senderKey(props.value)) : undefined;
+  const listId = `${props.id}-bekannt`;
+  return (
+    <div className="field">
+      <label htmlFor={props.id}>{props.label}</label>
+      <input
+        id={props.id}
+        name={props.name}
+        className="input"
+        placeholder={props.placeholder}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        list={props.active && props.senders.length ? listId : undefined}
+        autoComplete="off"
+      />
+      {props.active && props.senders.length ? (
+        <datalist id={listId}>
+          {props.senders.map((s) => (
+            <option key={s.name} value={s.name} />
+          ))}
+        </datalist>
+      ) : null}
+      <span className="hint">
+        {known
+          ? `Von „${known.name}“ ${known.files === 1 ? "liegt schon eine Datei" : `liegen schon ${known.files} Dateien`} vor. Was Sie jetzt eintragen, zählt zum selben Absender.`
+          : props.hint}
+      </span>
+    </div>
   );
 }
 

@@ -41,7 +41,8 @@ export async function participationStats(c: Campaign): Promise<Participation> {
       (SELECT count(*) FROM map_points WHERE consultation_id = ${c.consultationId} AND rolle IS NOT NULL AND status = 'released')::int AS statements,
       (SELECT count(*) FROM submissions WHERE consultation_id = ${c.consultationId} AND door = 'statement')::int AS short_points,
       (SELECT count(*) FROM judgments WHERE consultation_id = ${c.consultationId} AND family LIKE 'kern-short.%' AND decided->>'answer' = 'ja')::int AS short_confirmed,
-      (SELECT count(*) FROM campaign_files WHERE campaign_id = ${c.id} AND participant_id IS NOT NULL)::int AS uploads`);
+      -- Citizens' statements (door 3), by sender: one upload may hold a statement and its attachments.
+      (SELECT count(DISTINCT participant_id) FROM campaign_files WHERE campaign_id = ${c.id} AND participant_id IS NOT NULL AND uploaded_by IS NULL)::int AS uploads`);
   return {
     voters: Number(x!.voters),
     realVotes: Number(x!.real_votes),

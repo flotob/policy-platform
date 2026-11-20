@@ -11,3 +11,4 @@ export * from "./votes.ts";
 export * from "./befund.ts";
 export * from "./befund-text.ts";
 export * from "./bericht.ts";
+export * from "./absender.ts";

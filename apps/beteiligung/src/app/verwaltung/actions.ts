@@ -3,9 +3,11 @@
 import { createHash } from "node:crypto";
 
 import { sql } from "@policy/db";
+import { sameSender } from "@policy/pipeline/kern/absender";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { dropEmptySender, filesOf, knownSenders, privateSender, uploadProblem } from "@/lib/absender";
 import { freeSlug, getCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue } from "@/lib/kern";
@@ -27,8 +29,6 @@ const field = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const valuesOf = (f: FormData) => Object.fromEntries([...f.entries()].filter(([, v]) => typeof v === "string").map(([k, v]) => [k, String(v)]));
 /** A decision question is a question: add the mark if it is missing. */
 const asQuestion = (q: string) => (q && !/[?？]$/.test(q) ? `${q.replace(/[.!]+$/, "")}?` : q);
-/** Files up to this size are kept in the database (statements, statutes, decision papers). */
-const MAX_FILE = 20 * 1024 * 1024;
 
 async function audit(tenantId: string, userId: string, action: string, campaignId: string, payload: unknown) {
   await getDb().execute(sql`
@@ -129,41 +129,78 @@ export async function saveProcess(id: string, _prev: ActionState, form: FormData
   return { ok: "Gespeichert." };
 }
 
+/**
+ * Upload: one or several files of one kind. Statements uploaded together are one sender (a statement and
+ * its attachments); a later statement under the same organisation name joins that sender, spelled as
+ * the first time (lib/absender.ts).
+ */
 export async function uploadFile(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
   const { staff, campaign } = await own(id);
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Bitte wählen Sie eine Datei aus." };
-  if (file.size > MAX_FILE) return { error: "Die Datei ist größer als 20 MB. Bitte teilen Sie sie auf." };
+  const values = valuesOf(form);
+  const files = filesOf(form, "file");
+  const problem = uploadProblem(files, false);
+  if (problem) return { error: problem, values };
   const role = field(form, "role");
-  if (!["entwurf", "unterlage", "stellungnahme"].includes(role)) return { error: "Bitte wählen Sie, was die Datei ist." };
-  const sender = field(form, "sender");
+  if (!["entwurf", "unterlage", "stellungnahme"].includes(role)) return { error: "Bitte wählen Sie, was die Datei ist.", values };
+  let sender = field(form, "sender");
   const senderType = field(form, "senderType");
   // A private person is never named in public: the name (if typed) stays internal, the quotes say "Privatperson".
   if (role === "stellungnahme" && !sender && senderType !== "privat")
-    return { error: "Von wem stammt die Stellungnahme? Der Absender erscheint später bei jedem Zitat; bei Privatpersonen wählen Sie „Privatperson“.", values: valuesOf(form) };
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const sha = createHash("sha256").update(bytes).digest("hex");
-  if (campaign.state !== "entwurf" && campaign.state !== "vorbereitung") return { error: "Nach dem Freischalten kommen Stellungnahmen über die Beteiligung herein." };
-  const r = await getDb().execute(sql`
-    INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, uploaded_by)
-    VALUES (${staff.tenant.id}, ${campaign.id}, ${role}, ${file.name}, ${file.type || null}, ${file.size}, ${sha}, ${bytes},
-            ${sender || null}, ${senderType || null}, ${staff.user.id})
-    ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
-  if (r.rows.length === 0) return { error: "Diese Datei liegt schon vor." };
-  await audit(staff.tenant.id, staff.user.id, "campaign.upload", campaign.id, { filename: file.name, role, size: file.size, sha256: sha });
+    return { error: "Von wem stammt die Stellungnahme? Der Absender erscheint später bei jedem Zitat; bei Privatpersonen wählen Sie „Privatperson“.", values };
+  if (campaign.state !== "entwurf" && campaign.state !== "vorbereitung") return { error: "Nach dem Freischalten kommen Stellungnahmen über die Beteiligung herein.", values };
+  const statement = role === "stellungnahme";
+  const named = statement && senderType !== "privat";
+  if (named) sender = sameSender(sender, (await knownSenders(campaign.id)).map((s) => s.name)) ?? sender;
+  const read = await Promise.all(
+    files.map(async (file) => {
+      const bytes = Buffer.from(await file.arrayBuffer());
+      return { file, bytes, sha: createHash("sha256").update(bytes).digest("hex") };
+    }),
+  );
+  const db = getDb();
+  const { added, skipped } = await db.transaction(async (tx) => {
+    // A private person's files uploaded together are one person; a single file needs no shared participant.
+    const together = statement && !named && read.length > 1 ? await privateSender(tx, campaign) : null;
+    const added: { id: string; name: string; size: number; sha: string }[] = [];
+    const skipped: string[] = [];
+    const seen = new Set<string>();
+    for (const x of read) {
+      if (seen.has(x.sha)) continue;
+      seen.add(x.sha);
+      const r = await tx.execute(sql`
+        INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, uploaded_by, participant_id)
+        VALUES (${staff.tenant.id}, ${campaign.id}, ${role}, ${x.file.name}, ${x.file.type || null}, ${x.file.size}, ${x.sha}, ${x.bytes},
+                ${sender || null}, ${senderType || null}, ${staff.user.id}, ${together})
+        ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
+      const fid = (r.rows[0] as { id: string } | undefined)?.id;
+      if (fid) added.push({ id: fid, name: x.file.name, size: x.file.size, sha: x.sha });
+      else skipped.push(x.file.name);
+    }
+    if (together && !added.length) await tx.execute(sql`DELETE FROM participants WHERE id = ${together}`);
+    return { added, skipped };
+  });
+  if (!added.length) return { error: skipped.length === 1 ? "Diese Datei liegt schon vor." : "Diese Dateien liegen schon vor.", values };
+  for (const f of added)
+    await audit(staff.tenant.id, staff.user.id, "campaign.upload", campaign.id, { filename: f.name, role, size: f.size, sha256: f.sha, together: added.length });
   // In preparation the machine reads a new statement right away (E4 → Z1–Z5).
-  const reading = campaign.state === "vorbereitung" && role === "stellungnahme";
-  if (reading) await enqueue(staff.tenant.id, campaign.id, "zerlegen", (r.rows[0] as { id: string }).id);
+  const reading = campaign.state === "vorbereitung" && statement;
+  if (reading) for (const f of added) await enqueue(staff.tenant.id, campaign.id, "zerlegen", f.id);
   revalidatePath(`/verwaltung/${id}`, "layout");
-  return { ok: `„${file.name}“ hochgeladen.${reading ? " Die Maschine liest sie jetzt." : ""}` };
+  const what = added.length === 1 ? `„${added[0]!.name}“ hochgeladen.` : `${added.length} Dateien hochgeladen${statement ? ", sie zählen als ein Absender" : ""}.`;
+  const dup = skipped.length ? ` ${skipped.map((n) => `„${n}“`).join(", ")} ${skipped.length === 1 ? "lag" : "lagen"} schon vor.` : "";
+  return { ok: `${what}${dup}${reading ? " Die Maschine liest jetzt." : ""}` };
 }
 
 export async function deleteFile(id: string, fileId: string): Promise<void> {
   const { staff, campaign } = await own(id);
   // A statement the machine has read stays: its moves are evidence in the editors' queue.
   const r = await getDb().execute(sql`
-    DELETE FROM campaign_files WHERE id = ${fileId} AND campaign_id = ${campaign.id} AND submission_id IS NULL RETURNING filename`);
-  if (r.rows.length) await audit(staff.tenant.id, staff.user.id, "campaign.delete_file", campaign.id, { filename: (r.rows[0] as { filename: string }).filename });
+    DELETE FROM campaign_files WHERE id = ${fileId} AND campaign_id = ${campaign.id} AND submission_id IS NULL RETURNING filename, participant_id`);
+  const gone = r.rows[0] as { filename: string; participant_id: string | null } | undefined;
+  if (gone) {
+    await dropEmptySender(gone.participant_id);
+    await audit(staff.tenant.id, staff.user.id, "campaign.delete_file", campaign.id, { filename: gone.filename });
+  }
   revalidatePath(`/verwaltung/${id}`, "layout");
 }
 

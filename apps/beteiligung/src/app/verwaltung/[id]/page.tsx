@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { knownSenders } from "@/lib/absender";
 import { getCampaign, inviteCounts, listFiles } from "@/lib/campaigns";
 import { appUrl } from "@/lib/mail";
 import { STEPS } from "@/lib/params";
@@ -26,14 +27,32 @@ export default async function CampaignPage({ params, searchParams }: { params: P
   const { fehler } = await searchParams;
   const campaign = await getCampaign(staff.tenant.id, id);
   if (!campaign) notFound();
-  const [files, open, invites] = await Promise.all([listFiles(campaign.id), openingCheck(campaign.consultationId), inviteCounts(campaign.id)]);
+  const [files, open, invites, senders] = await Promise.all([
+    listFiles(campaign.id),
+    openingCheck(campaign.consultationId),
+    inviteCounts(campaign.id),
+    knownSenders(campaign.id),
+  ]);
   // After closing, the procedure stays as it was evaluated: result, report and published pages refer to it.
   const settled = ["auswertung", "bericht", "veroeffentlicht"].includes(campaign.state);
   const editable = staff.role === "initiator" && !settled;
   const preparing = campaign.state === "entwurf" || campaign.state === "vorbereitung";
   const publicPath = `/${staff.tenant.slug}/${campaign.slug}`;
   const stepsDone = STEPS.filter((s) => campaign.steps[s.key]).length;
-  const statements = files.filter((f) => f.role === "stellungnahme").length;
+  const statementFiles = files.filter((f) => f.role === "stellungnahme");
+  const statements = statementFiles.length;
+  // Several files of one sender (a statement and its attachments) are one sender: "Datei 2 von 3".
+  const groupSize = new Map<string, number>();
+  for (const f of statementFiles) groupSize.set(f.senderGroup!, (groupSize.get(f.senderGroup!) ?? 0) + 1);
+  const senderCount = groupSize.size;
+  const seenInGroup = new Map<string, number>();
+  const placeInGroup = new Map(
+    statementFiles.map((f) => {
+      const i = (seenInGroup.get(f.senderGroup!) ?? 0) + 1;
+      seenInGroup.set(f.senderGroup!, i);
+      return [f.id, { i, n: groupSize.get(f.senderGroup!)! }];
+    }),
+  );
 
   const setup = [
     { done: true, text: "Maßnahme und Entscheidungsfrage stehen." },
@@ -42,7 +61,11 @@ export default async function CampaignPage({ params, searchParams }: { params: P
     { done: files.some((f) => f.role === "entwurf"), text: "Der Entwurf ist hochgeladen (optional)." },
     {
       done: statements > 0,
-      text: statements ? `${statements} vorhandene ${statements === 1 ? "Stellungnahme" : "Stellungnahmen"} (optional).` : "Vorhandene Stellungnahmen (optional).",
+      text: !statements
+        ? "Vorhandene Stellungnahmen (optional)."
+        : senderCount === statements
+          ? `${statements} vorhandene ${statements === 1 ? "Stellungnahme" : "Stellungnahmen"} (optional).`
+          : `Vorhandene Stellungnahmen von ${senderCount} ${senderCount === 1 ? "Absender" : "Absendern"}, ${statements} Dateien (optional).`,
     },
   ];
   const opening = [
@@ -134,9 +157,12 @@ export default async function CampaignPage({ params, searchParams }: { params: P
                   <span className="tag">{ROLE[f.role]}</span>
                   <span className="file-name">{f.filename}</span>
                   <span className="muted small">
-                    {f.sender ? `${f.sender}, ` : ""}
+                    {f.sender ? `${f.sender}, ` : f.role === "stellungnahme" ? (f.door3 ? "über die Beteiligung, " : "Privatperson, ") : ""}
                     {kb(f.size)}
                     {f.role === "stellungnahme" && f.read ? `, ${f.moves} ${f.moves === 1 ? "Beitrag" : "Beiträge"}` : ""}
+                    {placeInGroup.get(f.id) && placeInGroup.get(f.id)!.n > 1
+                      ? `, Datei ${placeInGroup.get(f.id)!.i} von ${placeInGroup.get(f.id)!.n} desselben Absenders`
+                      : ""}
                   </span>
                   {editable && preparing && !f.read ? (
                     <form action={deleteFile.bind(null, campaign.id, f.id)}>
@@ -156,7 +182,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
           {files.some((f) => f.read) ? (
             <p className="small muted">Gelesene Stellungnahmen bleiben: Ihre Beiträge sind schon in der Redaktion.</p>
           ) : null}
-          {editable && preparing ? <UploadForm id={campaign.id} /> : null}
+          {editable && preparing ? <UploadForm id={campaign.id} senders={senders} /> : null}
           {staff.role !== "betrachter" && (preparing || campaign.state === "offen") ? (
             <div className="letter">
               <h3>Brief, Anruf oder Bürgerbüro eintragen</h3>
@@ -164,7 +190,7 @@ export default async function CampaignPage({ params, searchParams }: { params: P
                 Wer nicht online mitmacht, zählt genauso. Tippen Sie den Beitrag ab oder hängen Sie einen Scan an; die Maschine zerlegt ihn wie jede
                 Stellungnahme, und die Redaktion entscheidet wie immer.
               </p>
-              <LetterForm id={campaign.id} />
+              <LetterForm id={campaign.id} senders={senders} />
             </div>
           ) : null}
         </section>

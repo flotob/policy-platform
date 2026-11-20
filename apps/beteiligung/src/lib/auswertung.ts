@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { sql } from "@policy/db";
 import { evaluate, type BelegKey, type Ergebnis, type EvaluateInput, type MoveIn, type NodeIn, type SourceIn } from "@policy/pipeline/kern";
 
+import { townSenders } from "./absender";
 import type { CampNaming } from "./bericht";
 import type { Campaign } from "./campaigns";
 import { getDb } from "./db";
@@ -57,7 +58,7 @@ const isPrivate = (m: Row) => !m.author_org || m.author_type === "privat";
 const dateDe = (d: unknown) => (d ? new Date(String(d)).toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }) : "");
 
 async function loadInput(c: Campaign): Promise<EvaluateInput> {
-  const [nodes, moves, votes, participants, sat, counts] = await Promise.all([
+  const [nodes, moves, votes, participants, sat, counts, senders] = await Promise.all([
     rows(sql`
       SELECT id, ord, text, typ, rolle, schritt, frage, richtung, version FROM map_points
       WHERE consultation_id = ${c.consultationId} AND rolle IS NOT NULL AND status = 'released'`),
@@ -75,10 +76,13 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
       SELECT p.id, p.via, EXISTS (SELECT 1 FROM campaign_invites i WHERE i.participant_id = p.id AND i.kind = 'gelost') AS drawn
       FROM participants p WHERE p.consultation_id = ${c.consultationId}`),
     saturation(c),
+    // Statements are counted by sender, not by file: a statement with its attachments is one (lib/absender.ts).
+    // Citizens' uploads (door 3) are the files with a participant and no staff member behind them.
     rows(sql`
       SELECT (SELECT count(*) FROM submissions WHERE consultation_id = ${c.consultationId} AND door = 'statement')::int AS short_points,
-             (SELECT count(*) FROM campaign_files WHERE campaign_id = ${c.id} AND participant_id IS NOT NULL)::int AS uploads,
-             (SELECT count(*) FROM campaign_files WHERE campaign_id = ${c.id} AND role = 'stellungnahme' AND participant_id IS NULL)::int AS files`),
+             (SELECT count(DISTINCT participant_id) FROM campaign_files
+               WHERE campaign_id = ${c.id} AND participant_id IS NOT NULL AND uploaded_by IS NULL)::int AS uploads`),
+    townSenders(c.id),
   ]);
 
   const source = (m: Row): SourceIn => {
@@ -132,7 +136,7 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
     },
     params: { bridgeThreshold: c.params.bridgeThreshold, minParticipants: c.params.minParticipants },
     saturation: { inputs: sat.inputs, newPoints: sat.newPoints, streak: sat.streak, window: sat.window, saturated: sat.saturated, series: sat.series },
-    inputs: { shortPoints: Number(x.short_points), uploads: Number(x.uploads), files: Number(x.files) },
+    inputs: { shortPoints: Number(x.short_points), uploads: Number(x.uploads), files: senders },
   };
 }
 

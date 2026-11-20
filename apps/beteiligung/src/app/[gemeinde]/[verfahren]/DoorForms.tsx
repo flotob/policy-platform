@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { FilePicker } from "@/components/FilePicker";
 import { READABLE_ACCEPT } from "@/lib/files";
 
 import { startWithCode, submitShort, uploadStatement, type DoorState } from "./actions";
@@ -75,8 +76,8 @@ export function ShortForm({ gemeinde, verfahren, needsCode }: { gemeinde: string
   );
 }
 
-/** Door 3: a full statement, as a private person or for an organisation. */
-export function UploadForm({ gemeinde, verfahren, needsCode }: { gemeinde: string; verfahren: string; needsCode: boolean }) {
+/** Door 3: a full statement (with its attachments, if any), as a private person or for an organisation. */
+export function UploadForm({ gemeinde, verfahren, needsCode, filesPerDay }: { gemeinde: string; verfahren: string; needsCode: boolean; filesPerDay: number }) {
   const [state, action] = useActionState<DoorState, FormData>(uploadStatement.bind(null, gemeinde, verfahren), {});
   const [als, setAls] = useState(state.values?.als ?? "privat");
   return (
@@ -112,11 +113,15 @@ export function UploadForm({ gemeinde, verfahren, needsCode }: { gemeinde: strin
           </div>
         </div>
       ) : null}
-      <div className="field">
-        <label htmlFor="file">Datei</label>
-        <input id="file" name="file" type="file" className="input file-input" accept={READABLE_ACCEPT} required />
-        <span className="hint">PDF, Word, Text oder ein Foto des Briefs, bis 20 MB. Auch eingescannte Seiten liest die Maschine.</span>
-      </div>
+      <FilePicker
+        id="file"
+        name="file"
+        label="Datei oder Dateien"
+        accept={READABLE_ACCEPT}
+        required
+        together="Sie zählen zusammen als deine Stellungnahme."
+        hint={`Deine Stellungnahme und ihre Anlagen gern auf einmal, bis zu ${filesPerDay} Dateien am Tag, je bis 20 MB. PDF, Word, Text oder ein Foto des Briefs; auch eingescannte Seiten liest die Maschine.`}
+      />
       {needsCode ? (
         <div className="field">
           <label htmlFor="code3">Dein Einladungscode</label>
