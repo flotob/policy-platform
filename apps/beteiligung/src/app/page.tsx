@@ -54,7 +54,7 @@ export default async function Home() {
               <Link href="/registrieren" className="btn">
                 Verfahren anlegen
               </Link>
-              <Link href="/musterstadt/solarpflicht" className="btn btn-quiet">
+              <Link href="/musterstadt" className="btn btn-quiet">
                 Beispiel ansehen
               </Link>
             </div>

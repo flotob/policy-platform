@@ -17,7 +17,7 @@ export async function SiteHeader() {
         </Link>
         <nav className="site-nav" aria-label="Hauptnavigation">
           <Link href="/#ablauf">So funktioniert es</Link>
-          <Link href="/musterstadt/solarpflicht">Beispiel</Link>
+          <Link href="/musterstadt">Beispiel</Link>
           {staff ? (
             <Link href="/verwaltung" className="btn btn-small">
               Meine Kommune

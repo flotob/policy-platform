@@ -95,6 +95,12 @@ export async function getPublicCampaign(tenantSlug: string, slug: string) {
   return { ...toCampaign(x), tenant: { name: x.tenant_name as string, slug: x.tenant_slug as string }, preview };
 }
 
+/** A town's public procedures (everything past the draft), newest change first: its public page lists them. */
+export async function publicCampaignsOf(tenantId: string): Promise<Campaign[]> {
+  const r = await rows(sql`SELECT * FROM campaigns WHERE tenant_id = ${tenantId} AND state <> 'entwurf' ORDER BY updated_at DESC`);
+  return r.map(toCampaign);
+}
+
 /** Whether the logged-in staff member belongs to this town (session loaded only when needed: scripts import this file). */
 export async function ownTeam(tenantId: string): Promise<boolean> {
   const { getStaff } = await import("./session");

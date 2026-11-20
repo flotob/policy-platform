@@ -170,3 +170,19 @@
 .print-letter-url { font-family: var(--sans); font-weight: 600; }
 .print-letter-pin { font-family: var(--sans); font-size: 18pt; font-weight: 700; letter-spacing: 0.08em; margin: 1mm 0 0; }
 .cp-hint { max-width: 72ch; margin: 0 0 10px; }
+
+/* Settings: the town's public address, its photos, its links. */
+.public-address { margin-top: 20px; padding: 18px 20px; border-radius: 12px; background: var(--agree-soft); }
+.public-address h2 { font-size: 15px; font-weight: 600; font-family: var(--sans); margin: 0; }
+.public-address-url { margin-top: 4px; font-family: var(--serif); font-size: 22px; font-weight: 600; overflow-wrap: anywhere; }
+.public-address .small { margin-top: 6px; max-width: 60ch; }
+.public-address-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.image-form .image-preview { display: block; width: 100%; max-height: 180px; object-fit: cover; border-radius: 10px; margin-bottom: 16px; }
+.image-form-portrait .image-preview { width: 88px; height: 88px; border-radius: 50%; }
+.image-form-portrait { margin-top: 12px; }
+.link-rows { display: grid; gap: 8px; margin-top: 10px; }
+.link-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 8px; }
+.link-row[hidden] { display: none; }
+.link-add { margin-top: 8px; justify-self: start; }
+@media (max-width: 560px) { .link-row { grid-template-columns: minmax(0, 1fr); } }
+.ws-public { margin-top: 6px; }

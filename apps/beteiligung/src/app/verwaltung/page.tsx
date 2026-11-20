@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { listCampaigns } from "@/lib/campaigns";
 import { kommuneById } from "@/lib/kommune";
+import { appUrl } from "@/lib/mail";
 import { listTeam } from "@/lib/team";
 import { STATES } from "@/lib/params";
 import { requireStaff } from "@/lib/session";
@@ -45,6 +46,12 @@ export default async function Verwaltung({ searchParams }: { searchParams: Promi
         <div>
           <h1>Verfahren</h1>
           <p className="muted">Jedes Verfahren stellt eine Maßnahme zur Diskussion.</p>
+          <p className="small ws-public">
+            Ihre öffentliche Seite:{" "}
+            <Link href={`/${staff.tenant.slug}`} target="_blank">
+              {appUrl(`/${staff.tenant.slug}`).replace(/^https?:\/\//, "")}
+            </Link>
+          </p>
         </div>
         {staff.role === "initiator" ? (
           <Link href="/verwaltung/neu" className="btn">
