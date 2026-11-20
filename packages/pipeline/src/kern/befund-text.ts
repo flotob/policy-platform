@@ -5,6 +5,7 @@
  */
 
 import type { BelegKey, CampCount, Category, Ergebnis, Status, StatementOut, StepOut, Verdict } from "./befund.ts";
+import { carries, MIN_CAMP_VOTES, rejects } from "./position.ts";
 
 export type CampNames = (string | null | undefined)[] | null | undefined;
 
@@ -20,6 +21,8 @@ const WORDS = ["null", "eine", "zwei", "drei", "vier", "fünf", "sechs", "sieben
 export const word = (n: number, female = true) => (n === 1 ? (female ? "eine" : "ein") : (WORDS[n] ?? String(n)));
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
+/** "A, B und C" */
+const andList = (xs: string[]) => (xs.length < 2 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}`);
 export const pct = (n: number, of: number) => (of ? Math.round((100 * n) / of) : 0);
 
 const both = (k: number) => (k === 2 ? "beide" : "alle");
@@ -104,9 +107,7 @@ export function evidenceText(s: StatementOut): string | null {
   return [d ? `Dafür: ${d}.` : "", g ? `Dagegen: ${g}.` : ""].filter(Boolean).join(" ");
 }
 
-/** "72 % im Lager „Klima zuerst“, 18 % im Lager „Kosten & Freiheit“" */
-/** Fewer votes than this in a camp are not the camp's position (a statistical floor, not a policy threshold). */
-export const MIN_CAMP_VOTES = 3;
+export { MIN_CAMP_VOTES };
 
 /** "62 % im Lager „A“, zu wenige Stimmen im Lager „B“": no percentage where a camp hardly voted. */
 export function campShares(s: StatementOut, names: CampNames, field: "agree" | "disagree" = "agree"): string {
@@ -114,6 +115,38 @@ export function campShares(s: StatementOut, names: CampNames, field: "agree" | "
 }
 
 const perCamp = campShares;
+
+/**
+ * Who stands where on one statement, for any number of camps: "das Lager „A“ stimmt zu (86 % dafür, 9 %
+ * dagegen) und das Lager „B“ lehnt ab (19 % dafür, 72 % dagegen)". The verb is the camp's position by the
+ * bridge rule; both shares stand with it, so "unentschieden" at 23 % dafür explains itself.
+ */
+export function sidesText(s: StatementOut, names: CampNames, t: number): string {
+  return andList(
+    s.camps.map((c, g) => {
+      const who = `das ${campLabel(names, g)}`;
+      if (c.seen < MIN_CAMP_VOTES) return `${who} hat zu wenig abgestimmt`;
+      const p = `${pct(c.agree, c.seen)} % dafür, ${pct(c.disagree, c.seen)} % dagegen`;
+      return carries(c, t) ? `${who} stimmt zu (${p})` : rejects(c, t) ? `${who} lehnt ab (${p})` : `${who} ist unentschieden (${p})`;
+    }),
+  );
+}
+
+/** With three or more camps: which two stand closest, which two furthest apart. Null otherwise. */
+export function pairsText(r: Ergebnis, names: CampNames): string | null {
+  const ps = r.pairs;
+  if (!ps || ps.length < 2) return null;
+  const score = (x: (typeof ps)[number]) => x.einig - x.getrennt;
+  const sorted = [...ps].sort((a, b) => score(b) - score(a) || a.camps[0] - b.camps[0] || a.camps[1] - b.camps[1]);
+  const close = sorted[0]!;
+  const far = sorted[sorted.length - 1]!;
+  const two = (x: (typeof ps)[number]) => `das ${campLabel(names, x.camps[0])} und das ${campLabel(names, x.camps[1])}`;
+  const n = (x: number) => (x <= 12 ? word(x, false) : String(x));
+  return (
+    `Am nächsten stehen sich ${two(close)}: Bei ${n(close.einig)} ${pl(close.einig, "Aussage", "Aussagen")} haben sie dieselbe Haltung, bei ${n(close.getrennt)} trennen sie sich. ` +
+    `Am weitesten auseinander liegen ${two(far)}: dieselbe Haltung bei ${n(far.einig)}, getrennt bei ${n(far.getrennt)}.`
+  );
+}
 
 /** The reading of one statement ("Befund"), from its profile, type and role. */
 export function readingOf(s: StatementOut, r: Ergebnis, names: CampNames): string[] {
@@ -193,30 +226,34 @@ export function stepText(step: StepOut, r: Ergebnis): string {
   }
   const weak = c.einseitig ?? 0;
   if (weak && step.verdict !== "faellt") out.push(`${cap(word(weak))} ${pl(weak, "Stütze trägt", "Stützen tragen")} nur in einem Teil der Lager.`);
-  if (step.unasked.length) out.push(`${step.unasked.length === 1 ? "Einen Einwand" : `${cap(word(step.unasked.length))} Einwände`} hat niemand erhoben.`);
+  // Without any attack every possible objection is unraised; saying so twice reads like a contradiction.
+  if (step.attacks && step.unasked.length) {
+    out.push(`${step.unasked.length === 1 ? "Einen möglichen Einwand" : `${cap(word(step.unasked.length))} mögliche Einwände`} hat niemand erhoben.`);
+  }
   return out.join(" ");
 }
 
-/** "Stufe 1 und 2 halten, Stufe 3 wackelt, Stufe 4 fällt." */
-export function stepsLine(r: Ergebnis): string {
-  const by = (v: Verdict) => r.steps.map((s, i) => (s.verdict === v ? i + 1 : 0)).filter(Boolean);
-  const list = (xs: number[]) => (xs.length === 1 ? String(xs[0]) : `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}`);
+/**
+ * "Stufe 1 und 2 halten, Stufe 3 wackelt, Stufe 4 fällt." — or, for a reader who has not seen the step
+ * scheme (the report), by name: "Die Stufen „So ist die Lage“ und „…“ halten, „…“ wackelt, „…“ fällt."
+ */
+export function stepsLine(r: Ergebnis, byName = false): string {
+  const by = (v: Verdict) => r.steps.flatMap((s, i) => (s.verdict === v ? [byName ? `„${s.label}“` : String(i + 1)] : []));
   const verb: Record<Verdict, [string, string]> = { haelt: ["hält", "halten"], wackelt: ["wackelt", "wackeln"], faellt: ["fällt", "fallen"] };
-  const parts = (["haelt", "wackelt", "faellt"] as Verdict[])
-    .map((v) => {
-      const xs = by(v);
-      return xs.length ? `Stufe ${list(xs)} ${xs.length === 1 ? verb[v][0] : verb[v][1]}` : "";
-    })
-    .filter(Boolean);
+  const groups = (["haelt", "wackelt", "faellt"] as Verdict[]).map((v) => ({ v, xs: by(v) })).filter((g) => g.xs.length);
+  const parts = groups.map(({ v, xs }, i) => {
+    const head = !byName ? "Stufe " : i === 0 ? (xs.length === 1 ? "Die Stufe " : "Die Stufen ") : "";
+    return `${head}${andList(xs)} ${xs.length === 1 ? verb[v][0] : verb[v][1]}`;
+  });
   return `${parts.join(", ")}.`;
 }
 
 /** "Also": the conclusion from the four verdicts. */
-export function conclusionText(r: Ergebnis): string {
+export function conclusionText(r: Ergebnis, byName = false): string {
   const root = r.statements.find((s) => s.rolle === "schluss")?.text ?? "die Maßnahme";
   const falls = r.steps.some((s) => s.verdict === "faellt");
   const shaky = r.steps.some((s) => s.verdict === "wackelt");
-  const line = stepsLine(r);
+  const line = stepsLine(r, byName);
   if (falls && !shaky)
     return `${line} Der Schluss „${root}“ ist nicht widerlegt, aber er ist auch nicht aus Evidenz zu ziehen: Was ihn trägt oder kippt, ist eine Wertung. Sie gehört in den Rat.`;
   if (falls) return `${line} Der Schluss „${root}“ hängt an einer Wertung, die der Rat entscheiden muss, und an Punkten, die sich vorher klären oder ausgestalten lassen.`;
@@ -235,67 +272,100 @@ export function schemeConclusion(r: Ergebnis): string {
 
 export type Segment = { text: string } | { text: string; nr: number };
 
+/**
+ * What divides the camps, counted the way the report's sections count it: value questions and design
+ * questions (the council decides) and fact questions the camps are split on (a study can settle them).
+ * The measure itself is not among them; it has its own sentence.
+ */
+export function disputeCounts(r: Ergebnis): { values: number; design: number; facts: number } {
+  const own = r.statements.filter((s) => s.rolle !== "schluss");
+  return {
+    values: own.filter((s) => s.category === "streit" && s.typ === "W").length,
+    design: own.filter((s) => s.category === "streit" && s.typ !== "W").length,
+    facts: own.filter((s) => s.category === "klaerbar" && s.profile === "trennt").length,
+  };
+}
+
 /** The headline under the title: how many statements carry, and what the dispute comes down to. */
 export function headline(r: Ergebnis): { lead: string; rest: Segment[] } {
   const k = r.camps?.k ?? 0;
   const n = r.statements.length;
-  const carried = r.statements.filter((s) => s.profile === "getragen").length;
+  // Counted as the report counts: firm bridges, bridges that did not pass a check, agreement only for show.
+  const firm = r.statements.filter((s) => s.profile === "getragen" && firmBridge(s)).length;
+  const shaky = r.statements.filter((s) => s.profile === "getragen" && s.category === "bruecke" && !firmBridge(s)).length;
+  const sham = r.statements.filter((s) => s.category === "warnung").length;
   const rejected = r.statements.filter((s) => s.profile === "abgelehnt").length;
+  const more = (x: number) => (x === 1 ? "eine weitere" : `${word(x)} weitere`);
+  const extra = [shaky ? `${more(shaky)} nur unter Vorbehalt` : "", sham ? `${more(sham)} nur zum Schein` : "", rejected ? `${word(rejected)} lehnen ${both(k)} ab` : ""].filter(Boolean);
   const lead =
     (n === 1
-      ? `Die einzige Aussage trägt ${carried ? "" : "nicht "}in ${bothDat(k)} Lagern`
-      : carried
-        ? `${cap(word(carried))} von ${word(n)} Aussagen ${pl(carried, "trägt", "tragen")} in ${bothDat(k)} Lagern`
-        : `Keine der ${word(n)} Aussagen trägt in ${bothDat(k)} Lagern`) +
-    (rejected ? `, ${word(rejected)} lehnen ${both(k)} ab.` : ".");
+      ? `Die einzige Aussage trägt ${firm ? "" : "nicht "}in ${bothDat(k)} Lagern`
+      : firm
+        ? `${cap(word(firm))} von ${word(n)} Aussagen ${pl(firm, "trägt", "tragen")} in ${bothDat(k)} Lagern`
+        : `Keine der ${word(n)} Aussagen trägt in ${bothDat(k)} Lagern`) + (extra.length ? `, ${andList(extra)}.` : ".");
   const d = r.diagnoses[0];
   if (!d) return { lead, rest: [] };
   const core = r.core[0] ? r.statements.find((s) => s.nr === r.core[0]) : undefined;
-  const vals = d.artNodes.filter((x) => r.statements.find((s) => s.nr === x)?.typ === "W").length;
-  const facts = d.artNodes.length - vals;
+  const { values: vals, design, facts } = disputeCounts(r);
+  const kinds = andList(
+    [
+      vals ? `${word(vals)} ${pl(vals, "Wertungsfrage", "Wertungsfragen")}` : "",
+      design ? `${word(design)} ${pl(design, "Frage", "Fragen")} der Ausgestaltung` : "",
+      facts ? `${word(facts)} ${pl(facts, "Tatsachenfrage", "Tatsachenfragen")}` : "",
+    ].filter(Boolean),
+  );
+  const coreSegs: Segment[] = core ? [{ text: "Am weitesten auseinander liegen die Lager hier", nr: core.nr }, { text: `: „${core.text}“ ` }] : [];
+  const designNote = design ? ` Dazu ${pl(design, "kommt eine Frage", `kommen ${word(design)} Fragen`)} der Ausgestaltung, die der Rat im Beschluss regeln kann.` : "";
   switch (d.art) {
     case "wertkonflikt":
       return {
         lead,
         rest:
           vals === 1 && core
-            ? [{ text: "Der ganze Streit hat sich auf " }, { text: "eine einzige Frage", nr: core.nr }, { text: ` verengt, und die ist keine Tatsachenfrage: „${core.text}“ Das entscheidet kein Gutachten. Das entscheidet der Rat.` }]
-            : [
-                { text: `Der Streit hat sich auf ${word(vals)} Fragen verengt, und es sind keine Tatsachenfragen. ` },
-                ...(core ? [{ text: "Am weitesten auseinander liegen die Lager hier", nr: core.nr }, { text: `: „${core.text}“ ` }] : []),
-                { text: "Das entscheidet kein Gutachten. Das entscheidet der Rat." },
-              ],
+            ? [
+                { text: "Der ganze Streit hat sich auf " },
+                { text: "eine einzige Wertungsfrage", nr: core.nr },
+                { text: ` verengt: „${core.text}“ Das entscheidet kein Gutachten. Das entscheidet der Rat.${designNote}` },
+              ]
+            : [{ text: `Die Lager trennen ${kinds}, aber keine Tatsachenfrage. ` }, ...coreSegs, { text: "Das entscheidet kein Gutachten. Das entscheidet der Rat." }],
       };
     case "scheinfaktenstreit":
       return {
         lead,
-        rest: [{ text: `Gestritten wird über Tatsachen: ${word(facts)} ${pl(facts, "Frage lässt", "Fragen lassen")} sich mit einem Gutachten klären. In den Wertungen sind sich die Lager näher, als es scheint.` }],
+        rest: [
+          {
+            text: `Gestritten wird über Tatsachen: ${word(facts)} ${pl(facts, "Frage lässt", "Fragen lassen")} sich mit einem Gutachten klären. In den Wertungen sind sich die Lager näher, als es scheint.${designNote}`,
+          },
+        ],
       };
     case "gemischt":
       return {
         lead,
-        rest: [
-          { text: `Die Lager trennen ${word(vals)} ${pl(vals, "Wertungsfrage", "Wertungsfragen")} und ${word(facts)} ${pl(facts, "Tatsachenfrage", "Tatsachenfragen")}. Die Tatsachen kann ein Gutachten klären, die Wertungen entscheidet der Rat. ` },
-          ...(core ? [{ text: "Am weitesten auseinander liegen die Lager hier", nr: core.nr }, { text: `: „${core.text}“` }] : []),
-        ],
+        rest: [{ text: `Die Lager trennen ${kinds}. Die Tatsachen kann ein Gutachten klären, ${design ? "Wertungen und Ausgestaltung" : "die Wertungen"} entscheidet der Rat. ` }, ...coreSegs],
       };
     default:
-      return { lead, rest: [{ text: "Keine Aussage trennt die Lager." }] };
+      return { lead, rest: [{ text: design ? `Die Lager trennen nur ${kinds}. Der Rat kann sie im Beschluss regeln.` : "Keine Aussage trennt die Lager." }] };
   }
 }
 
-/** W5 in words, for one camp pair. */
+/** W5 in words: the measure itself and what divides the camps — all of them, or the pair `i` points to. */
 export function diagnosisText(r: Ergebnis, names: CampNames, i = 0): string {
   const d = r.diagnoses[i];
   if (!d) return "";
-  const [g, h] = d.camps;
-  const pair = `das ${campLabel(names, g)} und das ${campLabel(names, h)}`;
+  const gs = d.camps;
+  const two = gs.length === 2;
+  const who = two ? `das ${campLabel(names, gs[0]!)} und das ${campLabel(names, gs[1]!)}` : `die ${word(gs.length, false)} Lager`;
+  const root = r.statements.find((s) => s.rolle === "schluss");
+  // diagnoses[0] compares all camps (in order); with three or more, say who stands where.
+  const where = !two && root ? `: ${sidesText(root, names, r.params.bridgeThreshold)}` : "";
   const s = {
-    bruecke_gruende: `Über die Maßnahme selbst sind sich ${pair} einig, und auch über die Gründe der Stadt: eine Brücke der Gründe, die hält.`,
-    bruecke_ergebnisse: `Über die Maßnahme selbst sind sich ${pair} einig, aber nicht über die Gründe dafür: eine Brücke der Ergebnisse, die bei der ersten Ausgestaltungsfrage brechen kann.`,
-    abgelehnt: `Die Maßnahme selbst lehnen ${pair} beide ab.`,
-    streit: `Über die Maßnahme selbst sind sich ${pair} nicht einig.`,
-    offen: `Über die Maßnahme selbst hat sich weder das ${campLabel(names, g)} noch das ${campLabel(names, h)} klar festgelegt.`,
+    bruecke_gruende: `Über die Maßnahme selbst sind sich ${who} einig, und auch über die Gründe der Stadt: eine Brücke der Gründe, die hält.`,
+    bruecke_ergebnisse: `Über die Maßnahme selbst sind sich ${who} einig, aber nicht über die Gründe dafür: eine Brücke der Ergebnisse, die bei der ersten Ausgestaltungsfrage brechen kann.`,
+    abgelehnt: two ? `Die Maßnahme selbst lehnen ${who} beide ab.` : `Die Maßnahme selbst lehnen ${who} ab.`,
+    streit: `Über die Maßnahme selbst sind sich ${who} nicht einig${where}.`,
+    offen: two
+      ? `Über die Maßnahme selbst hat sich weder das ${campLabel(names, gs[0]!)} noch das ${campLabel(names, gs[1]!)} klar festgelegt.`
+      : "Über die Maßnahme selbst hat sich keines der Lager klar festgelegt.",
   }[d.schluss];
   const a = {
     wertkonflikt: "Die Tatsachen sind zwischen ihnen nicht strittig; was sie trennt, sind Wertungen: ein klarer Wertkonflikt.",

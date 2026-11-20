@@ -15,7 +15,7 @@ import {
   type VoteIn,
 } from "../src/kern/befund.ts";
 import { checkRules, conclusions } from "../src/kern/bericht.ts";
-import { checkLines, countLine, firmBridge, headline, lotSummary, readingOf, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
+import { checkLines, countLine, diagnosisText, firmBridge, headline, lotSummary, readingOf, sidesText, smallHeadline, stepText, tallyOf } from "../src/kern/befund-text.ts";
 
 /** A camp of 100 with this agreement and disagreement in percent (the rest passes). */
 const camp = (agree: number, disagree = 100 - agree - 10): CampCount => ({ agree, disagree: Math.max(0, disagree), pass: 100 - agree - Math.max(0, disagree), seen: 100 });
@@ -310,5 +310,95 @@ describe("evaluate", () => {
     expect(headline(r).lead).toMatch(/von acht Aussagen tragen in beiden Lagern/);
     expect(readingOf(by("value"), r, ["Klima zuerst", "Kosten & Freiheit"]).join(" ")).toMatch(/Lager „Klima zuerst“/);
     expect(stepText(r.steps[3]!, r)).toMatch(/^Die Stufe fällt\./);
+  });
+});
+
+describe("three camps", () => {
+  // A (10) and C (6) want the measure, B (8) does not; A and B share the design question, B and C reject the value.
+  const nodes: NodeIn[] = [
+    { id: "root", ord: 1, text: "Die Stadt soll X tun.", typ: "W", rolle: "schluss", schritt: null, frage: null, richtung: null, version: 1 },
+    { id: "fact", ord: 2, text: "Die Netze haben Reserven.", typ: "T", rolle: "praemisse", schritt: "lage", frage: "lage", richtung: "stuetzt", version: 1 },
+    { id: "value", ord: 3, text: "Die Mehrkosten sind zumutbar.", typ: "W", rolle: "praemisse", schritt: "eingriff", frage: "wert", richtung: "stuetzt", version: 1 },
+    { id: "attack", ord: 4, text: "Die Mehrkosten sind für Familien nicht tragbar.", typ: "W", rolle: "beitrag", schritt: "eingriff", frage: "wert", richtung: "greift_an", version: 1 },
+    { id: "design", ord: 5, text: "Die Pflicht gilt erst ab 2028.", typ: "verfahren", rolle: "beitrag", schritt: "weg", frage: "weg", richtung: "stuetzt", version: 1 },
+    { id: "split", ord: 6, text: "Speicher senken die Kosten.", typ: "T", rolle: "beitrag", schritt: "wirkung", frage: "wirkung", richtung: "stuetzt", version: 1 },
+    { id: "shared", ord: 7, text: "Solarstrom senkt die Betriebskosten.", typ: "T", rolle: "beitrag", schritt: "wirkung", frage: "wirkung", richtung: "stuetzt", version: 1 },
+  ];
+  const sides: Record<string, -1 | 0 | 1>[] = [
+    { root: 1, fact: 1, value: 1, attack: -1, design: 1, split: 1, shared: 1 },
+    { root: -1, fact: 1, value: -1, attack: 1, design: 1, split: -1, shared: 1 },
+    { root: 1, fact: 1, value: -1, attack: 0, design: -1, split: 1, shared: 1 },
+  ];
+  const sizes = [10, 8, 6];
+  const votes: VoteIn[] = [];
+  const participants: { id: string; via: string }[] = [];
+  sizes.forEach((n, g) => {
+    for (let i = 0; i < n; i++) {
+      const id = `g${g}p${i}`;
+      participants.push({ id, via: "tuer" });
+      for (const node of nodes) votes.push({ participant: id, node: node.id, value: sides[g]![node.id]! });
+    }
+  });
+  const steps = [
+    { key: "lage" as const, label: "So ist die Lage", these: "" },
+    { key: "wirkung" as const, label: "Das bewirkt die Maßnahme", these: "" },
+    { key: "weg" as const, label: "So kommen wir ans Ziel", these: "" },
+    { key: "eingriff" as const, label: "Dafür lohnt sich der Eingriff", these: "" },
+  ];
+  const questions = [
+    { key: "lage", label: "Stimmt die Lage so?", steps: ["lage" as const] },
+    { key: "wirkung", label: "Bewirkt die Maßnahme, was sie soll?", steps: ["wirkung" as const] },
+    { key: "weg", label: "Gibt es einen besseren Weg?", steps: ["weg" as const] },
+    { key: "wert", label: "Ist das Ziel den Eingriff wert?", steps: ["eingriff" as const] },
+  ];
+  const r = evaluate({
+    nodes,
+    moves: [],
+    votes,
+    participants,
+    context: { steps, questions },
+    params: { bridgeThreshold: 0.6, minParticipants: 6 },
+    saturation: { inputs: 0, newPoints: 0, streak: 0, window: 10, saturated: false, series: [] },
+    inputs: { shortPoints: 0, uploads: 0, files: 0 },
+  });
+  const by = (id: string) => r.statements.find((s) => s.id === id)!;
+  const names = ["Klima zuerst", "Kosten im Blick", "Langsam, aber sicher"];
+
+  it("finds three camps, the largest first", () => {
+    expect(r.camps?.k).toBe(3);
+    expect(r.camps?.sizes).toEqual([10, 8, 6]);
+  });
+  it("diagnoses all three camps first, then every pair", () => {
+    expect(r.diagnoses.map((d) => d.camps)).toEqual([[0, 1, 2], [0, 1], [0, 2], [1, 2]]);
+    expect(r.diagnoses[0]?.schluss).toBe("streit");
+    expect(r.pairs?.find((p) => p.camps[0] === 0 && p.camps[1] === 2)).toEqual({ camps: [0, 2], einig: 4, getrennt: 3 });
+  });
+  it("finds the core across all camps, not just the two largest", () => {
+    expect(r.core).toContain(by("value").nr);
+    expect(by("design").category).toBe("streit");
+  });
+  it("says who stands where, for every camp", () => {
+    const d = diagnosisText(r, names, 0);
+    expect(d).toMatch(/^Über die Maßnahme selbst sind sich die drei Lager nicht einig: /);
+    expect(d).toMatch(/das Lager „Klima zuerst“ stimmt zu \(100 % dafür, 0 % dagegen\)/);
+    expect(d).toMatch(/das Lager „Kosten im Blick“ lehnt ab/);
+    expect(d).toMatch(/das Lager „Langsam, aber sicher“ stimmt zu/);
+    expect(sidesText(by("attack"), names, 0.6)).toMatch(/das Lager „Langsam, aber sicher“ ist unentschieden \(0 % dafür, 0 % dagegen\)/);
+  });
+  it("counts in the headline what the report's sections count", () => {
+    const h = headline(r);
+    expect(h.lead).toMatch(/^Zwei von sieben Aussagen tragen in allen Lagern\./);
+    expect(h.rest.map((x) => x.text).join("")).toMatch(/zwei Wertungsfragen, eine Frage der Ausgestaltung und eine Tatsachenfrage/);
+  });
+  it("R1 introduces the camps before the findings, names the closest pair, and passes the R3 rules verbatim", () => {
+    const ss = conclusions(r, names, { town: "Stadt Musterstadt", measure: "X", questions, fictional: false, editorialMode: "mensch", resultVersion: 1 });
+    const first = (section: string) => ss.findIndex((x) => x.section === section);
+    expect(ss[0]?.section).toBe("ergebnis");
+    expect(ss[0]?.text).toMatch(/drei Lager, also Gruppen, die ähnlich abgestimmt haben/);
+    expect(first("lager")).toBeLessThan(first("einig"));
+    expect(first("lesart")).toBeLessThan(first("einig"));
+    expect(ss.find((x) => x.section === "lager" && /Am nächsten stehen sich das Lager „Klima zuerst“ und das Lager „Langsam, aber sicher“/.test(x.text))).toBeTruthy();
+    expect(ss.filter((x) => x.section === "rat").map((x) => x.text).join(" ")).toMatch(/Langsam, aber sicher/);
+    expect(checkRules(ss, ss.map((x) => ({ abschnitt: x.section, text: x.text, saetze: [x.id] })))).toEqual([]);
   });
 });

@@ -22,13 +22,11 @@ import {
   buildRawMatrix,
   clusterableParticipantIds,
   findBestKmeans,
-  isSignificant,
-  onePropTest,
   runPca,
   type VoteRecord,
 } from "@policy/math";
 
-import { MIN_CAMP_VOTES } from "./befund-text.ts";
+import { carries, MIN_CAMP_VOTES, rejects } from "./position.ts";
 import type { Richtung, StepKey, Typ } from "./prompts.ts";
 
 export type Rolle = "schluss" | "praemisse" | "beitrag";
@@ -37,8 +35,7 @@ export type BelegKey = "keine" | "behauptung" | "vergleichsfall" | "studie" | "m
 /** Evidence that is more than a claim (Belegklassen with a source). */
 export const PROOF: readonly BelegKey[] = ["vergleichsfall", "studie", "messdaten"];
 
-// MIN_CAMP_VOTES (fewer votes than this in a camp are not the camp's position) lives in befund-text.ts,
-// so the sentences can say "zu wenige Stimmen" by the same rule.
+// MIN_CAMP_VOTES, carries and rejects live in position.ts, so the sentences apply the same rule.
 /** A participant needs this many votes to be placed in a camp (Polis default). */
 const MIN_VOTES = 7;
 /** The share of a camp's carrying votes a bridge must survive losing (Stephan: "die jeweils einflussreichsten Stimmen herausrechnen"). */
@@ -226,7 +223,8 @@ export interface StepOut {
 }
 
 export interface Diagnosis {
-  camps: [number, number];
+  /** The camps compared: all of them first, then (with three or more) every pair. */
+  camps: number[];
   /** About the measure itself (the root) and the town's premises. */
   schluss: "bruecke_gruende" | "bruecke_ergebnisse" | "abgelehnt" | "streit" | "offen";
   schlussNodes: number[];
@@ -288,8 +286,13 @@ export interface Ergebnis {
   diagnoses: Diagnosis[];
   gaps: Gaps;
   saturation: Saturation;
-  /** The core of the dispute: dividing value statements between the two largest camps, largest gap first. */
+  /** The core of the dispute: value statements that divide the camps, largest gap first. */
   core: number[];
+  /**
+   * With three or more camps: for every pair, on how many statements they hold the same position (both
+   * carry or both reject) and on how many one holds a position the other does not share. Absent before.
+   */
+  pairs?: { camps: [number, number]; einig: number; getrennt: number }[];
 }
 
 // ———— The rules ————
@@ -297,13 +300,7 @@ export interface Ergebnis {
 const share = (n: number, of: number) => (of ? n / of : 0);
 const pct = (n: number, of: number) => (of ? Math.round((100 * n) / of) : 0);
 
-/** A camp holds a position when enough of it voted, the share reaches the threshold and it is not chance. */
-export function carries(c: CampCount, t: number): boolean {
-  return c.seen >= MIN_CAMP_VOTES && share(c.agree, c.seen) >= t && isSignificant(onePropTest(c.agree, c.seen));
-}
-export function rejects(c: CampCount, t: number): boolean {
-  return c.seen >= MIN_CAMP_VOTES && share(c.disagree, c.seen) >= t && isSignificant(onePropTest(c.disagree, c.seen));
-}
+export { carries, rejects };
 
 /**
  * Does the bridge hang on a few votes? Take out, in every camp, a tenth of the votes that carry it
@@ -413,7 +410,12 @@ export function verdictOf(entries: { entry: Entry; typ: Typ; rolle: Rolle }[]): 
 
 /** W5 for one pair of camps. */
 export function diagnosePair(statements: StatementOut[], g: number, h: number, t: number): Diagnosis {
-  const pp = (s: StatementOut) => profileOf([s.camps[g]!, s.camps[h]!], t);
+  return diagnoseCamps(statements, [g, h], t);
+}
+
+/** W5 across the given camps: the measure itself, and whether values, facts or both divide them. */
+export function diagnoseCamps(statements: StatementOut[], gs: number[], t: number): Diagnosis {
+  const pp = (s: StatementOut) => profileOf(gs.map((g) => s.camps[g]!), t);
   const root = statements.find((s) => s.rolle === "schluss");
   const premises = statements.filter((s) => s.rolle === "praemisse");
   const dividingPremises = premises.filter((s) => pp(s) === "trennt").map((s) => s.nr);
@@ -434,7 +436,7 @@ export function diagnosePair(statements: StatementOut[], g: number, h: number, t
   const facts = others.filter((s) => s.typ === "T" && pp(s) === "trennt").map((s) => s.nr);
   const values = others.filter((s) => s.typ === "W" && pp(s) === "trennt").map((s) => s.nr);
   const art: Diagnosis["art"] = values.length && !facts.length ? "wertkonflikt" : facts.length && !values.length ? "scheinfaktenstreit" : facts.length ? "gemischt" : "einig";
-  return { camps: [g, h], schluss, schlussNodes, art, artNodes: art === "wertkonflikt" ? values : art === "scheinfaktenstreit" ? facts : [...values, ...facts] };
+  return { camps: gs, schluss, schlussNodes, art, artNodes: art === "wertkonflikt" ? values : art === "scheinfaktenstreit" ? facts : [...values, ...facts] };
 }
 
 /** The wording shown for an attack: from a contribution that may be quoted — never one that names a private person. */
@@ -700,9 +702,19 @@ export function evaluate(input: EvaluateInput): Ergebnis {
   });
   const conclusion: Verdict = steps.some((s) => s.verdict === "faellt") ? "faellt" : steps.some((s) => s.verdict === "wackelt") ? "wackelt" : "haelt";
 
-  // W5 per pair of camps.
+  // W5 across all camps; with three or more also per pair (who stands where).
   const diagnoses: Diagnosis[] = [];
-  for (let g = 0; g < k; g++) for (let h = g + 1; h < k; h++) diagnoses.push(diagnosePair(statements, g, h, t));
+  const pairs: NonNullable<Ergebnis["pairs"]> = [];
+  if (k >= 2) diagnoses.push(diagnoseCamps(statements, Array.from({ length: k }, (_, g) => g), t));
+  if (k >= 3) {
+    for (let g = 0; g < k; g++) {
+      for (let h = g + 1; h < k; h++) {
+        diagnoses.push(diagnosePair(statements, g, h, t));
+        const ps = statements.map((s) => profileOf([s.camps[g]!, s.camps[h]!], t));
+        pairs.push({ camps: [g, h], einig: ps.filter((x) => x === "getragen" || x === "abgelehnt").length, getrennt: ps.filter((x) => x === "trennt").length });
+      }
+    }
+  }
 
   // W6: gaps, from the argument entries per step and question. Answers: the town's premises and supporting
   // contributions; objections: attacks, contradictions and hidden readings (Scheinkonsens).
@@ -742,7 +754,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
   const core =
     k >= 2
       ? statements
-          .filter((s) => s.rolle !== "schluss" && s.typ === "W" && profileOf([s.camps[0]!, s.camps[1]!], t) === "trennt")
+          .filter((s) => s.rolle !== "schluss" && s.typ === "W" && s.profile === "trennt")
           .sort((a, b) => b.gap - a.gap || a.nr - b.nr)
           .map((s) => s.nr)
       : [];
@@ -775,5 +787,6 @@ export function evaluate(input: EvaluateInput): Ergebnis {
     gaps: { unasked, oneSided, unattacked },
     saturation: input.saturation,
     core,
+    ...(pairs.length ? { pairs } : {}),
   };
 }
