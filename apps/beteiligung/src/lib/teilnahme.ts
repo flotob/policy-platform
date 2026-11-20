@@ -22,7 +22,8 @@ export const LIMITS = {
   participantsPerOriginHour: 30,
   votesPerMinute: 90,
   shortPerHour: 6,
-  uploadsPerDay: 3,
+  /** Files per day (a statement and a few attachments fit in one go). */
+  uploadsPerDay: 5,
   shortMaxChars: 400,
 } as const;
 
@@ -90,8 +91,8 @@ export async function ensureParticipant(c: Campaign, invite?: string): Promise<P
   return { id, createdAt: new Date().toISOString() };
 }
 
-/** Count of a participant's recent actions (votes, short statements, uploads) against a limit. */
-export async function within(kind: "vote" | "short" | "upload", participantId: string): Promise<boolean> {
+/** Count of a participant's recent actions (votes, short statements, uploads) against a limit; `adding` files for an upload. */
+export async function within(kind: "vote" | "short" | "upload", participantId: string, adding = 1): Promise<boolean> {
   const db = getDb();
   if (kind === "vote") {
     const r = await db.execute(sql`
@@ -103,11 +104,12 @@ export async function within(kind: "vote" | "short" | "upload", participantId: s
       SELECT count(*)::int AS n FROM submissions WHERE participant_id = ${participantId} AND door = 'statement' AND created_at > now() - interval '1 hour'`);
     return Number((r.rows[0] as Row).n) < LIMITS.shortPerHour;
   }
-  // Uploads for an organisation are filed under the organisation's participant ("org:<name>|<uploader>"): they count too.
+  // Files, not uploads: each one costs the machine a reading. Uploads for an organisation are filed under the
+  // organisation's participant ("org:<name>|<uploader>"): they count too.
   const r = await db.execute(sql`
     SELECT count(*)::int AS n FROM campaign_files f JOIN participants x ON x.id = f.participant_id
     WHERE (x.id = ${participantId} OR x.source_ref LIKE ${`org:%|${participantId}`}) AND f.created_at > now() - interval '1 day'`);
-  return Number((r.rows[0] as Row).n) < LIMITS.uploadsPerDay;
+  return Number((r.rows[0] as Row).n) + adding <= LIMITS.uploadsPerDay;
 }
 
 /** A tracking-slip token: short, unambiguous to read out, unguessable. */

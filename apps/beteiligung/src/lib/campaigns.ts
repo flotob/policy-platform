@@ -1,5 +1,6 @@
 import { sql } from "@policy/db";
 
+import { senderGroup } from "./absender";
 import { confirmedTown } from "./bestaetigen";
 import { getDb } from "./db";
 import { paramsOf, type CampaignParams, type CampaignState, type Steps } from "./params";
@@ -33,6 +34,10 @@ export interface CampaignFile {
   /** Read by the machine (Z1 done), and how many moves it found in it. */
   read: boolean;
   moves: number;
+  /** Statements: files of one sender share this (lib/absender.ts) — they are one participant in the result. */
+  senderGroup: string | null;
+  /** Uploaded by a citizen (door 3), not by the town. */
+  door3: boolean;
 }
 
 type Row = Record<string, unknown>;
@@ -96,22 +101,39 @@ export async function ownTeam(tenantId: string): Promise<boolean> {
   return (await getStaff())?.tenant.id === tenantId;
 }
 
+/** The files of a procedure; a sender's statements stay together (in the order they came), so the list reads by sender. */
 export async function listFiles(campaignId: string): Promise<CampaignFile[]> {
   const r = await rows(sql`
-    SELECT f.id, f.role, f.filename, f.size, f.sender, f.sender_type, f.created_at, f.submission_id,
+    SELECT f.id, f.role, f.filename, f.size, f.sender, f.sender_type, f.created_at, f.submission_id, f.participant_id, f.uploaded_by,
+      s.participant_id AS read_by,
       (SELECT count(*) FROM moves m WHERE m.submission_id = f.submission_id)::int AS moves
-    FROM campaign_files f WHERE f.campaign_id = ${campaignId} ORDER BY f.role, f.created_at, f.filename`);
-  return r.map((x) => ({
-    id: x.id as string,
-    role: x.role as CampaignFile["role"],
-    filename: x.filename as string,
-    size: x.size as number,
-    sender: (x.sender as string | null) ?? null,
-    senderType: (x.sender_type as string | null) ?? null,
-    createdAt: String(x.created_at),
-    read: !!x.submission_id,
-    moves: Number(x.moves ?? 0),
-  }));
+    FROM campaign_files f LEFT JOIN submissions s ON s.id = f.submission_id
+    WHERE f.campaign_id = ${campaignId} ORDER BY f.role, f.created_at, f.filename`);
+  const files = r.map(
+    (x): CampaignFile => ({
+      id: x.id as string,
+      role: x.role as CampaignFile["role"],
+      filename: x.filename as string,
+      size: x.size as number,
+      sender: (x.sender as string | null) ?? null,
+      senderType: (x.sender_type as string | null) ?? null,
+      createdAt: String(x.created_at),
+      read: !!x.submission_id,
+      moves: Number(x.moves ?? 0),
+      senderGroup: x.role === "stellungnahme" ? senderGroup(x as Parameters<typeof senderGroup>[0]) : null,
+      door3: !!x.participant_id && !x.uploaded_by,
+    }),
+  );
+  // Statements by sender: a group sits where its first file came in.
+  const first = new Map<string, number>();
+  files.forEach((f, i) => {
+    if (f.senderGroup && !first.has(f.senderGroup)) first.set(f.senderGroup, i);
+  });
+  const rank = (f: CampaignFile, i: number) => (f.senderGroup ? first.get(f.senderGroup)! : i);
+  return files
+    .map((f, i) => ({ f, i, k: rank(f, i) }))
+    .sort((a, b) => a.k - b.k || a.i - b.i)
+    .map((x) => x.f);
 }
 
 /** A free slug for the municipality: "solarpflicht", "solarpflicht-2", … */

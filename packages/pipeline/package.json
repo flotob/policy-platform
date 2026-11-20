@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./prompts": "./src/prompts.ts",
     "./kern": "./src/kern/index.ts",
-    "./kern/text": "./src/kern/befund-text.ts"
+    "./kern/text": "./src/kern/befund-text.ts",
+    "./kern/absender": "./src/kern/absender.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

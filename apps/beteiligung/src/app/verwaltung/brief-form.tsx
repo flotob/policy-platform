@@ -1,19 +1,37 @@
 "use client";
 
-import { useActionState, useMemo } from "react";
+import { useActionState, useMemo, useState } from "react";
+
+import { FilePicker } from "@/components/FilePicker";
+import type { KnownSender } from "@/lib/absender";
 
 import type { ActionState } from "./actions";
 import { enterLetter } from "./brief-actions";
-import { Status } from "./forms";
+import { SenderField, Status } from "./forms";
 
-export function LetterForm({ id }: { id: string }) {
+export function LetterForm({ id, senders }: { id: string; senders: KnownSender[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(enterLetter.bind(null, id), {});
-  const v = state.values ?? {};
-  const today = new Date().toISOString().slice(0, 10);
   // After a successful entry the fields start empty again; after an error they keep what was typed.
   const formKey = useMemo(() => (state.ok ? Math.random() : 0), [state]);
   return (
     <form action={action} className="ws-form upload-form" key={formKey}>
+      <LetterFields values={state.values ?? {}} senders={senders} />
+      <div className="form-foot">
+        <button type="submit" className="btn" disabled={pending}>
+          Eintragen
+        </button>
+        <Status state={state} pending={pending} />
+      </div>
+    </form>
+  );
+}
+
+function LetterFields({ values: v, senders }: { values: Record<string, string>; senders: KnownSender[] }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [als, setAls] = useState(v.als ?? "privat");
+  const [org, setOrg] = useState(v.org ?? "");
+  return (
+    <>
       <div className="field-row">
         <div className="field">
           <label htmlFor="weg">Wie kam es?</label>
@@ -32,32 +50,27 @@ export function LetterForm({ id }: { id: string }) {
       <div className="field-row">
         <div className="field">
           <label htmlFor="als">Von wem?</label>
-          <select id="als" name="als" className="select" defaultValue={v.als ?? "privat"}>
+          <select id="als" name="als" className="select" value={als} onChange={(e) => setAls(e.target.value)}>
             <option value="privat">Einer Privatperson (wird nie mit Namen gezeigt)</option>
             <option value="organisation">Einer Organisation</option>
           </select>
         </div>
-        <div className="field">
-          <label htmlFor="org">Name der Organisation</label>
-          <input id="org" name="org" className="input" defaultValue={v.org} placeholder="nur bei Organisationen" />
-        </div>
+        <SenderField id="org" name="org" label="Name der Organisation" placeholder="nur bei Organisationen" value={org} onChange={setOrg}
+          senders={senders} active={als === "organisation"} hint="Erscheint bei jedem Zitat aus diesem Beitrag." />
       </div>
       <div className="field">
         <label htmlFor="letter-text">Der Text</label>
         <textarea id="letter-text" name="text" className="textarea" rows={6} defaultValue={v.text} placeholder="Wörtlich abtippen, bei einem Anruf in den Worten des Anrufers." />
         <span className="hint">Namen und Anschriften von Privatpersonen bitte weglassen.</span>
       </div>
-      <div className="field">
-        <label htmlFor="scan">Oder einen Scan anhängen</label>
-        <input id="scan" name="scan" type="file" className="input file-input" accept="application/pdf,image/png,image/jpeg,image/webp" />
-        <span className="hint">PDF oder Foto des Briefs, bis 20 MB. Die Maschine liest ihn ab; Briefkopf und Unterschrift lässt sie weg.</span>
-      </div>
-      <div className="form-foot">
-        <button type="submit" className="btn" disabled={pending}>
-          Eintragen
-        </button>
-        <Status state={state} pending={pending} />
-      </div>
-    </form>
+      <FilePicker
+        id="scan"
+        name="scan"
+        label="Oder Scans anhängen"
+        accept="application/pdf,image/png,image/jpeg,image/webp"
+        together="Sie zählen als ein Absender."
+        hint="PDF oder Fotos des Briefs, je bis 20 MB. Mehrere Seiten am besten als ein PDF; Fotos einzelner Seiten gehen auch. Alle zählen als ein Absender. Briefkopf und Unterschrift lässt die Maschine weg."
+      />
+    </>
   );
 }

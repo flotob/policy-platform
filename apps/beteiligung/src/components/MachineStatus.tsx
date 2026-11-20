@@ -61,7 +61,7 @@ export function MachineStatus({ campaignId, jobs, editable, quiet = false }: { c
         <p>
           <strong>Die Maschine ist fertig.</strong>{" "}
           {read.length
-            ? `Sie hat ${read.length} ${read.length === 1 ? "Stellungnahme" : "Stellungnahmen"} in ${moves} einzelne Beiträge zerlegt; ${
+            ? `Sie hat ${read.length === 1 ? "eine Datei" : `${read.length} Dateien`} in ${moves} einzelne Beiträge zerlegt; ${
                 known === 0 ? "alle bringen neue Punkte" : `${known} davon ${known === 1 ? "gehört" : "gehören"} zu Punkten, die schon da waren`
               }. `
             : ""}

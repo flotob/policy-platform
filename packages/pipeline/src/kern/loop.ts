@@ -26,6 +26,7 @@ import type { JevJudge, LlmProvider } from "@policy/llm";
 import { saveJudgment } from "../jev-stage.ts";
 import { chunkText } from "../pipeline.ts";
 import { locateQuote } from "../quote-span.ts";
+import { senderKey } from "./absender.ts";
 import { audit, confirmMove, createNode, rejectNode, releaseNode, type NodeFields } from "./decide.ts";
 import { KERN_MATCH_FAMILY, matchMove, route, shortlistNodes, type MatchNode, type MoveMatch, type Route } from "./match.ts";
 import {
@@ -257,9 +258,31 @@ async function windowOutput(
  * The participant behind an uploaded statement: the one who uploaded it at
  * door 3, or — for the statements the town brought in (E4) — the sender as
  * a participant of its own (assumption 3: senders are participants).
+ * One sender, one participant: files of an organisation that came together or
+ * later under the same name (compared loosely, senderKey) share it, so its
+ * statement and attachments count once. Files of a private person uploaded
+ * together already carry their shared participant (set at upload); a single
+ * private file is a person of its own.
  */
 async function participantForFile(tx: Pick<Db, "execute">, c: KernCampaign, f: Row): Promise<string> {
   if (f.participant_id) return f.participant_id as string;
+  const sender = ((f.sender as string | null) ?? "").trim();
+  if (f.sender_type !== "privat" && sender) {
+    const key = senderKey(sender);
+    // Two files of one sender read side by side must not open two participants: one at a time per name.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`absender:${c.consultationId}:${key}`}, 0))`);
+    const known = await tx.execute(sql`
+      SELECT id, author_org FROM participants
+      WHERE consultation_id = ${c.consultationId} AND via = 'datei' AND author_org IS NOT NULL AND COALESCE(author_type, '') <> 'privat'
+      ORDER BY created_at, id`);
+    const same = (known.rows as Row[]).find((p) => senderKey(p.author_org as string) === key);
+    if (same) return same.id as string;
+    const r = await tx.execute(sql`
+      INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
+      VALUES (${c.tenantId}, ${c.consultationId}, ${`absender:${key}`}, ${sender}, ${(f.sender_type as string | null) ?? null}, 'de', 'datei')
+      ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = participants.author_org RETURNING id`);
+    return (r.rows[0] as Row).id as string;
+  }
   const r = await tx.execute(sql`
     INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
     VALUES (${c.tenantId}, ${c.consultationId}, ${`datei:${f.id as string}`}, ${f.sender_type === "privat" ? null : ((f.sender as string | null) ?? null)},

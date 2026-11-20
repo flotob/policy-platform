@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { getPublicCampaign } from "@/lib/campaigns";
-import { getParticipant } from "@/lib/teilnahme";
+import { getParticipant, LIMITS } from "@/lib/teilnahme";
 
 import { UploadForm } from "../DoorForms";
 import "../../public.css";
@@ -33,7 +33,7 @@ export default async function Stellungnahme({ params }: { params: Promise<{ geme
             Verwaltung ansehen. Bitte nichts Persönliches eintragen.
           </p>
         ) : null}
-        <UploadForm gemeinde={c.tenant.slug} verfahren={c.slug} needsCode={c.params.access === "einladung" && !me} />
+        <UploadForm gemeinde={c.tenant.slug} verfahren={c.slug} needsCode={c.params.access === "einladung" && !me} filesPerDay={LIMITS.uploadsPerDay} />
       </main>
     </PublicFrame>
   );

@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { castVote } from "@/lib/abstimmung";
+import { batchTokens, filesOf, uploadProblem } from "@/lib/absender";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue, kernDeps } from "@/lib/kern";
@@ -25,7 +26,6 @@ export interface DoorState {
 }
 
 const field = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
-const MAX_FILE = 20 * 1024 * 1024;
 
 async function open(gemeinde: string, verfahren: string) {
   const c = await getPublicCampaign(gemeinde, verfahren);
@@ -122,9 +122,10 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   const org = field(form, "org");
   const orgType = field(form, "orgType") || "verband";
   const values = { als: as, org, orgType };
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Bitte wähle eine Datei aus.", values };
-  if (file.size > MAX_FILE) return { error: "Die Datei ist größer als 20 MB.", values };
+  // One upload may hold a statement and its attachments: all of it is this one sender.
+  const files = filesOf(form, "file");
+  const problem = uploadProblem(files, true);
+  if (problem) return { error: problem, values };
   if (as === "organisation" && org.length < 3) return { error: "Für wen schreibst du? Der Name erscheint bei jedem Zitat.", values };
   let p;
   try {
@@ -133,26 +134,48 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
     if (e instanceof ParticipationError) return { error: e.message, values };
     throw e;
   }
-  if (!(await within("upload", p.id))) return { error: "Du hast heute schon mehrere Stellungnahmen hochgeladen. Bitte morgen wieder.", values };
+  // Every file costs the machine a reading: the daily limit counts files.
+  if (!(await within("upload", p.id, files.length)))
+    return {
+      error: `Am Tag gehen bis zu ${LIMITS.uploadsPerDay} Dateien. ${files.length > 1 ? "Lade heute weniger hoch oder den Rest morgen." : "Bitte morgen wieder."}`,
+      values,
+    };
 
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const sha = createHash("sha256").update(bytes).digest("hex");
+  const parts = await Promise.all(
+    files.map(async (file) => {
+      const bytes = Buffer.from(await file.arrayBuffer());
+      return { file, bytes, sha: createHash("sha256").update(bytes).digest("hex") };
+    }),
+  );
   // A file that is already there costs nothing: checked before anything is read.
-  const dup = await getDb().execute(sql`SELECT 1 FROM campaign_files WHERE campaign_id = ${c.id} AND sha256 = ${sha}`);
-  if (dup.rows.length) return { error: "Diese Datei liegt schon vor.", values };
-  let text: string;
+  const db = getDb();
+  const dup = await db.execute(sql`
+    SELECT sha256 FROM campaign_files WHERE campaign_id = ${c.id} AND sha256 IN (SELECT jsonb_array_elements_text(${JSON.stringify(parts.map((x) => x.sha))}::jsonb))`);
+  const there = new Set((dup.rows as Row[]).map((r) => r.sha256 as string));
+  const fresh = parts.filter((x, i) => !there.has(x.sha) && parts.findIndex((y) => y.sha === x.sha) === i);
+  if (!fresh.length) return { error: parts.length === 1 ? "Diese Datei liegt schon vor." : "Diese Dateien liegen schon vor.", values };
+  let texts: string[];
   try {
-    // A scan or a photo of a letter is read by the machine while the person waits; typed files need no machine.
+    // A scan or a photo of a letter is read by the machine while the person waits (all files side by side);
+    // typed files need no machine.
     const { llm } = await kernDeps((m) => console.log(`[kern] ${m}`));
-    text = await extractFileText(new Uint8Array(bytes), file.name, file.type || null, readScan(llm));
+    texts = await Promise.all(
+      fresh.map((x) =>
+        extractFileText(new Uint8Array(x.bytes), x.file.name, x.file.type || null, readScan(llm)).catch((e) => {
+          if (e instanceof UnreadableFile && fresh.length > 1) throw new UnreadableFile(`„${x.file.name}“: ${e.message}`);
+          throw e;
+        }),
+      ),
+    );
   } catch (e) {
     if (e instanceof UnreadableFile) return { error: e.message, values };
     console.error("[tuer3] reading an upload failed:", e);
     return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuch es gleich noch einmal.", values };
   }
-  const db = getDb();
+  // One tracking slip per file; the files of one upload share the slip number (TOKEN, TOKEN-2, …) and link to each other.
   const token = trackingToken();
-  const fileId = await db.transaction(async (tx) => {
+  const tokenOf = (i: number) => (i === 0 ? token : `${token}-${i + 1}`);
+  const fileIds = await db.transaction(async (tx) => {
     // An organisation is a participant of its own (assumption 3); a private person speaks as themselves.
     // The name is self-declared, so it is tied to this browser: typing another group's name opens a new
     // participant, it never speaks with (or cancels) the votes of the one who uploaded first.
@@ -164,23 +187,27 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
         ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = excluded.author_org RETURNING id`);
       participant = (r.rows[0] as Row).id as string;
     }
-    const f = await tx.execute(sql`
-      INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, participant_id)
-      VALUES (${c.tenantId}, ${c.id}, 'stellungnahme', ${file.name}, ${file.type || null}, ${file.size}, ${sha}, ${bytes},
-              ${as === "organisation" ? org : null}, ${as === "organisation" ? orgType : "privat"}, ${participant})
-      ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
-    const fid = (f.rows[0] as Row | undefined)?.id as string | undefined;
-    if (!fid) return null;
-    const s = await tx.execute(sql`
-      INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text,
-                               submitted_at, participant_id, tracking_token)
-      VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${as === "organisation" ? org : null}, ${as === "organisation" ? orgType : "privat"},
-              'de', 'beteiligung', ${fid}, ${text}, now(), ${participant}, ${token}) RETURNING id`);
-    await tx.execute(sql`UPDATE campaign_files SET submission_id = ${(s.rows[0] as Row).id as string} WHERE id = ${fid}`);
-    return fid;
+    const ids: string[] = [];
+    for (const [i, x] of fresh.entries()) {
+      const f = await tx.execute(sql`
+        INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, participant_id)
+        VALUES (${c.tenantId}, ${c.id}, 'stellungnahme', ${x.file.name}, ${x.file.type || null}, ${x.file.size}, ${x.sha}, ${x.bytes},
+                ${as === "organisation" ? org : null}, ${as === "organisation" ? orgType : "privat"}, ${participant})
+        ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
+      const fid = (f.rows[0] as Row | undefined)?.id as string | undefined;
+      if (!fid) continue;
+      const s = await tx.execute(sql`
+        INSERT INTO submissions (tenant_id, consultation_id, door, author_org, author_type, language, source_system, source_ref, text,
+                                 submitted_at, participant_id, tracking_token)
+        VALUES (${c.tenantId}, ${c.consultationId}, 'document', ${as === "organisation" ? org : null}, ${as === "organisation" ? orgType : "privat"},
+                'de', 'beteiligung', ${fid}, ${texts[i]!}, now(), ${participant}, ${tokenOf(ids.length)}) RETURNING id`);
+      await tx.execute(sql`UPDATE campaign_files SET submission_id = ${(s.rows[0] as Row).id as string} WHERE id = ${fid}`);
+      ids.push(fid);
+    }
+    return ids;
   });
-  if (!fileId) return { error: "Diese Datei liegt schon vor.", values };
-  await enqueue(c.tenantId, c.id, "zerlegen", fileId);
+  if (!fileIds.length) return { error: "Diese Datei liegt schon vor.", values };
+  for (const fid of fileIds) await enqueue(c.tenantId, c.id, "zerlegen", fid);
   revalidatePath(`/verwaltung/${c.id}`, "layout");
   redirect(`${base}/laufzettel/${token}`);
 }
@@ -218,8 +245,13 @@ export async function followCampaign(gemeinde: string, verfahren: string, token:
     for (const x of r.rows as Row[]) tokens.add(x.tracking_token as string);
   }
   if (token) {
-    const r = await db.execute(sql`SELECT 1 FROM submissions WHERE consultation_id = ${c.consultationId} AND tracking_token = ${token}`);
-    if (r.rows.length) tokens.add(token);
+    // The slip and the other files uploaded with it (they share its number).
+    const batch = await batchTokens(c.consultationId, token);
+    if (batch.some((b) => b.token === token)) for (const b of batch) tokens.add(b.token);
+    else {
+      const r = await db.execute(sql`SELECT 1 FROM submissions WHERE consultation_id = ${c.consultationId} AND tracking_token = ${token}`);
+      if (r.rows.length) tokens.add(token);
+    }
   }
   const res = await follow(c, email, [...tokens], await originHash(c, "folgen"));
   if (!res.ok) return { error: res.error, values: { email } };

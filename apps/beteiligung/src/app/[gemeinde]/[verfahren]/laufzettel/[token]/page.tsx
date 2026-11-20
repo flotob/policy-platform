@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { batchTokens } from "@/lib/absender";
 import { PublicFrame } from "@/components/PublicFrame";
 import { publishedBundle } from "@/lib/bericht";
 import { publicDecision } from "@/lib/beschluss";
@@ -317,6 +318,8 @@ export default async function Laufzettel({
         },
   }));
   const isShort = s.door === "statement";
+  // Several files sent together: each has its own slip, all share its number.
+  const batch = isShort ? [] : await batchTokens(c.consultationId, token);
   const after: After = { state: c.state, decision: c.state === "veroeffentlicht" ? await publicDecision(c.id) : null };
   const confirmed = (s.decided as { answer?: string } | null)?.answer === "ja";
 
@@ -330,6 +333,20 @@ export default async function Laufzettel({
           </p>
           <p className="small muted num">Laufzettel Nr. {token.slice(0, 4)}</p>
         </div>
+        {batch.length > 1 ? (
+          <nav className="slip-batch" aria-label="Dateien derselben Einsendung">
+            Du hast {batch.length} Dateien zusammen eingereicht. Sie zählen als eine Stellungnahme; jede hat ihren eigenen Laufzettel:
+            <ul>
+              {batch.map((b) => (
+                <li key={b.token}>
+                  <Link href={`${base}/laufzettel/${b.token}`} aria-current={b.token === token ? "page" : undefined}>
+                    {b.filename ? `„${b.filename}“` : `Datei ${b.token.split("-")[1] ?? 1}`}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
         {isShort ? <blockquote className="door-quote">„{s.text as string}“</blockquote> : null}
         {einspruch ? <p className="notice small">Dein Einspruch ist angekommen. Ein Mensch aus der Redaktion sieht sich die Zuordnung noch einmal an.</p> : null}
 

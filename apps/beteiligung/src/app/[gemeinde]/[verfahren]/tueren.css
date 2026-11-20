@@ -75,6 +75,10 @@
 
 /* ——— The tracking slip ——————————————————————————————————————————————————— */
 .slip-head { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; flex-wrap: wrap; }
+/* Several files in one upload: one slip each, linked to each other. */
+.slip-batch { margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+.slip-batch ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.slip-batch [aria-current] { color: var(--ink); font-weight: 600; text-decoration: none; }
 .fate { margin-top: 24px; padding: 20px 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; display: grid; gap: 10px; justify-items: start; }
 .fate h2 { font-size: 24px; font-weight: 600; line-height: 1.2; }
 .fate > p { max-width: 62ch; }

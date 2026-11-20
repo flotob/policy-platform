@@ -126,7 +126,11 @@ try {
     await db.query(`DELETE FROM campaign_reports WHERE campaign_id = $1`, [campaignId]);
     await db.query(`DELETE FROM campaign_results WHERE campaign_id = $1`, [campaignId]);
     await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);
-    const uploads = await db.query(`DELETE FROM campaign_files WHERE campaign_id = $1 AND participant_id IS NOT NULL RETURNING submission_id`, [campaignId]);
+    // Citizens' uploads (door 3): a participant and no staff member behind them (a town's private sender has both).
+    const uploads = await db.query(
+      `DELETE FROM campaign_files WHERE campaign_id = $1 AND participant_id IS NOT NULL AND uploaded_by IS NULL RETURNING submission_id`,
+      [campaignId],
+    );
     const fromDoors = await db.query(
       `SELECT id FROM submissions WHERE consultation_id = $1 AND (door = 'statement' OR id = ANY($2::uuid[]))`,
       [consultationId, uploads.rows.map((r) => r.submission_id).filter(Boolean)],
@@ -135,7 +139,11 @@ try {
     await db.query(`DELETE FROM extractions WHERE submission_id = ANY($1::uuid[])`, [ids]);
     await db.query(`DELETE FROM submissions WHERE id = ANY($1::uuid[])`, [ids]);
     await db.query(`UPDATE submissions SET participant_id = NULL WHERE consultation_id = $1`, [consultationId]);
-    await db.query(`DELETE FROM participants WHERE consultation_id = $1`, [consultationId]);
+    // A private sender whose files were uploaded together stays: the files still name it as their sender.
+    await db.query(
+      `DELETE FROM participants p WHERE p.consultation_id = $1 AND NOT EXISTS (SELECT 1 FROM campaign_files f WHERE f.participant_id = p.id)`,
+      [consultationId],
+    );
     await db.query(`UPDATE map_points SET merged_into = NULL WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM map_points WHERE consultation_id = $1`, [consultationId]);
     await db.query(`DELETE FROM campaign_jobs WHERE campaign_id = $1`, [campaignId]);
