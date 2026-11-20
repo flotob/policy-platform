@@ -28,7 +28,7 @@ export default async function VerwaltungLayout({ children }: { children: ReactNo
             <Link href="/verwaltung">Verfahren</Link>
             <Link href="/verwaltung/team">Team</Link>
             <Link href="/verwaltung/einstellungen">Einstellungen</Link>
-            {isPlatformAdmin(staff.user.email) ? <Link href="/verwaltung/kommunen">Kommunen</Link> : null}
+            {isPlatformAdmin(staff.user) ? <Link href="/verwaltung/kommunen">Kommunen</Link> : null}
           </nav>
           <div className="ws-user">
             <span className="muted small">{staff.user.name}</span>

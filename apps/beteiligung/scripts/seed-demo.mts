@@ -85,7 +85,9 @@ try {
     [TENANT.slug, TENANT.name],
   );
   const tenantId = t.rows[0].id as string;
-  const existing = await db.query(`SELECT id, consultation_id FROM campaigns WHERE tenant_id = $1 AND slug = $2`, [tenantId, CAMPAIGN.slug]);
+  const existing = await db.query(`SELECT id, consultation_id, fictional FROM campaigns WHERE tenant_id = $1 AND slug = $2`, [tenantId, CAMPAIGN.slug]);
+  // Only the demo itself is ever reset: a real procedure at the same address is left alone.
+  if (existing.rows[0] && !existing.rows[0].fictional) throw new Error(`${TENANT.slug}/${CAMPAIGN.slug} exists and is not the fictional demo — refusing to touch it`);
   let campaignId: string;
   if (existing.rows[0]) {
     campaignId = existing.rows[0].id;

@@ -27,6 +27,12 @@ export default async function Stellungnahme({ params }: { params: Promise<{ geme
           wo es hingehört, und zählt als deine Stimme. Ein Mensch aus der Redaktion prüft alles Neue. Über einen Link verfolgst du, was aus jedem
           Argument geworden ist.
         </p>
+        {c.fictional ? (
+          <p className="notice small">
+            Dies ist ein Beispiel mit erfundenen Inhalten. Was du hier schreibst, sehen auch andere Besucher, die sich das Beispiel aus Sicht der
+            Verwaltung ansehen. Bitte nichts Persönliches eintragen.
+          </p>
+        ) : null}
         <UploadForm gemeinde={c.tenant.slug} verfahren={c.slug} needsCode={c.params.access === "einladung" && !me} />
       </main>
     </PublicFrame>

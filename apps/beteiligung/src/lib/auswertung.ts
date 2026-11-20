@@ -6,6 +6,8 @@
  * unchangeable (W9) — the published page and the report read only that.
  */
 
+import { createHash } from "node:crypto";
+
 import { sql } from "@policy/db";
 import { evaluate, type BelegKey, type Ergebnis, type EvaluateInput, type MoveIn, type NodeIn, type SourceIn } from "@policy/pipeline/kern";
 
@@ -49,6 +51,9 @@ export async function saturation(c: Campaign) {
   };
 }
 
+/** A private person is never named and never shown with the paragraph around the quote — whatever name staff typed as sender. */
+const isPrivate = (m: Row) => !m.author_org || m.author_type === "privat";
+
 const dateDe = (d: unknown) => (d ? new Date(String(d)).toLocaleDateString("de-DE", { day: "numeric", month: "long", year: "numeric" }) : "");
 
 async function loadInput(c: Campaign): Promise<EvaluateInput> {
@@ -79,11 +84,11 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
   const source = (m: Row): SourceIn => {
     if (m.door === "statement") return { kind: "kurzaussage", title: "Eigener Punkt aus der Beteiligung", date: dateDe(m.at), before: "", after: "" };
     // Private persons: only the quoted words, never the paragraph around them (it may name them or their neighbours).
-    if (!m.author_org) return { kind: "privat", title: "Stellungnahme einer Privatperson", date: dateDe(m.at), before: "", after: "" };
+    if (isPrivate(m)) return { kind: "privat", title: "Stellungnahme einer Privatperson", date: dateDe(m.at), before: "", after: "" };
     const ctx = paragraphAround((m.source_text as string | null) ?? "", Number(m.span_start), Number(m.span_end));
     return { kind: "organisation", title: `Stellungnahme: ${m.author_org as string}`, date: dateDe(m.at), before: ctx.before, after: ctx.after };
   };
-  const sender = (m: Row) => (m.author_org ? (m.author_org as string) : m.door === "statement" ? "Eigener Punkt aus der Beteiligung" : "Privatperson");
+  const sender = (m: Row) => (!isPrivate(m) ? (m.author_org as string) : m.door === "statement" ? "Eigener Punkt aus der Beteiligung" : "Privatperson");
 
   const x = counts[0]!;
   return {
@@ -136,7 +141,9 @@ const live = new Map<string, { key: string; value: Ergebnis }>();
 /** The result as it stands now — the municipality's preview while citizens take part. */
 export async function liveResult(c: Campaign): Promise<Ergebnis> {
   const input = await loadInput(c);
-  const key = `${input.votes.length}:${input.votes.reduce((s, v) => s + v.value + 2, 0)}:${input.nodes.map((n) => `${n.id}${n.version}`).join()}:${input.moves.length}`;
+  // The key covers every input (votes, wording, quotes and their flags, drawn codes, parameters): a count
+  // or a sum could stay equal while the matrix changed. Hashing is cheap next to the evaluation.
+  const key = createHash("sha256").update(JSON.stringify(input)).digest("hex");
   const hit = live.get(c.id);
   if (hit && hit.key === key) return hit.value;
   const value = evaluate(input);

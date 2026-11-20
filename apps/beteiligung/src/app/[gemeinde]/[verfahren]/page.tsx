@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { readNotice } from "@/lib/notice";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { myVotes, participation } from "@/lib/abstimmung";
@@ -12,6 +13,8 @@ import { getParticipant } from "@/lib/teilnahme";
 import { CodeForm } from "./DoorForms";
 import { FollowForm, FollowPrompt } from "./FollowForm";
 import "../public.css";
+// The code form (letters, invitations) is a door form: its box and the code field are styled there.
+import "./tueren.css";
 
 const day = new Intl.DateTimeFormat("de-DE", { day: "numeric", month: "long", year: "numeric" });
 const n = (x: number) => x.toLocaleString("de-DE");
@@ -32,10 +35,12 @@ export default async function Einstieg({
   searchParams,
 }: {
   params: Promise<{ gemeinde: string; verfahren: string }>;
-  searchParams: Promise<{ hinweis?: string; code?: string }>;
+  searchParams: Promise<{ hinweis?: string; hs?: string; code?: string }>;
 }) {
   const { gemeinde, verfahren } = await params;
-  const { hinweis, code } = await searchParams;
+  const q = await searchParams;
+  const hinweis = readNotice(q.hinweis, q.hs);
+  const code = q.code;
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const open = c.state === "offen";

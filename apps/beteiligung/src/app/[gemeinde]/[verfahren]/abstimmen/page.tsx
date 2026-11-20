@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { readNotice } from "@/lib/notice";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { lastVotedTyp, myVotes, nextFor, statementsUnderVote, type Statement } from "@/lib/abstimmung";
@@ -39,8 +40,8 @@ function Bar({ s }: { s: Statement }) {
   if (!total) return <span className="small muted">Noch keine Stimmen</span>;
   const pct = (x: number) => `${Math.round((x / total) * 100)}%`;
   return (
-    <span className="tally">
-      <span className="tally-bar" aria-hidden>
+    <span className="deck-tally">
+      <span className="deck-tally-bar" aria-hidden>
         <i className="a" style={{ width: pct(s.agree) }} />
         <i className="p" style={{ width: pct(s.pass) }} />
         <i className="d" style={{ width: pct(s.disagree) }} />
@@ -62,10 +63,11 @@ export default async function Abstimmen({
   searchParams,
 }: {
   params: Promise<{ gemeinde: string; verfahren: string }>;
-  searchParams: Promise<{ hinweis?: string }>;
+  searchParams: Promise<{ hinweis?: string; hs?: string }>;
 }) {
   const { gemeinde, verfahren } = await params;
-  const { hinweis } = await searchParams;
+  const q = await searchParams;
+  const hinweis = readNotice(q.hinweis, q.hs);
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) notFound();
   const base = `/${c.tenant.slug}/${c.slug}`;
@@ -111,19 +113,19 @@ export default async function Abstimmen({
                 </details>
               ) : null}
               <div className="card-buttons">
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, 1)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 1)}>
                   <button type="submit" className="vote vote-a">
                     <span aria-hidden className="vote-dot" />
                     Stimme zu
                   </button>
                 </form>
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, -1)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, -1)}>
                   <button type="submit" className="vote vote-d">
                     <span aria-hidden className="vote-dot" />
                     Lehne ab
                   </button>
                 </form>
-                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, 0)}>
+                <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 0)}>
                   <button type="submit" className="vote vote-p">
                     Überspringen
                   </button>

@@ -12,6 +12,7 @@ import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { enqueue, kernDeps } from "@/lib/kern";
 import { follow } from "@/lib/folgen";
+import { noticeQuery } from "@/lib/notice";
 import { ensureParticipant, getParticipant, LIMITS, originHash, ParticipationError, redeemCode, trackingToken, within } from "@/lib/teilnahme";
 import { answerShort as answerShortCore, runShortCheck, shortByToken, storeShort } from "@/lib/tuer2";
 
@@ -48,7 +49,7 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
       const p = await ensureParticipant(c);
       const r = await redeemCode(c, p.id, code);
       if (r === "unbekannt") return { error: "Diesen Code kennen wir nicht, oder er wurde schon benutzt. Mitmachen kannst du trotzdem.", values: { code } };
-      if (r === "schon") redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
+      if (r === "schon") redirect(`${base}/abstimmen?${noticeQuery("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
     }
   } catch (e) {
     if (e instanceof ParticipationError) return { error: e.message, values: { code } };
@@ -58,17 +59,18 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
 }
 
 /** Door 1: one click, one vote; the deck moves on. */
-export async function vote(gemeinde: string, verfahren: string, statementId: string, value: -1 | 0 | 1): Promise<void> {
+export async function vote(gemeinde: string, verfahren: string, statementId: string, version: number, value: -1 | 0 | 1): Promise<void> {
   const { c, base } = await open(gemeinde, verfahren);
   let p;
   try {
     p = await ensureParticipant(c);
   } catch (e) {
-    if (e instanceof ParticipationError) redirect(`${base}?hinweis=${encodeURIComponent(e.message)}`);
+    if (e instanceof ParticipationError) redirect(`${base}?${noticeQuery(e.message)}`);
     throw e;
   }
-  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?hinweis=${encodeURIComponent("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
-  await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0);
+  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?${noticeQuery("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
+  const counted = await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0, Number(version) || undefined);
+  if (!counted) redirect(`${base}/abstimmen?${noticeQuery("Diese Aussage wurde gerade geändert oder zurückgezogen. Deine Stimme ist nicht gezählt; sieh dir die Karte bitte noch einmal an.")}`);
   redirect(`${base}/abstimmen`);
 }
 
@@ -134,6 +136,10 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   if (!(await within("upload", p.id))) return { error: "Du hast heute schon mehrere Stellungnahmen hochgeladen. Bitte morgen wieder.", values };
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  const sha = createHash("sha256").update(bytes).digest("hex");
+  // A file that is already there costs nothing: checked before anything is read.
+  const dup = await getDb().execute(sql`SELECT 1 FROM campaign_files WHERE campaign_id = ${c.id} AND sha256 = ${sha}`);
+  if (dup.rows.length) return { error: "Diese Datei liegt schon vor.", values };
   let text: string;
   try {
     // A scan or a photo of a letter is read by the machine while the person waits; typed files need no machine.
@@ -145,15 +151,16 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
     return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuch es gleich noch einmal.", values };
   }
   const db = getDb();
-  const sha = createHash("sha256").update(bytes).digest("hex");
   const token = trackingToken();
   const fileId = await db.transaction(async (tx) => {
     // An organisation is a participant of its own (assumption 3); a private person speaks as themselves.
+    // The name is self-declared, so it is tied to this browser: typing another group's name opens a new
+    // participant, it never speaks with (or cancels) the votes of the one who uploaded first.
     let participant = p.id;
     if (as === "organisation") {
       const r = await tx.execute(sql`
         INSERT INTO participants (tenant_id, consultation_id, source_ref, author_org, author_type, language, via)
-        VALUES (${c.tenantId}, ${c.consultationId}, ${`org:${org.toLowerCase().replace(/\s+/g, " ")}`}, ${org}, ${orgType}, 'de', 'stellungnahme')
+        VALUES (${c.tenantId}, ${c.consultationId}, ${`org:${org.toLowerCase().replace(/\s+/g, " ")}|${p.id}`}, ${org}, ${orgType}, 'de', 'stellungnahme')
         ON CONFLICT (consultation_id, source_ref) DO UPDATE SET author_org = excluded.author_org RETURNING id`);
       participant = (r.rows[0] as Row).id as string;
     }
@@ -214,7 +221,7 @@ export async function followCampaign(gemeinde: string, verfahren: string, token:
     const r = await db.execute(sql`SELECT 1 FROM submissions WHERE consultation_id = ${c.consultationId} AND tracking_token = ${token}`);
     if (r.rows.length) tokens.add(token);
   }
-  const res = await follow(c, email, [...tokens], await originHash(c));
+  const res = await follow(c, email, [...tokens], await originHash(c, "folgen"));
   if (!res.ok) return { error: res.error, values: { email } };
   return {
     ok: res.already

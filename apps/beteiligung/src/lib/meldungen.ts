@@ -27,7 +27,7 @@ const PER_HOUR = 10;
 export type ReportResult = { ok: true } | { ok: false; error: string };
 
 export async function reportContent(c: Campaign, kind: "node" | "move", id: string, reason: string, note: string): Promise<ReportResult> {
-  if (!REASONS.some((r) => r.key === reason)) return { ok: false, error: "Bitte wählen Sie einen Grund." };
+  if (!REASONS.some((r) => r.key === reason)) return { ok: false, error: "Bitte wähl einen Grund." };
   const db = getDb();
   // Only what belongs to this campaign and is public can be reported.
   const exists =
@@ -38,7 +38,7 @@ export async function reportContent(c: Campaign, kind: "node" | "move", id: stri
   const origin = await originHash(c);
   const recent = await db.execute(sql`
     SELECT count(*)::int AS n FROM content_reports WHERE campaign_id = ${c.id} AND origin_hash = ${origin} AND created_at > now() - interval '1 hour'`);
-  if (Number((recent.rows[0] as { n: number }).n) >= PER_HOUR) return { ok: false, error: "Sie haben in der letzten Stunde schon viel gemeldet. Bitte später noch einmal." };
+  if (Number((recent.rows[0] as { n: number }).n) >= PER_HOUR) return { ok: false, error: "Du hast in der letzten Stunde schon viel gemeldet. Bitte später noch einmal." };
   await db.execute(sql`
     INSERT INTO content_reports (tenant_id, campaign_id, subject_kind, subject_id, reason, note, origin_hash)
     VALUES (${c.tenantId}, ${c.id}, ${kind}, ${id}, ${reason}, ${note.trim().slice(0, 300) || null}, ${origin})
@@ -126,12 +126,33 @@ export async function hiddenOf(c: Campaign): Promise<{ nodes: Set<string>; moves
 /** A stored result as it may be shown: hidden quotes gone, hidden statements keep their number but not their words. */
 export function maskHidden(r: Ergebnis, hidden: { nodes: Set<string>; moves: Set<string> }): Ergebnis {
   if (!hidden.nodes.size && !hidden.moves.size) return r;
+  // An attack shown in the argument view is the wording of one contribution: gone with that contribution.
+  const gone = new Set(r.statements.flatMap((s) => s.quotes.filter((q) => hidden.moves.has(q.move)).map((q) => q.aussage)));
   return {
     ...r,
     statements: r.statements.map((s) =>
       hidden.nodes.has(s.id)
-        ? { ...s, text: "Von der Redaktion ausgeblendet.", quotes: [] }
-        : { ...s, quotes: s.quotes.filter((q) => !hidden.moves.has(q.move)) },
+        ? { ...s, text: HIDDEN, quotes: [], entries: s.entries.map((e) => ({ ...e, attack: null })) }
+        : {
+            ...s,
+            quotes: s.quotes.filter((q) => !hidden.moves.has(q.move)),
+            entries: s.entries.map((e) => (e.attack && gone.has(e.attack) ? { ...e, attack: null } : e)),
+          },
     ),
   };
+}
+
+const HIDDEN = "Von der Redaktion ausgeblendet.";
+
+/**
+ * Text written before something was hidden (the published report, its list of conclusions): every
+ * verbatim occurrence of a hidden statement or quote is replaced. Returns the replacer.
+ */
+export function hiddenWords(r: Ergebnis, hidden: { nodes: Set<string>; moves: Set<string> }): (text: string) => string {
+  const words = [
+    ...r.statements.filter((s) => hidden.nodes.has(s.id)).map((s) => s.text),
+    ...r.statements.flatMap((s) => s.quotes.filter((q) => hidden.moves.has(q.move)).map((q) => q.text)),
+  ].filter((w) => w.trim().length > 8);
+  if (!words.length) return (t) => t;
+  return (t) => words.reduce((acc, w) => acc.split(w).join("[von der Redaktion ausgeblendet]"), t);
 }

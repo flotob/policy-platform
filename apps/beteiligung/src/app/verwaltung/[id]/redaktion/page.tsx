@@ -272,7 +272,7 @@ export default async function Redaktion({
                         <Link href={it.href} aria-current={it.current ? "true" : undefined}>
                           <span className="rd-li-t">{it.title}</span>
                           <span className="rd-li-m">
-                            {it.mark ? <i className={`mark mark-${it.mark}`} title={{ release: "Vorschlag: freigeben", reject: "Vorschlag: verwerfen", review: "Bitte prüfen" }[it.mark]} /> : null}
+                            {it.mark ? <i className={`rd-mark rd-mark-${it.mark}`} title={{ release: "Vorschlag: freigeben", reject: "Vorschlag: verwerfen", review: "Bitte prüfen" }[it.mark]} /> : null}
                             {it.meta}
                           </span>
                         </Link>
@@ -359,7 +359,7 @@ export default async function Redaktion({
                                   </option>
                                   <NodeTargets all={all} exclude={node.id} />
                                 </select>
-                                <div className="seg">
+                                <div className="ne-seg">
                                   <label>
                                     <input type="radio" name="stance" value="1" defaultChecked />
                                     <span>stimmt zu</span>
@@ -494,7 +494,7 @@ export default async function Redaktion({
                         </option>
                         <NodeTargets all={all} exclude={move.nodeId ?? undefined} />
                       </select>
-                      <div className="seg">
+                      <div className="ne-seg">
                         <label>
                           <input type="radio" name="stance" value="1" defaultChecked />
                           <span>stimmt zu</span>

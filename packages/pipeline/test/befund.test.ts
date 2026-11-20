@@ -130,6 +130,30 @@ describe("evaluate", () => {
   const r = evaluate(input);
   const by = (id: string) => r.statements.find((s) => s.id === id)!;
 
+  describe("gaps follow the arguments", () => {
+    // The town's premises carry their question (as the skeleton writes them).
+    const withQuestions = evaluate({
+      ...input,
+      nodes: nodes.map((n) => (n.id === "value" ? { ...n, frage: "wert" } : n.id === "fact" ? { ...n, frage: "lage" } : n)),
+    });
+    const get = (id: string) => withQuestions.statements.find((s) => s.id === id)!;
+    it("a premise attacked on its step and question is not 'unattacked'", () => {
+      // "Die Mehrkosten sind zumutbar" (eingriff/wert) has an attack statement on eingriff/wert.
+      expect(withQuestions.gaps.unattacked).not.toContain(get("value").nr);
+    });
+    it("an objection the town answered is not 'without answer'", () => {
+      expect(withQuestions.gaps.oneSided.find((g) => g.step === "eingriff" && g.question === "wert" && g.direction === "greift_an")).toBeUndefined();
+    });
+    it("a contradicted premise is neither unattacked nor one-sided", () => {
+      expect(withQuestions.gaps.unattacked).not.toContain(get("fact").nr);
+      expect(withQuestions.gaps.oneSided.find((g) => g.step === "lage" && g.question === "lage")).toBeUndefined();
+    });
+    it("support with no objection at all is one-sided, and a question nobody touched is unasked", () => {
+      expect(withQuestions.gaps.oneSided.find((g) => g.step === "wirkung" && g.question === "wirkung")?.direction).toBe("stuetzt");
+      expect(withQuestions.gaps.unasked.some((g) => g.question === "nebenfolgen")).toBe(true);
+    });
+  });
+
   describe("Stephan's checks on a bridge", () => {
     it("a bridge far above the threshold does not hang on a few votes", () => {
       expect(robustBridge([camp(85), camp(80)], T, "getragen")).toEqual({ robust: true, fragile: [] });

@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { READABLE_ACCEPT } from "@/lib/files";
+
 import { startWithCode, submitShort, uploadStatement, type DoorState } from "./actions";
 
 const MAX = 400;
@@ -112,7 +114,7 @@ export function UploadForm({ gemeinde, verfahren, needsCode }: { gemeinde: strin
       ) : null}
       <div className="field">
         <label htmlFor="file">Datei</label>
-        <input id="file" name="file" type="file" className="input file-input" accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp,application/pdf,text/plain,image/png,image/jpeg,image/webp" required />
+        <input id="file" name="file" type="file" className="input file-input" accept={READABLE_ACCEPT} required />
         <span className="hint">PDF, Word, Text oder ein Foto des Briefs, bis 20 MB. Auch eingescannte Seiten liest die Maschine.</span>
       </div>
       {needsCode ? (

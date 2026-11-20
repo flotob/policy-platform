@@ -21,15 +21,15 @@ const withCode = (url: string, code: string) => `${url}?code=${encodeURIComponen
 /** One A4 letter per code, printed straight from the browser ("Als PDF sichern" works too). Nothing is stored. */
 function Letter({ info, code, qr }: { info: LetterInfo; code: string; qr: string }) {
   return (
-    <article className="letter">
-      <p className="letter-from">{info.town}</p>
-      <div className="letter-window">Platz für die Anschrift</div>
+    <article className="print-letter">
+      <p className="print-letter-from">{info.town}</p>
+      <div className="print-letter-window">Platz für die Anschrift</div>
       <h1>{info.drawn ? "Sie wurden ausgelost. Ihre Meinung zählt." : "Ihre Einladung zur Beteiligung"}</h1>
       <p>Guten Tag,</p>
       <p>
         {info.town} stellt eine Maßnahme zur Diskussion: <strong>{info.question}</strong>
       </p>
-      <p className="letter-measure">{info.measure}</p>
+      <p className="print-letter-measure">{info.measure}</p>
       {info.drawn ? (
         <p>
           Damit nicht nur diejenigen mitreden, die sich ohnehin melden, haben wir Einwohnerinnen und Einwohner zufällig ausgelost. Sie sind eine
@@ -43,13 +43,13 @@ function Letter({ info, code, qr }: { info: LetterInfo; code: string; qr: string
         Mitmachen dauert etwa zehn Minuten. Sie sehen kurze Aussagen und sagen zu jeder, ob Sie zustimmen oder ablehnen. Fehlt Ihnen ein Punkt,
         schreiben Sie ihn dazu. Ohne Anmeldung; Ihre Stimmen bleiben anonym.
       </p>
-      <div className="letter-code">
-        <div className="letter-qr" dangerouslySetInnerHTML={{ __html: qr }} />
+      <div className="print-letter-code">
+        <div className="print-letter-qr" dangerouslySetInnerHTML={{ __html: qr }} />
         <div>
           <p>Scannen Sie den Code mit dem Handy, oder öffnen Sie</p>
-          <p className="letter-url">{info.url.replace(/^https?:\/\//, "")}</p>
+          <p className="print-letter-url">{info.url.replace(/^https?:\/\//, "")}</p>
           <p>und geben Sie Ihren persönlichen Code ein:</p>
-          <p className="letter-pin">{code}</p>
+          <p className="print-letter-pin">{code}</p>
         </div>
       </div>
       <p>{info.end ? `Die Beteiligung läuft bis zum ${info.end}. ` : ""}Der Code gilt einmal.</p>

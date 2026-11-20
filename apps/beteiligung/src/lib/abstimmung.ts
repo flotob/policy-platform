@@ -100,11 +100,16 @@ export async function lastVotedTyp(participantId: string): Promise<string | null
 }
 
 /** B3/B4: one participant, one vote per statement and wording (I9); a second click changes it. */
-export async function castVote(c: Campaign, participantId: string, statementId: string, value: -1 | 0 | 1): Promise<boolean> {
+/**
+ * One vote on the wording the person saw (`version`): if the editors changed the statement meanwhile, nothing
+ * is stored (false) and the deck shows the new wording.
+ */
+export async function castVote(c: Campaign, participantId: string, statementId: string, value: -1 | 0 | 1, version?: number): Promise<boolean> {
   const r = await getDb().execute(sql`
     INSERT INTO map_point_votes (tenant_id, participant_id, map_point_id, version, value, method)
     SELECT p.tenant_id, ${participantId}, p.id, p.version, ${value}, 'real' FROM map_points p
     WHERE p.id = ${statementId} AND p.consultation_id = ${c.consultationId} AND p.status = 'released'
+      AND (${version ?? null}::int IS NULL OR p.version = ${version ?? null}::int)
     ON CONFLICT (participant_id, map_point_id, version) DO UPDATE SET value = excluded.value, method = 'real', created_at = now()
     RETURNING id`);
   return r.rows.length > 0;

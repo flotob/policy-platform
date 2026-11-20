@@ -15,7 +15,7 @@ import { sql } from "@policy/db";
 import { publishedBundle } from "./bericht";
 import { decisionDate, outcomeSentence, type Outcome } from "./beschluss-words";
 import { getDecision } from "./beschluss";
-import type { Campaign } from "./campaigns";
+import { getCampaign, type Campaign } from "./campaigns";
 import { getDb } from "./db";
 import { townShort } from "./ergebnis-seite";
 import { appUrl, sendMail } from "./mail";
@@ -39,6 +39,11 @@ export function checkSignature(id: string, purpose: "bestaetigen" | "abmelden", 
 }
 
 const link = (id: string, purpose: "bestaetigen" | "abmelden") => appUrl(`/nachricht?id=${id}&a=${purpose}&t=${sign(id, purpose)}`);
+
+async function getCampaignById(id: string): Promise<Campaign | null> {
+  const [x] = await rows(sql`SELECT tenant_id FROM campaigns WHERE id = ${id}`);
+  return x ? getCampaign(x.tenant_id as string, id) : null;
+}
 
 async function townOf(tenantId: string): Promise<{ name: string; slug: string }> {
   const [t] = await rows(sql`SELECT name, slug FROM tenants WHERE id = ${tenantId}`);
@@ -92,12 +97,15 @@ export interface FollowerView {
   campaign: { title: string; question: string; url: string };
   confirmed: boolean;
   unsubscribed: boolean;
+  /** Not confirmed within seven days: the link no longer works. */
+  expired: boolean;
 }
 
 export async function followerById(id: string): Promise<FollowerView | null> {
   if (!/^[0-9a-f-]{36}$/.test(id)) return null;
   const [f] = await rows(sql`
-    SELECT f.id, f.confirmed_at, f.unsubscribed_at, c.title, c.question, c.slug, t.slug AS town
+    SELECT f.id, f.confirmed_at, f.unsubscribed_at, f.confirmed_at IS NULL AND f.created_at <= now() - interval '7 days' AS expired,
+      c.title, c.question, c.slug, t.slug AS town
     FROM campaign_followers f JOIN campaigns c ON c.id = f.campaign_id JOIN tenants t ON t.id = c.tenant_id WHERE f.id = ${id}`);
   if (!f) return null;
   return {
@@ -105,13 +113,14 @@ export async function followerById(id: string): Promise<FollowerView | null> {
     campaign: { title: f.title as string, question: f.question as string, url: `/${f.town as string}/${f.slug as string}` },
     confirmed: !!f.confirmed_at,
     unsubscribed: !!f.unsubscribed_at,
+    expired: f.expired === true,
   };
 }
 
 /** The link in the confirmation mail. What already happened is not sent again: the page links to it. */
 export async function confirmFollower(id: string): Promise<void> {
   await getDb().execute(sql`
-    UPDATE campaign_followers f SET confirmed_at = COALESCE(f.confirmed_at, now()),
+    UPDATE campaign_followers f SET confirmed_at = COALESCE(f.confirmed_at, CASE WHEN f.created_at > now() - interval '7 days' THEN now() END),
       ergebnis_sent_at = COALESCE(f.ergebnis_sent_at, CASE WHEN c.state = 'veroeffentlicht' THEN now() END),
       beschluss_sent_at = COALESCE(f.beschluss_sent_at,
         CASE WHEN EXISTS (SELECT 1 FROM campaign_decisions d WHERE d.campaign_id = c.id AND d.state = 'veroeffentlicht') THEN now() END)
@@ -121,6 +130,29 @@ export async function confirmFollower(id: string): Promise<void> {
 /** One click, no questions. The address itself goes too: there is nothing left to send it. */
 export async function unsubscribe(id: string): Promise<void> {
   await getDb().execute(sql`UPDATE campaign_followers SET unsubscribed_at = now(), email = 'abgemeldet:' || id::text, laufzettel = '{}' WHERE id = ${id}`);
+}
+
+/**
+ * Messages that were due but did not go out (a restart mid-run, a failed send): sent again. The worker
+ * runs this every hour next to the clean-up below.
+ */
+export async function notifyPending(): Promise<number> {
+  const due = await rows(sql`
+    SELECT DISTINCT f.campaign_id, c.tenant_id,
+      (c.state = 'veroeffentlicht' AND f.ergebnis_sent_at IS NULL) AS ergebnis,
+      (d.state = 'veroeffentlicht' AND f.beschluss_sent_at IS NULL) AS beschluss
+    FROM campaign_followers f JOIN campaigns c ON c.id = f.campaign_id
+    LEFT JOIN campaign_decisions d ON d.campaign_id = f.campaign_id
+    WHERE f.confirmed_at IS NOT NULL AND f.unsubscribed_at IS NULL
+      AND ((c.state = 'veroeffentlicht' AND f.ergebnis_sent_at IS NULL) OR (d.state = 'veroeffentlicht' AND f.beschluss_sent_at IS NULL))`);
+  let n = 0;
+  for (const x of due) {
+    const c = await getCampaignById(x.campaign_id as string);
+    if (!c) continue;
+    if (x.ergebnis) n += await notifyFollowers(c, "ergebnis");
+    if (x.beschluss) n += await notifyFollowers(c, "beschluss");
+  }
+  return n;
 }
 
 /** An address nobody confirmed within seven days goes (the worker runs this every hour). */
@@ -179,7 +211,11 @@ export async function notifyFollowers(c: Campaign, kind: "ergebnis" | "beschluss
       const nrOf = new Map(bundle.result.statements.map((s) => [s.id, s.nr]));
       if (kind === "beschluss" && decision?.state !== "veroeffentlicht") return;
       for (const f of due) {
-        const tokens = (f.laufzettel as string[] | null) ?? [];
+        // Unsubscribed (or already sent by another run) since the list was made: skip.
+        const still = await rows(sql`
+          SELECT laufzettel FROM campaign_followers WHERE id = ${f.id as string} AND confirmed_at IS NOT NULL AND unsubscribed_at IS NULL AND ${column} IS NULL`);
+        if (!still.length) continue;
+        const tokens = (still[0]!.laufzettel as string[] | null) ?? [];
         const own = await ownPoints(c.id, tokens, nrOf);
         const slips = [...new Set(own.map((p) => p.token))];
         let subject: string;

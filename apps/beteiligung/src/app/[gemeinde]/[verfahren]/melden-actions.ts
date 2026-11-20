@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { noticeQuery } from "@/lib/notice";
 
 import { getPublicCampaign } from "@/lib/campaigns";
 import { reportContent } from "@/lib/meldungen";
@@ -26,5 +27,5 @@ export async function reportFromDeck(gemeinde: string, verfahren: string, id: st
   if (!c) redirect("/");
   const r = await reportContent(c, "node", id, field(form, "grund"), field(form, "notiz"));
   const note = r.ok ? "Danke, die Redaktion sieht sich das an. Du kannst weiter abstimmen oder die Aussage überspringen." : r.error;
-  redirect(`/${c.tenant.slug}/${c.slug}/abstimmen?hinweis=${encodeURIComponent(note)}`);
+  redirect(`/${c.tenant.slug}/${c.slug}/abstimmen?${noticeQuery(note)}`);
 }

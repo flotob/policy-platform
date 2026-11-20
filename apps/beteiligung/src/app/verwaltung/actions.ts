@@ -75,6 +75,7 @@ export async function createCampaign(_prev: ActionState, form: FormData): Promis
 
 export async function saveBasics(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
   const { staff, campaign } = await own(id);
+  if (SETTLED.includes(campaign.state)) return { error: "Die Beteiligung ist geschlossen; Maßnahme, Begründung und Ablauf bleiben, wie sie ausgewertet wurden." };
   const title = field(form, "title");
   const question = asQuestion(field(form, "question"));
   const measure = field(form, "measure");
@@ -94,6 +95,7 @@ export async function saveBasics(id: string, _prev: ActionState, form: FormData)
 
 export async function saveJustification(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
   const { staff, campaign } = await own(id);
+  if (SETTLED.includes(campaign.state)) return { error: "Die Beteiligung ist geschlossen; Maßnahme, Begründung und Ablauf bleiben, wie sie ausgewertet wurden." };
   const justification = field(form, "justification");
   const steps = Object.fromEntries(STEPS.map((s) => [s.key, field(form, `step_${s.key}`)]).filter(([, v]) => v));
   await getDb().execute(sql`
@@ -106,6 +108,7 @@ export async function saveJustification(id: string, _prev: ActionState, form: Fo
 
 export async function saveProcess(id: string, _prev: ActionState, form: FormData): Promise<ActionState> {
   const { staff, campaign } = await own(id);
+  if (SETTLED.includes(campaign.state)) return { error: "Die Beteiligung ist geschlossen; Maßnahme, Begründung und Ablauf bleiben, wie sie ausgewertet wurden." };
   const start = field(form, "start") || null;
   const end = field(form, "end") || null;
   if (start && end && end < start) return { error: "Das Ende liegt vor dem Beginn.", values: valuesOf(form) };
@@ -134,14 +137,17 @@ export async function uploadFile(id: string, _prev: ActionState, form: FormData)
   const role = field(form, "role");
   if (!["entwurf", "unterlage", "stellungnahme"].includes(role)) return { error: "Bitte wählen Sie, was die Datei ist." };
   const sender = field(form, "sender");
-  if (role === "stellungnahme" && !sender) return { error: "Von wem stammt die Stellungnahme? Der Absender erscheint später bei jedem Zitat.", values: valuesOf(form) };
+  const senderType = field(form, "senderType");
+  // A private person is never named in public: the name (if typed) stays internal, the quotes say "Privatperson".
+  if (role === "stellungnahme" && !sender && senderType !== "privat")
+    return { error: "Von wem stammt die Stellungnahme? Der Absender erscheint später bei jedem Zitat; bei Privatpersonen wählen Sie „Privatperson“.", values: valuesOf(form) };
   const bytes = Buffer.from(await file.arrayBuffer());
   const sha = createHash("sha256").update(bytes).digest("hex");
   if (campaign.state !== "entwurf" && campaign.state !== "vorbereitung") return { error: "Nach dem Freischalten kommen Stellungnahmen über die Beteiligung herein." };
   const r = await getDb().execute(sql`
     INSERT INTO campaign_files (tenant_id, campaign_id, role, filename, mime, size, sha256, content, sender, sender_type, uploaded_by)
     VALUES (${staff.tenant.id}, ${campaign.id}, ${role}, ${file.name}, ${file.type || null}, ${file.size}, ${sha}, ${bytes},
-            ${sender || null}, ${field(form, "senderType") || null}, ${staff.user.id})
+            ${sender || null}, ${senderType || null}, ${staff.user.id})
     ON CONFLICT (campaign_id, sha256) DO NOTHING RETURNING id`);
   if (r.rows.length === 0) return { error: "Diese Datei liegt schon vor." };
   await audit(staff.tenant.id, staff.user.id, "campaign.upload", campaign.id, { filename: file.name, role, size: file.size, sha256: sha });
@@ -160,6 +166,9 @@ export async function deleteFile(id: string, fileId: string): Promise<void> {
   if (r.rows.length) await audit(staff.tenant.id, staff.user.id, "campaign.delete_file", campaign.id, { filename: (r.rows[0] as { filename: string }).filename });
   revalidatePath(`/verwaltung/${id}`, "layout");
 }
+
+/** After closing, the procedure stays as it was evaluated. */
+const SETTLED: CampaignState[] = ["auswertung", "bericht", "veroeffentlicht"];
 
 /** State changes by button; opening the participation has its own action with its own checks. */
 const NEXT: Partial<Record<CampaignState, CampaignState[]>> = {

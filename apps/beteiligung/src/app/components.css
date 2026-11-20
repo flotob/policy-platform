@@ -82,3 +82,6 @@
 .report-err { color: var(--danger); font-size: 13px; }
 .report-done { font-size: 13px; color: var(--agree); }
 .legal .nachricht-form { margin-top: 28px; }
+
+/* The header on phones: the same on every page (it used to change only after a visit to the start page). */
+@media (max-width: 560px) { .site-nav { gap: 14px; font-size: 14px; } }

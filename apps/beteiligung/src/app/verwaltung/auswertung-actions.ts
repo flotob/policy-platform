@@ -34,6 +34,12 @@ async function load(id: string, staff: Staff) {
 
 const refresh = (id: string) => revalidatePath(`/verwaltung/${id}`, "layout");
 
+/** A report may only be released or published while the procedure is in its report phase, on the latest result. */
+async function isCurrent(c: { id: string; state: string }, resultId: string): Promise<boolean> {
+  if (c.state !== "bericht") return false;
+  return (await latestResult(c.id))?.id === resultId;
+}
+
 /** B13: no more votes; the matrix is frozen and evaluated once more, then stored (W9). */
 export async function closeParticipation(id: string): Promise<void> {
   const staff = await requireInitiator();
@@ -41,8 +47,10 @@ export async function closeParticipation(id: string): Promise<void> {
   if (c.state !== "offen") redirect(`/verwaltung/${id}/auswertung`);
   // Without camps the result counts everyone together (small procedures); it only needs one vote.
   if (!(await liveResult(c)).participation.voters) redirect(`/verwaltung/${id}/auswertung?fehler=leer`);
-  // Close first, so no vote slips in between the evaluation and the state change.
-  await getDb().execute(sql`UPDATE campaigns SET state = 'auswertung', updated_at = now() WHERE id = ${c.id}`);
+  // Close first, so no vote slips in between the evaluation and the state change — and only once: a
+  // double click must not store two results.
+  const closed = await getDb().execute(sql`UPDATE campaigns SET state = 'auswertung', updated_at = now() WHERE id = ${c.id} AND state = 'offen' RETURNING id`);
+  if (!closed.rows.length) redirect(`/verwaltung/${id}/auswertung`);
   const saved = await saveResult({ ...c, state: "auswertung" }, `user:${staff.user.id}`);
   await audit(staff, "campaign.state", "campaign", c.id, { from: "offen", to: "auswertung", result: saved.id, version: saved.version, matrix: saved.result.matrixHash });
   if (saved.result.ready) await enqueue(c.tenantId, c.id, "lagernamen", null, null, { resultId: saved.id });
@@ -57,7 +65,12 @@ export async function reopenParticipation(id: string): Promise<void> {
   const report = await latestReport(c.id);
   if (!["auswertung", "bericht"].includes(c.state) || (report && ["freigegeben", "veroeffentlicht"].includes(report.state))) redirect(`/verwaltung/${id}/auswertung`);
   await getDb().execute(sql`UPDATE campaigns SET state = 'offen', updated_at = now() WHERE id = ${c.id}`);
-  await audit(staff, "campaign.state", "campaign", c.id, { from: c.state, to: "offen" });
+  // A report written on the old result must not be released later on: withdrawn, with the reason.
+  const withdrawn = await getDb().execute(sql`
+    UPDATE campaign_reports SET state = 'zurueckgewiesen', feedback = 'Die Beteiligung wurde wieder geöffnet.', decided_by = ${`user:${staff.user.id}`},
+      decided_at = now(), updated_at = now()
+    WHERE campaign_id = ${c.id} AND state IN ('liste', 'text', 'geprueft', 'durchgefallen') RETURNING id`);
+  await audit(staff, "campaign.state", "campaign", c.id, { from: c.state, to: "offen", reportsWithdrawn: withdrawn.rows.length });
   refresh(id);
   redirect(`/verwaltung/${id}/auswertung`);
 }
@@ -112,8 +125,10 @@ export async function makeReport(id: string): Promise<void> {
   if (saved.result.camps && !namingOf(saved.campNames)?.confirmedBy) redirect(`/verwaltung/${id}/auswertung?fehler=namen#lager`);
   const open = await latestReport(c.id);
   if (open && open.resultId === saved.id && ["liste", "text", "geprueft", "durchgefallen", "freigegeben"].includes(open.state)) redirect(`/verwaltung/${id}/bericht`);
+  const moved = await getDb().execute(sql`
+    UPDATE campaigns SET state = 'bericht', updated_at = now() WHERE id = ${c.id} AND state IN ('auswertung', 'bericht') RETURNING id`);
+  if (!moved.rows.length) redirect(`/verwaltung/${id}/auswertung`);
   const report = await startReport(c, saved, staff.tenant.name);
-  await getDb().execute(sql`UPDATE campaigns SET state = 'bericht', updated_at = now() WHERE id = ${c.id}`);
   await audit(staff, "report.created", "campaign_report", report.id, { version: report.version, result: saved.id, sentences: report.sentences.length });
   refresh(id);
   redirect(`/verwaltung/${id}/bericht`);
@@ -133,7 +148,7 @@ export async function releaseReport(id: string, reportId: string): Promise<void>
   const staff = await requireEditor();
   const c = await load(id, staff);
   const report = await getReport(c.id, reportId);
-  if (report?.state !== "geprueft") redirect(`/verwaltung/${id}/bericht`);
+  if (report?.state !== "geprueft" || !(await isCurrent(c, report.resultId))) redirect(`/verwaltung/${id}/bericht`);
   await getDb().execute(sql`
     UPDATE campaign_reports SET state = 'freigegeben', decided_by = ${`user:${staff.user.id}`}, decided_at = now(), updated_at = now()
     WHERE id = ${report.id} AND state = 'geprueft'`);
@@ -167,9 +182,15 @@ export async function publishReport(id: string, reportId: string): Promise<void>
   const staff = await requireInitiator();
   const c = await load(id, staff);
   const report = await getReport(c.id, reportId);
-  if (report?.state !== "freigegeben") redirect(`/verwaltung/${id}/bericht`);
-  await getDb().execute(sql`UPDATE campaign_reports SET state = 'veroeffentlicht', updated_at = now() WHERE id = ${report.id}`);
-  await getDb().execute(sql`UPDATE campaigns SET state = 'veroeffentlicht', updated_at = now() WHERE id = ${c.id}`);
+  if (report?.state !== "freigegeben" || !(await isCurrent(c, report.resultId))) redirect(`/verwaltung/${id}/bericht`);
+  // Report and procedure change together, or neither (a half-done publish would leave the public page empty).
+  const done = await getDb().transaction(async (tx) => {
+    const r = await tx.execute(sql`UPDATE campaign_reports SET state = 'veroeffentlicht', updated_at = now() WHERE id = ${report.id} AND state = 'freigegeben' RETURNING id`);
+    if (!r.rows.length) return false;
+    await tx.execute(sql`UPDATE campaigns SET state = 'veroeffentlicht', updated_at = now() WHERE id = ${c.id}`);
+    return true;
+  });
+  if (!done) redirect(`/verwaltung/${id}/bericht`);
   await audit(staff, "report.veroeffentlicht", "campaign_report", report.id, { version: report.version, result: report.resultId });
   await audit(staff, "campaign.state", "campaign", c.id, { from: c.state, to: "veroeffentlicht" });
   refresh(id);

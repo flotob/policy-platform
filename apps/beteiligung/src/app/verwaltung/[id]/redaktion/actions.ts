@@ -79,7 +79,7 @@ export async function releaseNodeAction(id: string, nodeId: string, form: FormDa
   const edits = fieldsFrom(form, node.rolle);
   const back = `punkt=${nodeId}`;
   if (typeof edits === "string") redirect(`${base}?${back}&fehler=${encodeURIComponent(edits)}`);
-  await decide(x, back, () => releaseNode(db, { tenantId: campaign.tenantId, nodeId, actor, edits }));
+  await decide(x, back, () => releaseNode(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, nodeId, actor, edits }));
 }
 
 /**
@@ -97,7 +97,7 @@ export async function releaseRecommendedSkeleton(id: string): Promise<void> {
   await decide(x, "", async () => {
     for (const n of nodes) {
       try {
-        await releaseNode(db, { tenantId: campaign.tenantId, nodeId: n, actor });
+        await releaseNode(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, nodeId: n, actor });
       } catch (e) {
         // Decided meanwhile by a colleague: skip, keep going.
         if (!(e instanceof DecisionError)) throw e;
@@ -115,7 +115,7 @@ export async function editNodeAction(id: string, nodeId: string, form: FormData)
   const edits = fieldsFrom(form, node.rolle);
   if (typeof edits === "string") redirect(`${base}?bearbeiten=${nodeId}&fehler=${encodeURIComponent(edits)}#p-${nodeId}`);
   try {
-    await editNode(db, { tenantId: campaign.tenantId, nodeId, actor, edits, newVersion: campaign.state === "offen" });
+    await editNode(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, nodeId, actor, edits, newVersion: campaign.state === "offen" });
     await syncDerivedVotes(db, campaign.consultationId);
   } catch (e) {
     if (e instanceof DecisionError) redirect(`${base}?fehler=${encodeURIComponent(e.message)}`);
@@ -130,21 +130,21 @@ export async function rejectNodeAction(id: string, nodeId: string, form: FormDat
   const { campaign, actor, db, base } = x;
   const reason = field(form, "reason") as RejectKey;
   await decide(x, `punkt=${nodeId}`, () =>
-    rejectNode(db, { tenantId: campaign.tenantId, nodeId, actor, reason: reason in REJECT ? reason : "kein_argument" }),
+    rejectNode(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, nodeId, actor, reason: reason in REJECT ? reason : "kein_argument" }),
   );
 }
 
 export async function mergeNodeAction(id: string, nodeId: string, intoId: string, stance: 1 | -1): Promise<void> {
   const x = await ctx(id);
   const { campaign, actor, db, base } = x;
-  await decide(x, `punkt=${nodeId}`, () => mergeNode(db, { tenantId: campaign.tenantId, nodeId, intoId, actor, stance }));
+  await decide(x, `punkt=${nodeId}`, () => mergeNode(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, nodeId, intoId, actor, stance }));
 }
 
 /** A move inside a node's card: open it as a proposal of its own, or drop it — the card stays open. */
 export async function detachMoveAction(id: string, nodeId: string, moveId: string): Promise<void> {
   const x = await ctx(id);
   const { campaign, actor, db, base } = x;
-  await decide(x, `punkt=${nodeId}`, () => reassignMove(db, { tenantId: campaign.tenantId, moveId, actor, to: "neu" }), `${base}?punkt=${nodeId}`);
+  await decide(x, `punkt=${nodeId}`, () => reassignMove(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, moveId, actor, to: "neu" }), `${base}?punkt=${nodeId}`);
 }
 
 export async function discardMoveAction(id: string, back: string, moveId: string, form: FormData): Promise<void> {
@@ -153,7 +153,7 @@ export async function discardMoveAction(id: string, back: string, moveId: string
   const reason = field(form, "reason") as RejectKey;
   await decide(x,
     back,
-    () => discardMove(db, { tenantId: campaign.tenantId, moveId, actor, reason: reason in REJECT ? reason : "kein_argument" }),
+    () => discardMove(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, moveId, actor, reason: reason in REJECT ? reason : "kein_argument" }),
     back.startsWith("punkt=") ? `${base}?${back}` : base,
   );
 }
@@ -161,7 +161,7 @@ export async function discardMoveAction(id: string, back: string, moveId: string
 export async function confirmMoveAction(id: string, moveId: string): Promise<void> {
   const x = await ctx(id);
   const { campaign, actor, db, base } = x;
-  await decide(x, `beitrag=${moveId}`, () => confirmMove(db, { tenantId: campaign.tenantId, moveId, actor }));
+  await decide(x, `beitrag=${moveId}`, () => confirmMove(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, moveId, actor }));
 }
 
 export async function newNodeFromMoveAction(id: string, moveId: string): Promise<void> {
@@ -169,7 +169,7 @@ export async function newNodeFromMoveAction(id: string, moveId: string): Promise
   const { campaign, actor, db, base } = x;
   let target: string;
   try {
-    target = await reassignMove(db, { tenantId: campaign.tenantId, moveId, actor, to: "neu" });
+    target = await reassignMove(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, moveId, actor, to: "neu" });
   } catch (e) {
     if (e instanceof DecisionError) redirect(`${base}?beitrag=${moveId}&fehler=${encodeURIComponent(e.message)}`);
     throw e;
@@ -189,7 +189,7 @@ export async function reassignMoveAction(id: string, back: string, moveId: strin
   if (!/^[0-9a-f-]{36}$/.test(node)) redirect(`${base}?${back}&fehler=${encodeURIComponent("Bitte wählen Sie einen Punkt.")}`);
   await decide(x,
     back,
-    () => reassignMove(db, { tenantId: campaign.tenantId, moveId, actor, to: { node, stance } }),
+    () => reassignMove(db, { tenantId: campaign.tenantId, consultationId: campaign.consultationId, moveId, actor, to: { node, stance } }),
     back.startsWith("punkt=") ? `${base}?${back}` : base,
   );
 }

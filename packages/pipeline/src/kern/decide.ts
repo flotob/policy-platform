@@ -60,15 +60,23 @@ export async function createNode(
   return (r.rows[0] as Row).id as string;
 }
 
-async function lockNode(tx: Exec, tenantId: string, nodeId: string): Promise<Row> {
-  const r = await tx.execute(sql`SELECT * FROM map_points WHERE id = ${nodeId} AND tenant_id = ${tenantId} FOR UPDATE`);
+/**
+ * `consultationId`, when given, pins the row to the procedure the caller was authorised for: an editor of
+ * a town must not change another procedure of the same town through this one's page.
+ */
+async function lockNode(tx: Exec, tenantId: string, nodeId: string, consultationId?: string): Promise<Row> {
+  const r = await tx.execute(sql`
+    SELECT * FROM map_points WHERE id = ${nodeId} AND tenant_id = ${tenantId}
+      AND (${consultationId ?? null}::uuid IS NULL OR consultation_id = ${consultationId ?? null}::uuid) FOR UPDATE`);
   const node = r.rows[0] as Row | undefined;
   if (!node) throw new DecisionError("Diesen Punkt gibt es nicht.");
   return node;
 }
 
-async function lockMove(tx: Exec, tenantId: string, moveId: string): Promise<Row> {
-  const r = await tx.execute(sql`SELECT * FROM moves WHERE id = ${moveId} AND tenant_id = ${tenantId} FOR UPDATE`);
+async function lockMove(tx: Exec, tenantId: string, moveId: string, consultationId?: string): Promise<Row> {
+  const r = await tx.execute(sql`
+    SELECT * FROM moves WHERE id = ${moveId} AND tenant_id = ${tenantId}
+      AND (${consultationId ?? null}::uuid IS NULL OR consultation_id = ${consultationId ?? null}::uuid) FOR UPDATE`);
   const move = r.rows[0] as Row | undefined;
   if (!move) throw new DecisionError("Diesen Beitrag gibt es nicht.");
   return move;
@@ -96,9 +104,9 @@ async function dropIfEmpty(tx: Exec, tenantId: string, nodeId: string | null, ac
 }
 
 /** Z7/A2: release a node (with the editors' wording); its waiting moves now belong to it. */
-export async function releaseNode(db: Db, a: { tenantId: string; nodeId: string; actor: string; edits?: Partial<NodeFields> }) {
+export async function releaseNode(db: Db, a: { tenantId: string; consultationId?: string; nodeId: string; actor: string; edits?: Partial<NodeFields> }) {
   await db.transaction(async (tx) => {
-    const node = await lockNode(tx, a.tenantId, a.nodeId);
+    const node = await lockNode(tx, a.tenantId, a.nodeId, a.consultationId);
     if (node.status !== "draft") throw new DecisionError("Über diesen Punkt ist schon entschieden.");
     const f = { ...fieldsOf(node), ...(a.edits ?? {}) };
     if (f.text.trim().length < 8) throw new DecisionError("Die Aussage ist zu kurz.");
@@ -127,9 +135,9 @@ export async function releaseNode(db: Db, a: { tenantId: string; nodeId: string;
  * changed wording is a new version (A2): votes stay with the wording they
  * were cast on, and everyone is asked again.
  */
-export async function editNode(db: Db, a: { tenantId: string; nodeId: string; actor: string; edits: Partial<NodeFields>; newVersion?: boolean }) {
+export async function editNode(db: Db, a: { tenantId: string; consultationId?: string; nodeId: string; actor: string; edits: Partial<NodeFields>; newVersion?: boolean }) {
   await db.transaction(async (tx) => {
-    const node = await lockNode(tx, a.tenantId, a.nodeId);
+    const node = await lockNode(tx, a.tenantId, a.nodeId, a.consultationId);
     if (node.status !== "released") throw new DecisionError("Nur freigegebene Punkte lassen sich hier ändern.");
     const before = fieldsOf(node);
     const f = { ...before, ...a.edits };
@@ -151,9 +159,9 @@ export async function editNode(db: Db, a: { tenantId: string; nodeId: string; ac
 }
 
 /** Reject a proposed node; its moves are no argument for the map. */
-export async function rejectNode(db: Db, a: { tenantId: string; nodeId: string; actor: string; reason: RejectReason }) {
+export async function rejectNode(db: Db, a: { tenantId: string; consultationId?: string; nodeId: string; actor: string; reason: RejectReason }) {
   await db.transaction(async (tx) => {
-    const node = await lockNode(tx, a.tenantId, a.nodeId);
+    const node = await lockNode(tx, a.tenantId, a.nodeId, a.consultationId);
     if (node.status !== "draft") throw new DecisionError("Über diesen Punkt ist schon entschieden.");
     await tx.execute(sql`UPDATE map_points SET status = 'rejected' WHERE id = ${a.nodeId}`);
     await tx.execute(sql`
@@ -169,11 +177,11 @@ export async function rejectNode(db: Db, a: { tenantId: string; nodeId: string; 
  * into another; stance -1 when it said the opposite ("Die Netze reichen
  * nicht" into "Die Netze reichen"), so its moves count as disagreement.
  */
-export async function mergeNode(db: Db, a: { tenantId: string; nodeId: string; intoId: string; actor: string; stance: 1 | -1 }) {
+export async function mergeNode(db: Db, a: { tenantId: string; consultationId?: string; nodeId: string; intoId: string; actor: string; stance: 1 | -1 }) {
   if (a.nodeId === a.intoId) throw new DecisionError("Ein Punkt lässt sich nicht mit sich selbst zusammenführen.");
   await db.transaction(async (tx) => {
-    const node = await lockNode(tx, a.tenantId, a.nodeId);
-    const into = await lockNode(tx, a.tenantId, a.intoId);
+    const node = await lockNode(tx, a.tenantId, a.nodeId, a.consultationId);
+    const into = await lockNode(tx, a.tenantId, a.intoId, a.consultationId);
     if (node.status !== "draft") throw new DecisionError("Über diesen Punkt ist schon entschieden.");
     if (into.consultation_id !== node.consultation_id || !["draft", "released"].includes(into.status as string)) {
       throw new DecisionError("Mit diesem Punkt lässt sich nicht zusammenführen.");
@@ -199,9 +207,9 @@ export async function mergeNode(db: Db, a: { tenantId: string; nodeId: string; i
 }
 
 /** Confirm the machine's assignment of a move (uncertain match, opposite, or a spot check). */
-export async function confirmMove(db: Db, a: { tenantId: string; moveId: string; actor: string }) {
+export async function confirmMove(db: Db, a: { tenantId: string; consultationId?: string; moveId: string; actor: string }) {
   await db.transaction(async (tx) => {
-    const move = await lockMove(tx, a.tenantId, a.moveId);
+    const move = await lockMove(tx, a.tenantId, a.moveId, a.consultationId);
     const decision = move.decision as Row | null;
     if (move.sample && move.state !== "vorgelegt") {
       // Z9: the spot check passed.
@@ -212,7 +220,7 @@ export async function confirmMove(db: Db, a: { tenantId: string; moveId: string;
       return;
     }
     if (move.state !== "vorgelegt" || !move.map_point_id) throw new DecisionError("Über diesen Beitrag ist schon entschieden.");
-    const node = await lockNode(tx, a.tenantId, move.map_point_id as string);
+    const node = await lockNode(tx, a.tenantId, move.map_point_id as string, a.consultationId);
     if (node.status !== "released") throw new DecisionError("Der Punkt ist noch nicht freigegeben; der Beitrag wird mit ihm entschieden.");
     await tx.execute(sql`
       UPDATE moves SET state = 'verknuepft', decided_by = ${a.actor}, decided_at = now(),
@@ -225,10 +233,10 @@ export async function confirmMove(db: Db, a: { tenantId: string; moveId: string;
 /** Z6 "umhängen" / "als neuen Knoten anlegen": move a move to another node, or open a new proposed node from it. */
 export async function reassignMove(
   db: Db,
-  a: { tenantId: string; moveId: string; actor: string; to: { node: string; stance: 1 | -1 } | "neu" },
+  a: { tenantId: string; consultationId?: string; moveId: string; actor: string; to: { node: string; stance: 1 | -1 } | "neu" },
 ): Promise<string> {
   return db.transaction(async (tx) => {
-    const move = await lockMove(tx, a.tenantId, a.moveId);
+    const move = await lockMove(tx, a.tenantId, a.moveId, a.consultationId);
     // A discarded move comes back only as the correction of a spot check (Z9).
     if (move.state === "verworfen" && !move.sample) throw new DecisionError("Dieser Beitrag ist verworfen.");
     const from = (move.map_point_id as string | null) ?? null;
@@ -250,7 +258,7 @@ export async function reassignMove(
       });
       linked = false;
     } else {
-      const node = await lockNode(tx, a.tenantId, a.to.node);
+      const node = await lockNode(tx, a.tenantId, a.to.node, a.consultationId);
       if (node.consultation_id !== move.consultation_id || !["draft", "released"].includes(node.status as string)) {
         throw new DecisionError("Diesem Punkt lässt sich der Beitrag nicht zuordnen.");
       }
@@ -270,9 +278,9 @@ export async function reassignMove(
 }
 
 /** Z6 "verwerfen": the move is no argument (greeting, insult without a claim, off the measure). */
-export async function discardMove(db: Db, a: { tenantId: string; moveId: string; actor: string; reason: RejectReason }) {
+export async function discardMove(db: Db, a: { tenantId: string; consultationId?: string; moveId: string; actor: string; reason: RejectReason }) {
   await db.transaction(async (tx) => {
-    const move = await lockMove(tx, a.tenantId, a.moveId);
+    const move = await lockMove(tx, a.tenantId, a.moveId, a.consultationId);
     if (move.state === "verworfen") return;
     await tx.execute(sql`
       UPDATE moves SET state = 'verworfen', decided_by = ${a.actor}, decided_at = now(),

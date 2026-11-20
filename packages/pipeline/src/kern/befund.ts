@@ -28,6 +28,7 @@ import {
   type VoteRecord,
 } from "@policy/math";
 
+import { MIN_CAMP_VOTES } from "./befund-text.ts";
 import type { Richtung, StepKey, Typ } from "./prompts.ts";
 
 export type Rolle = "schluss" | "praemisse" | "beitrag";
@@ -36,8 +37,8 @@ export type BelegKey = "keine" | "behauptung" | "vergleichsfall" | "studie" | "m
 /** Evidence that is more than a claim (Belegklassen with a source). */
 export const PROOF: readonly BelegKey[] = ["vergleichsfall", "studie", "messdaten"];
 
-/** Fewer votes than this in a camp are not the camp's position (a statistical floor, not a policy threshold). */
-export const MIN_CAMP_VOTES = 3;
+// MIN_CAMP_VOTES (fewer votes than this in a camp are not the camp's position) lives in befund-text.ts,
+// so the sentences can say "zu wenige Stimmen" by the same rule.
 /** A participant needs this many votes to be placed in a camp (Polis default). */
 const MIN_VOTES = 7;
 /** The share of a camp's carrying votes a bridge must survive losing (Stephan: "die jeweils einflussreichsten Stimmen herausrechnen"). */
@@ -227,7 +228,7 @@ export interface StepOut {
 export interface Diagnosis {
   camps: [number, number];
   /** About the measure itself (the root) and the town's premises. */
-  schluss: "bruecke_gruende" | "bruecke_ergebnisse" | "streit" | "offen";
+  schluss: "bruecke_gruende" | "bruecke_ergebnisse" | "abgelehnt" | "streit" | "offen";
   schlussNodes: number[];
   /** What kind of dispute it is, over facts and values. */
   art: "wertkonflikt" | "scheinfaktenstreit" | "gemischt" | "einig";
@@ -421,6 +422,10 @@ export function diagnosePair(statements: StatementOut[], g: number, h: number, t
   if (root && pp(root) === "getragen") {
     schluss = dividingPremises.length ? "bruecke_ergebnisse" : "bruecke_gruende";
     schlussNodes = dividingPremises.length ? dividingPremises : premises.filter((s) => pp(s) === "getragen").map((s) => s.nr);
+  } else if (root && pp(root) === "abgelehnt") {
+    // Both camps reject the measure itself: agreement too — against it.
+    schluss = "abgelehnt";
+    schlussNodes = [root.nr];
   } else if (root && pp(root) === "trennt") {
     schluss = "streit";
     schlussNodes = [root.nr, ...dividingPremises];
@@ -431,6 +436,9 @@ export function diagnosePair(statements: StatementOut[], g: number, h: number, t
   const art: Diagnosis["art"] = values.length && !facts.length ? "wertkonflikt" : facts.length && !values.length ? "scheinfaktenstreit" : facts.length ? "gemischt" : "einig";
   return { camps: [g, h], schluss, schlussNodes, art, artNodes: art === "wertkonflikt" ? values : art === "scheinfaktenstreit" ? facts : [...values, ...facts] };
 }
+
+/** The wording shown for an attack: from a contribution that may be quoted — never one that names a private person. */
+const shownAttack = (contra: MoveIn[]) => contra.find((m) => !m.personal)?.aussage ?? null;
 
 // ———— The evaluation ————
 
@@ -591,7 +599,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
       entries.push({ step: n.schritt, question: n.frage, role: own, status: "offen", attack: null, camp: null });
       const contra = own === "stuetzt" ? ms.filter((m) => m.stance === -1) : [];
-      if (contra.length) entries.push({ step: n.schritt, question: contra[0]!.frage ?? n.frage, role: "greift_an", status: "offen", attack: contra[0]!.aussage, camp: null });
+      if (contra.length) entries.push({ step: n.schritt, question: contra[0]!.frage ?? n.frage, role: "greift_an", status: "offen", attack: shownAttack(contra), camp: null });
     }
     if (n.rolle !== "schluss" && n.schritt && k >= 2) {
       const own: Richtung = n.rolle === "beitrag" && n.richtung === "greift_an" ? "greift_an" : "stuetzt";
@@ -615,7 +623,7 @@ export function evaluate(input: EvaluateInput): Ergebnis {
             question: contra[0]!.frage ?? n.frage,
             role: "greift_an",
             status: attackStatus(cc, t, true, n.typ, proven),
-            attack: contra[0]!.aussage,
+            attack: shownAttack(contra),
             camp: null,
           });
         }
@@ -696,20 +704,40 @@ export function evaluate(input: EvaluateInput): Ergebnis {
   const diagnoses: Diagnosis[] = [];
   for (let g = 0; g < k; g++) for (let h = g + 1; h < k; h++) diagnoses.push(diagnosePair(statements, g, h, t));
 
-  // W6: gaps.
-  // Unasked in the strict sense: neither an objection nor an answer. A question with only supporting
-  // contributions was raised from one side — it is listed there, not here.
-  const spoken = (st: StepKey, q: string) => statements.some((s) => s.rolle === "beitrag" && s.schritt === st && s.frage === q);
-  const unasked = steps.flatMap((s) => s.unasked.filter((q) => !spoken(s.key, q)).map((q) => ({ step: s.key, question: q })));
+  // W6: gaps, from the argument entries per step and question. Answers: the town's premises and supporting
+  // contributions; objections: attacks, contradictions and hidden readings (Scheinkonsens).
+  const spoken = new Map<string, { answers: Set<number>; objections: Set<number>; contributions: Set<number> }>();
+  for (const s of statements) {
+    for (const e of s.entries) {
+      if (!e.question) continue;
+      const key = `${e.step}|${e.question}`;
+      const g = spoken.get(key) ?? { answers: new Set<number>(), objections: new Set<number>(), contributions: new Set<number>() };
+      if (e.role === "greift_an") g.objections.add(s.nr);
+      else {
+        g.answers.add(s.nr);
+        if (s.rolle === "beitrag") g.contributions.add(s.nr);
+      }
+      spoken.set(key, g);
+    }
+  }
+  const at = (st: StepKey, q: string) => spoken.get(`${st}|${q}`);
+  // Unasked in the strict sense: neither an objection nor an answer, not even from the town.
+  const unasked = steps.flatMap((s) => s.unasked.filter((q) => !at(s.key, q)?.answers.size).map((q) => ({ step: s.key, question: q })));
   const oneSided: Gaps["oneSided"] = [];
   for (const st of STEP_ORDER) {
     for (const q of input.context.questions.filter((x) => x.steps.includes(st))) {
-      const cs = statements.filter((s) => s.rolle === "beitrag" && s.schritt === st && s.frage === q.key);
-      const dirs = new Set(cs.map((s) => s.richtung));
-      if (cs.length && dirs.size === 1) oneSided.push({ step: st, question: q.key, direction: [...dirs][0] ?? "stuetzt", nodes: cs.map((s) => s.nr) });
+      const g = at(st, q.key);
+      if (!g) continue;
+      // Objections nobody answered — not the town either.
+      if (g.objections.size && !g.answers.size) oneSided.push({ step: st, question: q.key, direction: "greift_an", nodes: [...g.objections] });
+      // Contributions only in support, no objection at all (a question only the town spoke to is "unattacked" below).
+      else if (g.contributions.size && !g.objections.size) oneSided.push({ step: st, question: q.key, direction: "stuetzt", nodes: [...g.contributions] });
     }
   }
-  const unattacked = statements.filter((s) => s.rolle === "praemisse" && !s.entries.some((e) => e.role === "greift_an")).map((s) => s.nr);
+  // A premise of the town nobody attacked: no objection to it, and none on its step and question.
+  const unattacked = statements
+    .filter((s) => s.rolle === "praemisse" && !s.entries.some((e) => e.role === "greift_an") && !(s.schritt && s.frage && at(s.schritt, s.frage)?.objections.size))
+    .map((s) => s.nr);
 
   const core =
     k >= 2
