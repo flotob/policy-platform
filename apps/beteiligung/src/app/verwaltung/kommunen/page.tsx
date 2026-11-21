@@ -1,4 +1,5 @@
 import { sql } from "@policy/db";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { getDb } from "@/lib/db";
@@ -50,7 +51,9 @@ export default async function Kommunen() {
             return (
               <tr key={t.id}>
                 <td>
-                  {t.name}
+                  <Link href={`/${t.slug}`} className="ws-link">
+                    {t.name}
+                  </Link>
                   <span className="muted small ws-q">streit.bar/{t.slug}</span>
                 </td>
                 <td className="num">{t.members}</td>

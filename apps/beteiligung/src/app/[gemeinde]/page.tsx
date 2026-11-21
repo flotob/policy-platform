@@ -8,7 +8,7 @@ import { participation } from "@/lib/abstimmung";
 import { confirmedTown } from "@/lib/bestaetigen";
 import { publicDecision } from "@/lib/beschluss";
 import { decisionHead } from "@/lib/beschluss-words";
-import { ownTeam, publicCampaignsOf, type Campaign } from "@/lib/campaigns";
+import { maySeePreview, publicCampaignsOf, type Campaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { kommuneBySlug, type KommuneLink } from "@/lib/kommune";
 import { RESERVED } from "@/lib/slug";
@@ -32,17 +32,6 @@ function teaser(text: string | null, max = 260): string {
   const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
   return end > 80 ? cut.slice(0, end + 1) : `${cut.replace(/\s+\S*$/, "")} …`;
 }
-
-/** The letter on a town without logo: the place name's, not "Stadt"'s or "Gemeinde"'s. */
-const initial = (name: string) => (name.trim().split(/\s+/).pop() ?? name).charAt(0).toUpperCase();
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .filter((w) => /^\p{Lu}/u.test(w))
-    .slice(0, 2)
-    .map((w) => w.charAt(0))
-    .join("");
 
 const ICON: Record<string, ReactNode> = {
   web: (
@@ -111,7 +100,7 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
     | undefined;
   // A town nobody has confirmed an address for is seen by its own team only (lib/bestaetigen.ts).
   const preview = t ? !t.confirmed : false;
-  if (!t || (preview && !(await ownTeam(t.id)))) notFound();
+  if (!t || (preview && !(await maySeePreview(t.id)))) notFound();
   const k = (await kommuneBySlug(gemeinde))!;
   const s = k.settings;
 
@@ -138,26 +127,23 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
       <main className="wrap tp">
         {preview ? <p className="notice">Vorschau für Ihr Team: Öffentlich sichtbar wird diese Seite, sobald jemand aus Ihrem Team die E-Mail-Adresse bestätigt hat.</p> : null}
 
-        <section className="tp-head" aria-label={k.name}>
+        {/* What the town has not uploaded is left out, not stood in for: no empty band, no letter. */}
+        <section className={k.titelbild ? "tp-head tp-head-cover" : "tp-head"} aria-label={k.name}>
           {k.titelbild ? (
             <figure className="tp-cover">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={k.titelbild} alt={s.titelbild.alt} />
               {s.titelbild.credit ? <figcaption>Bild: {s.titelbild.credit}</figcaption> : null}
             </figure>
-          ) : (
-            <div className="tp-cover tp-cover-empty" aria-hidden="true" />
-          )}
+          ) : null}
           <div className="tp-id">
             <div className="tp-who">
-              <div className="tp-logo">
-                {k.logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+              {k.logo ? (
+                <div className="tp-logo">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={k.logo} alt={`Logo: ${k.name}`} />
-                ) : (
-                  <span aria-hidden="true">{initial(k.name)}</span>
-                )}
-              </div>
+                </div>
+              ) : null}
               <div className="tp-name">
                 <h1>{k.name}</h1>
                 {s.claim ? <p>{s.claim}</p> : null}
@@ -298,9 +284,7 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
                       {k.portrait ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={k.portrait} alt="" />
-                      ) : (
-                        <span aria-hidden="true">{initials(s.gruss.name)}</span>
-                      )}
+                      ) : null}
                       <p>
                         <strong>{s.gruss.name}</strong>
                         {s.gruss.amt ? <span>{s.gruss.amt}</span> : null}

@@ -91,7 +91,7 @@ export async function getPublicCampaign(tenantSlug: string, slug: string) {
   const x = r[0];
   if (!x) return null;
   const preview = x.confirmed !== true;
-  if (preview && !(await ownTeam(x.tenant_id as string))) return null;
+  if (preview && !(await maySeePreview(x.tenant_id as string))) return null;
   return { ...toCampaign(x), tenant: { name: x.tenant_name as string, slug: x.tenant_slug as string }, preview };
 }
 
@@ -101,10 +101,17 @@ export async function publicCampaignsOf(tenantId: string): Promise<Campaign[]> {
   return r.map(toCampaign);
 }
 
-/** Whether the logged-in staff member belongs to this town (session loaded only when needed: scripts import this file). */
-export async function ownTeam(tenantId: string): Promise<boolean> {
+/**
+ * Who may see a town's pages before anyone there has confirmed an address: its own team, and the
+ * platform admins who set towns up. Session loaded only when needed: scripts import this file.
+ */
+export async function maySeePreview(tenantId: string): Promise<boolean> {
   const { getStaff } = await import("./session");
-  return (await getStaff())?.tenant.id === tenantId;
+  const staff = await getStaff();
+  if (!staff) return false;
+  if (staff.tenant.id === tenantId) return true;
+  const { isPlatformAdmin } = await import("./team");
+  return isPlatformAdmin(staff.user);
 }
 
 /** The files of a procedure; a sender's statements stay together (in the order they came), so the list reads by sender. */

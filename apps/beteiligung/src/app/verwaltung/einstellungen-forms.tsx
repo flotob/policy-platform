@@ -147,7 +147,7 @@ export function ImageForm({ kind, url, credit, alt }: { kind: "titelbild" | "por
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={title ? "Ihr Titelbild" : "Ihr Foto"} className="image-preview" />
       ) : (
-        <p className="muted small">{title ? "Noch kein Titelbild. Ohne Bild zeigt die Seite eine ruhige Fläche." : "Noch kein Foto. Ohne Foto stehen dort die Anfangsbuchstaben."}</p>
+        <p className="muted small">{title ? "Noch kein Titelbild. Ohne Bild beginnt Ihre Seite schlicht mit dem Namen der Kommune." : "Noch kein Foto. Ohne Foto steht dort nur der Name."}</p>
       )}
       <div className="field">
         <label htmlFor={`b-${kind}`}>{url ? (title ? "Anderes Titelbild" : "Anderes Foto") : title ? "Titelbild hochladen" : "Foto hochladen"}</label>
