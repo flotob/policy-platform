@@ -41,23 +41,26 @@
 .erg .scheme .row .k { font-family: var(--serif); font-weight: 600; color: var(--ink-3); }
 .erg .scheme .row .lbl { font-size: 13px; font-weight: 600; }
 .erg .scheme .row .lbl .sub { display: block; font-weight: 400; font-size: 11.5px; color: var(--ink-3); }
-.erg .scheme .concl { margin-top: 6px; padding-top: 8px; border-top: 2px solid var(--ink); font-family: var(--serif); font-size: 14px; }
-.erg .scheme .concl span { color: var(--ink-3); font-family: var(--sans); font-size: 12px; margin-right: 6px; }
 /* The overview's rows are buttons: each leads to its step in the chain below. */
-.erg .scheme button.row, .erg .scheme button.concl { width: 100%; text-align: left; color: var(--ink); background: transparent; border-right: 0; border-bottom: 0; border-left: 0; cursor: pointer; font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit; }
+.erg .scheme button.row { width: 100%; text-align: left; color: var(--ink); background: transparent; border-right: 0; border-bottom: 0; border-left: 0; cursor: pointer; font-family: inherit; font-size: inherit; font-weight: inherit; line-height: inherit; }
 .erg .scheme button.row { border-top: 1px solid var(--line); margin-inline: -6px; padding-inline: 6px; width: calc(100% + 12px); border-radius: 6px; }
 .erg .scheme button.row:hover { background: var(--bg); }
-.erg .scheme button.row:hover .lbl .t, .erg .scheme button.concl:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-.erg .scheme button.concl { display: block; padding-inline: 0; padding-bottom: 0; border-top: 2px solid var(--ink); }
+.erg .scheme button.row:hover .lbl .t { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .erg .scheme button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.erg .kt-step:focus, .erg .kt-end:focus { outline: none; }
-.erg .kt-step, .erg .kt-end { scroll-margin-top: 16px; }
+.erg .kt-step:focus { outline: none; }
+.erg .kt-step { scroll-margin-top: 16px; }
 
-.erg .these { background: var(--sel); color: var(--sel-fg); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
-.erg .these .who { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.65; }
-.erg .these p { margin: 4px 0 0; font-family: var(--serif); font-size: 15px; line-height: 1.4; }
-.erg .these.lead { margin-bottom: 14px; }
-.erg .these + .item { margin-bottom: 18px; }
+/* "Nach Argument" in Urteilsstil: the tenor first — the measure with each camp's vote, and joined beneath it
+   what the four verdicts mean for it. Then the reasons in brief (the scheme) and in full (the chain). */
+.erg .kt-tenor { background: var(--panel); border: 1.5px solid var(--ink); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+.erg .kt-tenor .who { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--ink-3); }
+.erg .kt-tenor > .item { border: 0; border-radius: 0; padding: 14px 16px 12px; }
+.erg .kt-tenor > .item .who { margin-bottom: 5px; }
+.erg .kt-tenor > .item .t { font-size: 18.5px; line-height: 1.32; }
+.erg .kt-urteil { padding: 12px 16px 15px; border-top: 1px solid var(--line); }
+.erg .kt-urteil p { margin: 5px 0 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.45; }
+.erg .kt-urteil b { font-weight: 600; }
+.erg .kt-intro { margin: 22px 0 0; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
 
 .erg .st { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; font-family: var(--sans); }
 .erg .st.ok { background: var(--agree-soft); color: var(--agree); }
@@ -95,7 +98,7 @@
 /* Nach Argument: the four steps hang on one line like links of a chain. A step's node carries its number in the
    verdict's colour; the line below it runs on solid green where the step holds, dashed ochre where it wobbles,
    dashed red where it falls. */
-.erg .kt-chain { margin-top: 20px; }
+.erg .kt-chain { margin-top: 14px; }
 .erg .group.kt-step { --kt: var(--ink-3); --kt-lit: rgb(255 255 255 / 0.9); --kt-line: var(--line-2); position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; margin: 0; padding-bottom: 22px; }
 .erg .group.kt-step.ok { --kt: var(--agree); --kt-lit: #84d3ac; --kt-line: var(--agree); }
 .erg .group.kt-step.warn { --kt: var(--warn); --kt-lit: #ebbf63; --kt-line: repeating-linear-gradient(to bottom, var(--warn) 0 5px, transparent 5px 10px); }
@@ -116,13 +119,6 @@
 .erg .kt-verdict p { margin: 0; font-size: 13.5px; line-height: 1.5; color: rgb(255 255 255 / 0.8); }
 .erg .kt-verdict b { color: var(--kt-lit); font-weight: 600; }
 .erg .kt-lists .role { margin: 0; padding: 9px 0 5px; }
-.erg .kt-end { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; }
-.erg .kt-end > * { grid-column: 2; min-width: 0; }
-.erg .kt-end > .kt-node { grid-column: 1; background: var(--panel); border: 2px solid var(--ink); }
-.erg .kt-end > .kt-node::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--ink); }
-.erg .kt-end h3 { margin: 0; align-self: center; font-family: var(--serif); font-size: 15px; font-weight: 600; }
-.erg .kt-also { background: var(--panel); border: 1.5px solid var(--ink); border-radius: 10px; padding: 13px 16px 15px; }
-.erg .kt-also p { margin: 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.45; }
 
 /* Filter */
 

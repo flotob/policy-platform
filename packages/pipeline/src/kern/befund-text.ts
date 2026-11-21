@@ -310,13 +310,18 @@ export function conclusionText(r: Ergebnis, byName = false): string {
   return `${line} Die Begründung trägt in allen vier Stufen.`;
 }
 
-/** The short "Also" under the step scheme: where the conclusion hangs. */
-export function schemeConclusion(r: Ergebnis): string {
-  const falls = r.steps.map((s, i) => (s.verdict === "faellt" ? i + 1 : 0)).filter(Boolean);
-  const shaky = r.steps.map((s, i) => (s.verdict === "wackelt" ? i + 1 : 0)).filter(Boolean);
-  if (falls.length) return `Der Schluss hängt an Stufe ${falls.join(" und ")}. Dort steht, was keine Evidenz abwehren kann.`;
-  if (shaky.length) return `Der Schluss hängt an Stufe ${shaky.join(" und ")}. Was dort steht, lässt sich klären oder ausgestalten.`;
-  return "Alle vier Stufen halten.";
+/**
+ * The tenor on the results page ("Nach Argument"): the four verdicts and what follows for the measure, which
+ * stands right above it, so it is not quoted again. The report keeps conclusionText.
+ */
+export function tenorText(r: Ergebnis): { line: string; rest: string } {
+  const falls = r.steps.some((s) => s.verdict === "faellt");
+  const shaky = r.steps.some((s) => s.verdict === "wackelt");
+  if (!falls && !shaky) return { line: `Alle ${r.steps.length === 4 ? "vier" : r.steps.length} Stufen halten.`, rest: "Die Begründung der Stadt trägt." };
+  const line = stepsLine(r);
+  if (!shaky) return { line, rest: "Ob die Maßnahme richtig ist, lässt sich nicht aus Belegen ableiten. Es hängt an einer Wertung, und die gehört in den Rat." };
+  if (falls) return { line, rest: "Ob die Maßnahme richtig ist, hängt an einer Wertung, die der Rat entscheiden muss, und an Punkten, die sich vorher klären oder ausgestalten lassen." };
+  return { line, rest: "Ob die Maßnahme richtig ist, hängt an Punkten, die sich vor einem Beschluss klären oder ausgestalten lassen." };
 }
 
 export type Segment = { text: string } | { text: string; nr: number };

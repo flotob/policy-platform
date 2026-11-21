@@ -5,7 +5,6 @@ import {
   campLabel,
   campName,
   checkLines,
-  conclusionText,
   countLine,
   evidenceText,
   firmBridge,
@@ -18,7 +17,6 @@ import {
   pct,
   pillOf,
   readingOf,
-  schemeConclusion,
   smallHeadline,
   smallNote,
   statusWords,
@@ -27,6 +25,7 @@ import {
   TALLY_ORDER,
   TALLY_WORDS,
   tallyOf,
+  tenorText,
   type Tally,
   TYP_WORDS,
   VERDICT_WORDS,
@@ -324,17 +323,24 @@ export function ResultView(props: ResultViewProps) {
   );
 
   const root = r.statements.find((s) => s.rolle === "schluss");
+  // Urteilsstil: the result first (the tenor), then the reasons in brief (the scheme), then in full (the chain).
+  const tenor = (
+    <section className="kt-tenor" aria-label="Ergebnis">
+      {root ? item(root, <div className="who">Die Maßnahme</div>) : null}
+      {small ? null : (
+        <div className="kt-urteil">
+          <div className="who">Die Begründung der Stadt</div>
+          <p>
+            <b>{tenorText(r).line}</b> {tenorText(r).rest}
+          </p>
+        </div>
+      )}
+    </section>
+  );
   const argumentList = (
     <>
-      <div className="these lead">
-        <div className="who">Die Maßnahme</div>
-        <p>{props.measure}</p>
-        <div className="who" style={{ marginTop: 8 }}>
-          So begründet die Stadt sie, in vier Schritten. Darunter jeweils, was die Teilnehmenden dazu gesagt haben.
-        </div>
-      </div>
-      {root ? item(root) : null}
-      {/* The four steps hang on one line like links of a chain; the "Also" is where it ends. */}
+      <p className="kt-intro">Die {r.steps.length === 4 ? "vier" : r.steps.length} Stufen im Einzelnen. Unter jeder steht, was die Teilnehmenden dazu gesagt haben.</p>
+      {/* The four steps hang on one line like links of a chain. */}
       <div className="kt-chain">
       {r.steps.map((st, i) => {
         const sup = r.statements.flatMap((s) => s.entries.filter((e) => e.step === st.key && e.role === "stuetzt").map((e) => ({ s, e })));
@@ -443,20 +449,11 @@ export function ResultView(props: ResultViewProps) {
           </section>
         );
       })}
-      {small ? null : (
-        <div className="kt-end" id="stufe-schluss" tabIndex={-1}>
-          <span className="kt-node" aria-hidden />
-          <h3>Also</h3>
-          <div className="kt-also">
-            <p>{conclusionText(r)}</p>
-          </div>
-        </div>
-      )}
       </div>
     </>
   );
 
-  // The overview's rows lead to their step in the chain below (and the "Also" to its end).
+  // The overview's rows lead to their step in the chain below.
   const goStep = (id: string) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -488,7 +485,7 @@ export function ResultView(props: ResultViewProps) {
     <div className="scheme">
       <p>
         Wer eine Maßnahme begründet, macht vier Schritte. Jede Aussage aus der Beteiligung stützt einen davon oder greift ihn an. Ein Angriff ist
-        abgewehrt, klärbar, offen oder er steht. Daraus folgt das Urteil über die Stufe, und aus den vier Urteilen der Schluss.
+        abgewehrt, klärbar, offen oder er steht. Daraus folgt das Urteil über jede Stufe, und aus den vier Urteilen das Ergebnis oben.
       </p>
       {r.steps.map((st, i) => {
         const c = st.counts;
@@ -508,10 +505,6 @@ export function ResultView(props: ResultViewProps) {
           </button>
         );
       })}
-      <button type="button" className="concl" onClick={() => goStep("stufe-schluss")}>
-        <span>Also</span>
-        {schemeConclusion(r)}
-      </button>
     </div>
   );
 
@@ -769,7 +762,12 @@ export function ResultView(props: ResultViewProps) {
               Nach Argument
             </button>
           </div>
-          {view === "argument" ? scheme : null}
+          {view === "argument" ? (
+            <>
+              {tenor}
+              {scheme}
+            </>
+          ) : null}
           <div>{view === "befund" ? (small ? tallyList : befundList) : argumentList}</div>
         </aside>
 
