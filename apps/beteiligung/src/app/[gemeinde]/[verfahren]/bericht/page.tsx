@@ -48,7 +48,10 @@ export default async function Bericht({ params }: { params: Promise<{ gemeinde: 
           {c.tenant.name}
           {period ? `, Beteiligung ${period}` : ""}. Fassung {report.version}, freigegeben {report.decidedAt ? `am ${day(report.decidedAt)}` : ""} von der Redaktion.
         </p>
+        {/* The measure is the town's proposal, not a rule in force: say so, and where the decision stands. */}
+        <p className="pub-report-put">{c.tenant.name} hat diese Maßnahme zur Diskussion gestellt:</p>
         <blockquote className="pub-measure">{c.measure}</blockquote>
+        {decision ? <p className="pub-report-put">Wie der {decision.gremium} entschieden hat, steht am Ende des Berichts.</p> : null}
         <ReportText text={report.text!} resultsHref={`${base}/ergebnis`} />
         {decision ? (
           <section className="pub-report-decision">
