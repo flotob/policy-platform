@@ -16,7 +16,11 @@ type Row = Record<string, unknown>;
 
 export const EXAMPLE = { gemeinde: "musterstadt", verfahren: "solarpflicht" } as const;
 
+/** Why the statement was chosen: the core dispute, a firm bridge, a bridge with a reservation, a fact a report can settle. */
+export type ExampleRole = "kern" | "einig" | "vorbehalt" | "tatsache";
+
 export interface ExampleStatement {
+  role: ExampleRole;
   text: string;
   label: string;
   tone: "agree" | "disagree" | "warn";
@@ -72,7 +76,15 @@ function build(r: Ergebnis, names: string[] | null, hidden: Set<string>, base: s
   const firm = bridges.find((s) => firmBridge(s));
   const caution = pool.find((s) => s.category === "warnung") ?? bridges.find((s) => !firmBridge(s));
   const fact = pool.filter((s) => s.category === "klaerbar").sort((a, b) => b.gap - a.gap)[0];
-  const chosen = [...new Set([core, firm, caution, fact].filter((s): s is StatementOut => !!s))];
+  const slots: [ExampleRole, StatementOut | undefined][] = [
+    ["kern", core],
+    ["einig", firm],
+    ["vorbehalt", caution],
+    ["tatsache", fact],
+  ];
+  const picked: { s: StatementOut; role: ExampleRole }[] = [];
+  for (const [role, s] of slots) if (s && !picked.some((x) => x.s.id === s.id)) picked.push({ s, role });
+  const chosen = picked.map((x) => x.s);
   if (!chosen.length) return null;
 
   const word = (s: StatementOut): Pick<ExampleStatement, "label" | "tone"> => {
@@ -86,11 +98,12 @@ function build(r: Ergebnis, names: string[] | null, hidden: Set<string>, base: s
     people: r.people
       .filter((p) => p.camp >= 0 && p.x >= 0 && p.y >= 0)
       .map((p) => ({ x: p.x, y: p.y, camp: p.camp, v: chosen.map((s) => p.v[s.nr - 1] ?? ".").join("") })),
-    statements: chosen.map((s) => {
+    statements: picked.map(({ s, role }) => {
       const lines = readingOf(s, r, names);
       // The results page points to its checks below the reading; here the failed check is said in place.
       const failed = s.category === "bruecke" && !firmBridge(s) ? checkLines(s, r, names).filter((c) => c.ok === false) : [];
       return {
+        role,
         text: s.text,
         ...word(s),
         reading: failed.length

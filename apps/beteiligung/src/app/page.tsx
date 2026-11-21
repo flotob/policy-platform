@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { OpinionSpace } from "@/components/OpinionSpace";
+import { BeispielFlow, HeroAnswers, HeroStage } from "@/components/Beispiel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { landingExample } from "@/lib/beispiel";
 
@@ -36,38 +36,64 @@ const RESULTS = [
   { cls: "pass", title: "Was niemand gefragt hat", text: "Einwände, die in der ganzen Beteiligung niemand erhoben oder beantwortet hat. Vor einem Beschluss gezielt nachfragen." },
 ];
 
+const NUMBER = ["", "ein", "zwei", "drei", "vier", "fünf"];
+const listed = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}` : (xs[0] ?? ""));
+
 export default async function Home() {
   const example = await landingExample();
+  const total = example ? example.camps.reduce((s, c) => s + c.n, 0) : 0;
   return (
     <>
       <SiteHeader />
       <main>
-        <section className="hero wrap">
-          <div className="hero-text">
-            <h1>Worüber streitet Ihre Stadt wirklich?</h1>
+        <section className={example ? "hero hero-full" : "hero"} aria-labelledby="hero-h">
+          <HeroStage example={example}>
+            <h1 id="hero-h">Worüber streitet Ihre Stadt wirklich?</h1>
             <p className="hero-lead">
-              Sie stellen eine Maßnahme zur Diskussion, etwa eine Solarpflicht für Neubauten. Bürgerinnen und Bürger stimmen ab, ergänzen
-              eigene Punkte oder reichen Stellungnahmen ein. streit.bar zeigt dem Rat, worüber man sich längst einig ist, was
-              ein Gutachten klären kann und was er selbst entscheiden muss.
+              Sie stellen eine Maßnahme zur Diskussion, etwa eine Solarpflicht für Neubauten. Die Bürgerinnen und Bürger stimmen ab und
+              ergänzen, was fehlt. Am Ende weiß der Rat, woran er ist.
             </p>
             <div className="hero-cta">
               <Link href="/registrieren" className="btn">
                 Verfahren anlegen
               </Link>
-              <Link href="/musterstadt" className="btn btn-quiet">
-                Beispiel ansehen
-              </Link>
+              {example ? (
+                <a href="#beispiel" className="btn btn-quiet">
+                  Beispiel ansehen
+                </a>
+              ) : (
+                <Link href="/musterstadt" className="btn btn-quiet">
+                  Beispiel ansehen
+                </Link>
+              )}
+            </div>
+          </HeroStage>
+          <div className="hero-base">
+            <div className="wrap">
+              <h2 className="hero-answers-h">Was der Rat am Ende bekommt</h2>
+              <HeroAnswers linked={!!example} />
             </div>
           </div>
-          {example ? (
-            <div className="hero-map">
-              <OpinionSpace example={example} />
-              <p className="small muted hero-note">Beispiel mit erfundenen Zahlen: {example.title}</p>
-            </div>
-          ) : null}
         </section>
 
-        <section className="band" id="ablauf" aria-labelledby="ablauf-h">
+        {example ? (
+          <section className="bx" id="beispiel" aria-labelledby="beispiel-h">
+            <div className="wrap">
+              <div className="bx-top">
+                <h2 id="beispiel-h">So sieht das aus: {example.title} in Musterstadt</h2>
+                <p className="bx-intro">
+                  {total.toLocaleString("de-DE")} Menschen haben abgestimmt. Aus ihren Stimmen ergeben sich{" "}
+                  {NUMBER[example.camps.length] ?? example.camps.length} Lager: {listed(example.camps.map((c) => `„${c.name}“`))}. Wählen Sie
+                  eine Aussage: Sie sehen, wie jedes Lager abgestimmt hat, und was daraus für den Rat folgt.
+                </p>
+              </div>
+              <BeispielFlow example={example} />
+              <p className="bx-foot">Beispiel mit erfundenen Zahlen. Die Aussagen und alle Stimmen stammen aus dem veröffentlichten Ergebnis von Musterstadt.</p>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="lp-sec" id="ablauf" aria-labelledby="ablauf-h">
           <div className="wrap">
             <h2 id="ablauf-h">So läuft ein Verfahren</h2>
             <ol className="steps">
@@ -81,7 +107,8 @@ export default async function Home() {
           </div>
         </section>
 
-        <section className="wrap results" aria-labelledby="ergebnis-h">
+        <section className="band" aria-labelledby="ergebnis-h">
+          <div className="wrap results">
           <div className="results-head">
             <h2 id="ergebnis-h">Was der Rat bekommt</h2>
             <p className="muted">
@@ -100,9 +127,10 @@ export default async function Home() {
               </li>
             ))}
           </ul>
+          </div>
         </section>
 
-        <section className="band" aria-labelledby="vertrauen-h">
+        <section className="lp-sec" aria-labelledby="vertrauen-h">
           <div className="wrap trust">
             <h2 id="vertrauen-h">Warum man dem Ergebnis trauen kann</h2>
             <dl>
