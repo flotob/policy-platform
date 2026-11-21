@@ -35,7 +35,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ReportBox } from "@/components/ReportBox";
-import { decisionHead, outcomeOf, outcomeSentence, type PublicDecision } from "@/lib/beschluss-words";
+import { decisionDate, decisionHead, outcomeOf, outcomeSentence, type PublicDecision } from "@/lib/beschluss-words";
 import { STEPS } from "@/lib/params";
 
 /**
@@ -327,20 +327,6 @@ export function ResultView(props: ResultViewProps) {
   );
 
   const root = r.statements.find((s) => s.rolle === "schluss");
-  // Urteilsstil: the result first (the tenor), then the reasons in brief (the scheme), then in full (the chain).
-  const tenor = (
-    <section className="kt-tenor" aria-label="Ergebnis">
-      {root ? item(root, <div className="who">Die Maßnahme</div>) : null}
-      {small ? null : (
-        <div className="kt-urteil">
-          <div className="who">Die Begründung der Stadt</div>
-          <p>
-            {tenorText(r).map((x, i) => (i === 0 ? <b key={i}>{x}</b> : ` ${x}`))}
-          </p>
-        </div>
-      )}
-    </section>
-  );
   const argumentList = (
     <>
       <p className="kt-intro">Die {r.steps.length === 4 ? "vier" : r.steps.length} Stufen im Einzelnen. Unter jeder steht, was die Teilnehmenden dazu gesagt haben.</p>
@@ -691,9 +677,7 @@ export function ResultView(props: ResultViewProps) {
   const statements = p.files + p.uploads;
   const sub = [
     `${n(p.voters)} ${p.voters === 1 ? "Mensch hat" : "Menschen und Organisationen haben"}${props.period ? ` ${props.period}` : ""} abgestimmt${p.shortPoints ? ", eigene Punkte geschickt" : ""}${statements ? " und Stellung genommen" : ""}.`,
-    small
-      ? `Die Teilnehmenden haben über ${N} Aussagen abgestimmt. Jede Aussage führt bis zum Originalzitat zurück.`
-      : `Die Auswertung hat ${word(k, false)} Lager gefunden und ${N} Aussagen, an denen sich der Streit entscheidet. Jede Aussage führt bis zum Originalzitat zurück.`,
+    "Jeder Satz dieser Seite führt per Klick zurück zur Aussage, zum Zitat und zum Originaldokument.",
   ].join(" ");
   const showBridges = () => {
     setView("befund");
@@ -704,6 +688,24 @@ export function ResultView(props: ResultViewProps) {
       (document.getElementById(`gruppe-${key.slice(2)}`) ?? listRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
   };
+
+  // The tenor's links: a statement opens on the right; "im Einzelnen" opens a reading of the list below.
+  const still = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const pick = (nr: number) => {
+    select(nr);
+    stageRef.current?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" });
+  };
+  const goList = (v: "befund" | "argument") => {
+    setView(v);
+    requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" }));
+  };
+  const w2 = (x: number, of: number) => (of ? Math.round((x / of) * 10000) / 100 : 0);
+  const down = (
+    <svg viewBox="0 0 12 12" aria-hidden>
+      <path d="M6 2v8M2.5 6.5 6 10l3.5-3.5" />
+    </svg>
+  );
+  const decided = dec ? decisionDate(dec.datum) : null;
 
   const gaps = gapTexts(r, props.questions);
   const sat = r.saturation;
@@ -717,43 +719,109 @@ export function ResultView(props: ResultViewProps) {
           {props.title}: Worüber {props.town} wirklich streitet
         </h1>
         <p className="sub">{sub}</p>
-        <div className="erg-verdict">
-          <span className="mark" />
-          <p>
-            <b>
-              <button type="button" className="lnk" onClick={showBridges}>
-                {h.lead}
-              </button>
-            </b>{" "}
-            {h.rest.map((seg, i) =>
-              "nr" in seg ? (
-                <button
-                  key={i}
-                  type="button"
-                  className="lnk"
-                  onClick={() => {
-                    select(seg.nr);
-                    stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                >
-                  {seg.text}
+        {/* The tenor (Urteilsstil): what was put to the vote and how each camp voted on it, the two findings — each
+            opening its reading below — and the council's decision. The two readings are the reasons for the findings. */}
+        <div className={`erg-tenor${root ? "" : " solo"}`}>
+          <div className="et-grid">
+            {root ? (
+              <div className="et-side">
+                <div className="et-lbl">Zur Diskussion stand</div>
+                <button type="button" className="et-measure" onClick={() => pick(root.nr)}>
+                  {root.text}
                 </button>
-              ) : (
-                <span key={i}>{seg.text}</span>
-              ),
-            )}
-          </p>
-        </div>
-        {dec ? (
-          <div className="erg-decision">
-            <b>{decisionHead(dec)}</b> {dec.summary ?? ""} <span>Bei jeder Aussage steht, was aus ihr geworden ist.</span>
+                <div className="et-votes">
+                  {k >= 2
+                    ? byCloud(root).map(({ g, c }) => (
+                        <div key={g} className={`et-vote c${g}`}>
+                          <div className="et-vh">
+                            <i className="et-dot" aria-hidden />
+                            <span className="et-nm">{campLabel(names, g)}</span>
+                            <span className="et-ct num">{n(r.camps?.sizes[g] ?? 0)} Personen</span>
+                          </div>
+                          <div className="et-bar" aria-hidden>
+                            <i className="a" style={{ width: `${w2(c.agree, c.seen)}%` }} />
+                            <i className="p" style={{ width: `${w2(c.pass, c.seen)}%` }} />
+                            <i className="d" style={{ width: `${w2(c.disagree, c.seen)}%` }} />
+                          </div>
+                          <div className="et-vv num">
+                            <b>{pct(c.agree, c.seen)} %</b> stimmen zu, {pct(c.disagree, c.seen)} % lehnen ab
+                          </div>
+                        </div>
+                      ))
+                    : null}
+                  {root.total.seen ? (
+                    <div className={`et-all num${k >= 2 ? "" : " only"}`}>
+                      {k >= 2 ? "Alle zusammen: " : ""}
+                      {n(root.total.agree)} von {n(root.total.seen)} stimmen zu ({pct(root.total.agree, root.total.seen)} %), {n(root.total.disagree)}{" "}
+                      {root.total.disagree === 1 ? "lehnt" : "lehnen"} ab.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            <div className="et-side">
+              <div className="et-finding">
+                <div className="et-lbl">{small ? "Wie abgestimmt wurde" : "Wo die Lager stehen"}</div>
+                <p>
+                  {/* Links, not buttons: a button never wraps inside a sentence. */}
+                  <b>
+                    <a
+                      className="lnk"
+                      href={`#gruppe-${small ? "zu" : "bruecke"}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        showBridges();
+                      }}
+                    >
+                      {h.lead}
+                    </a>
+                  </b>{" "}
+                  {h.rest.map((seg, i) =>
+                    "nr" in seg ? (
+                      <a
+                        key={i}
+                        className="lnk"
+                        href={`#a${seg.nr}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          pick(seg.nr);
+                        }}
+                      >
+                        {seg.text}
+                      </a>
+                    ) : (
+                      <span key={i}>{seg.text}</span>
+                    ),
+                  )}
+                </p>
+                <button type="button" className="et-more" onClick={() => goList("befund")}>
+                  Die {N} Aussagen {small ? "nach Zustimmung" : "nach Befund"} {down}
+                </button>
+              </div>
+              <div className="et-finding">
+                <div className="et-lbl">Die Begründung der Stadt</div>
+                {small ? (
+                  <p>Ob sie trägt, zeigt die Auswertung erst, wenn sich Lager bilden. Zu jedem der vier Schritte steht unten, was vorgebracht wurde.</p>
+                ) : (
+                  <p>{tenorText(r).map((x, i) => (i === 0 ? <b key={i}>{x}</b> : ` ${x}`))}</p>
+                )}
+                <button type="button" className="et-more" onClick={() => goList("argument")}>
+                  Die vier Schritte im Einzelnen {down}
+                </button>
+              </div>
+            </div>
           </div>
-        ) : null}
+          {dec ? (
+            <div className="et-beschluss">
+              <div className="et-lbl">{decided ? `Beschluss vom ${decided}` : "Beschluss"}</div>
+              <p>
+                {dec.summary?.trim() || decisionHead(dec)} <span>Bei jeder Aussage steht, was aus ihr geworden ist.</span>
+              </p>
+            </div>
+          ) : null}
+        </div>
         {small ? <p className="erg-notice">{smallNote(r)}</p> : null}
         {props.notice ? <p className="erg-notice">{props.notice}</p> : null}
-        <div className="eyebrow" style={{ marginTop: 8 }}>
-          Jeder Satz dieser Seite führt per Klick zurück: zur Aussage, zum Zitat, zum Originaldokument.
-        </div>
       </header>
 
       <div className="erg-app">
@@ -766,12 +834,7 @@ export function ResultView(props: ResultViewProps) {
               Nach Argument
             </button>
           </div>
-          {view === "argument" ? (
-            <>
-              {tenor}
-              {scheme}
-            </>
-          ) : null}
+          {view === "argument" ? scheme : null}
           <div>{view === "befund" ? (small ? tallyList : befundList) : argumentList}</div>
         </aside>
 
