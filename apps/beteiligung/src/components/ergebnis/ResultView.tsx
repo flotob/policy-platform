@@ -317,37 +317,41 @@ export function ResultView(props: ResultViewProps) {
         </div>
       </div>
       {root ? item(root) : null}
+      {/* The four steps hang on one line like links of a chain; the "Also" is where it ends. */}
+      <div className="kt-chain">
       {r.steps.map((st, i) => {
         const sup = r.statements.flatMap((s) => s.entries.filter((e) => e.step === st.key && e.role === "stuetzt").map((e) => ({ s, e })));
         const att = r.statements.flatMap((s) => s.entries.filter((e) => e.step === st.key && e.role === "greift_an").map((e) => ({ s, e })));
         const v = VERDICT_WORDS[st.verdict];
         return (
-          <section key={st.key} className="group step">
+          <section key={st.key} className={`group step kt-step ${small ? "grey" : v.tone}`}>
+            <span className="kt-node" aria-hidden>
+              {i + 1}
+            </span>
             <h3>
-              <span className="k">{i + 1} ·</span>
+              <span className="visually-hidden">Stufe {i + 1}: </span>
               {st.label}
             </h3>
-            {/* The town's claim and, joined to it, what became of it; the two lists below are the evidence. */}
-            <div className={`step-head ${small ? "grey" : v.tone}`}>
+            {/* One card: the town's claim, and joined beneath it what became of it. The two lists below are the evidence. */}
+            <div className="kt-card">
               {st.these ? (
-                <div className="these">
+                <div className="kt-claim">
                   <div className="who">Die Stadt sagt</div>
                   <p>{st.these}</p>
                 </div>
               ) : null}
-              {small ? (
-                <div className="urteil">
+              <div className="kt-verdict">
+                {small ? (
                   <p>{stepCountText(st)}</p>
-                </div>
-              ) : (
-                <div className="urteil">
-                  <span className={`st ${v.tone}`}>
-                    Stufe {i + 1} {v.text}
-                  </span>
-                  <p>{stepText(st, r)}</p>
-                </div>
-              )}
+                ) : (
+                  <p>
+                    {/* "Hält." leads; the sentence's own "Die Stufe hält." would only repeat it. */}
+                    <b>{v.text.charAt(0).toUpperCase() + v.text.slice(1)}.</b> {stepText(st, r).replace(/^Die Stufe \S+\.\s*/, "")}
+                  </p>
+                )}
+              </div>
             </div>
+            <div className="kt-lists">
             <details className="rolle">
               <summary className="role sup">
                 <span className="rl">Stützt die These</span>
@@ -418,15 +422,20 @@ export function ResultView(props: ResultViewProps) {
               {!att.length && !st.unasked.length ? <div className="none">Niemand hat diese Stufe angegriffen.</div> : null}
               </div>
             </details>
+            </div>
           </section>
         );
       })}
       {small ? null : (
-        <div className="these concl">
-          <div className="who">Also</div>
-          <p>{conclusionText(r)}</p>
+        <div className="kt-end">
+          <span className="kt-node" aria-hidden />
+          <h3>Also</h3>
+          <div className="kt-also">
+            <p>{conclusionText(r)}</p>
+          </div>
         </div>
       )}
+      </div>
     </>
   );
 

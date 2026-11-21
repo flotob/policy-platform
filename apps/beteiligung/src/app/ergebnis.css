@@ -48,7 +48,6 @@
 .erg .these .who { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; opacity: 0.65; }
 .erg .these p { margin: 4px 0 0; font-family: var(--serif); font-size: 15px; line-height: 1.4; }
 .erg .these.lead { margin-bottom: 14px; }
-.erg .these.concl { margin-top: 6px; border-left: 4px solid var(--warn); }
 .erg .these + .item { margin-bottom: 18px; }
 
 .erg .st { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; font-family: var(--sans); }
@@ -82,21 +81,39 @@
 .erg .luecke .who { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: var(--ink-3); }
 .erg .luecke .ang { font-family: var(--serif); font-size: 16px; line-height: 1.35; margin-top: 3px; }
 .erg .luecke .ex2 { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
-.erg .urteil { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); }
-.erg .urteil p { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.45; }
-/* A step opens with one card: the town's claim on dark, the verdict joined beneath it, tinted by how the step fared. */
-.erg .step-head { margin-bottom: 6px; border-radius: 8px; overflow: hidden; }
-.erg .step-head .these { margin: 0; border-radius: 0; }
-.erg .step-head .urteil { margin: 0; border: 0; border-radius: 0; padding: 10px 14px 12px; }
-.erg .step-head.ok .urteil { background: var(--agree-soft); }
-.erg .step-head.warn .urteil { background: var(--warn-soft); }
-.erg .step-head.bad .urteil { background: var(--disagree-soft); }
-.erg .step-head.grey .urteil { background: var(--panel); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; }
-.erg .step-head.grey .urteil:first-child { border-top: 1px solid var(--line); border-radius: 8px; }
-.erg .step-head .st { background: var(--panel); }
-.erg .step-head .urteil p { color: var(--ink); }
 .erg .group.step h3 { text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--ink); font-family: var(--serif); font-weight: 600; }
 .erg .group.step h3 .k { color: var(--ink-3); font-weight: 400; margin-right: 4px; }
+/* Nach Argument: the four steps hang on one line like links of a chain. A step's node carries its number in the
+   verdict's colour; the line below it runs on solid green where the step holds, dashed ochre where it wobbles,
+   dashed red where it falls. */
+.erg .kt-chain { margin-top: 20px; }
+.erg .group.kt-step { --kt: var(--ink-3); --kt-lit: rgb(255 255 255 / 0.9); --kt-line: var(--line-2); position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; margin: 0; padding-bottom: 22px; }
+.erg .group.kt-step.ok { --kt: var(--agree); --kt-lit: #84d3ac; --kt-line: var(--agree); }
+.erg .group.kt-step.warn { --kt: var(--warn); --kt-lit: #ebbf63; --kt-line: repeating-linear-gradient(to bottom, var(--warn) 0 5px, transparent 5px 10px); }
+.erg .group.kt-step.bad { --kt: var(--disagree); --kt-lit: #f29a7f; --kt-line: repeating-linear-gradient(to bottom, var(--disagree) 0 5px, transparent 5px 10px); }
+.erg .group.kt-step > * { grid-column: 2; min-width: 0; }
+.erg .group.kt-step::before { content: ""; position: absolute; left: 13px; top: 28px; bottom: 0; width: 2px; background: var(--kt-line); }
+.erg .kt-chain > .kt-step:last-child::before { display: none; }
+.erg .kt-node { grid-column: 1; grid-row: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1; font: 600 13px/1 var(--sans); font-variant-numeric: tabular-nums; color: var(--panel); background: var(--kt); }
+.erg .group.kt-step > .kt-node { grid-column: 1; }
+.erg .group.kt-step h3 { align-self: center; padding: 0; }
+.erg .kt-card { background: var(--sel); color: var(--sel-fg); border-radius: 10px; overflow: hidden; }
+.erg .kt-claim { padding: 14px 16px 15px; }
+.erg .kt-claim .who { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; color: rgb(255 255 255 / 0.55); }
+.erg .kt-claim p { margin: 5px 0 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.42; }
+.erg .kt-verdict { padding: 12px 16px 14px; background: color-mix(in srgb, var(--sel) 80%, var(--kt)); }
+.erg .kt-step.grey .kt-verdict { background: var(--sel); }
+.erg .kt-claim + .kt-verdict { border-top: 1px solid rgb(255 255 255 / 0.12); }
+.erg .kt-verdict p { margin: 0; font-size: 13.5px; line-height: 1.5; color: rgb(255 255 255 / 0.8); }
+.erg .kt-verdict b { color: var(--kt-lit); font-weight: 600; }
+.erg .kt-lists .role { margin: 0; padding: 9px 0 5px; }
+.erg .kt-end { display: grid; grid-template-columns: 28px minmax(0, 1fr); column-gap: 12px; row-gap: 8px; }
+.erg .kt-end > * { grid-column: 2; min-width: 0; }
+.erg .kt-end > .kt-node { grid-column: 1; background: var(--panel); border: 2px solid var(--ink); }
+.erg .kt-end > .kt-node::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--ink); }
+.erg .kt-end h3 { margin: 0; align-self: center; font-family: var(--serif); font-size: 15px; font-weight: 600; }
+.erg .kt-also { background: var(--panel); border: 1.5px solid var(--ink); border-radius: 10px; padding: 13px 16px 15px; }
+.erg .kt-also p { margin: 0; font-family: var(--serif); font-size: 15.5px; line-height: 1.45; }
 
 /* Filter */
 .erg .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
