@@ -335,7 +335,7 @@ export function ResultView(props: ResultViewProps) {
         <div className="kt-urteil">
           <div className="who">Die Begründung der Stadt</div>
           <p>
-            <b>{tenorText(r).line}</b> {tenorText(r).rest}
+            {tenorText(r).map((x, i) => (i === 0 ? <b key={i}>{x}</b> : ` ${x}`))}
           </p>
         </div>
       )}

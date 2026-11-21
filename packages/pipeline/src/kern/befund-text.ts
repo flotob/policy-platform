@@ -311,17 +311,34 @@ export function conclusionText(r: Ergebnis, byName = false): string {
 }
 
 /**
- * The tenor on the results page ("Nach Argument"): the four verdicts and what follows for the measure, which
- * stands right above it, so it is not quoted again. The report keeps conclusionText.
+ * The tenor on the results page ("Nach Argument"): what the four verdicts mean, in plain words, without step
+ * numbers. One sentence per verdict that occurs, naming its steps by what they are about: what held, then what
+ * can still be fixed, then what goes to the council. The measure stands right above it. The report keeps
+ * conclusionText.
  */
-export function tenorText(r: Ergebnis): { line: string; rest: string } {
-  const falls = r.steps.some((s) => s.verdict === "faellt");
-  const shaky = r.steps.some((s) => s.verdict === "wackelt");
-  if (!falls && !shaky) return { line: `Alle ${r.steps.length === 4 ? "vier" : r.steps.length} Stufen halten.`, rest: "Die Begründung der Stadt trägt." };
-  const line = stepsLine(r);
-  if (!shaky) return { line, rest: "Ob die Maßnahme richtig ist, lässt sich nicht aus Belegen ableiten. Es hängt an einer Wertung, und die gehört in den Rat." };
-  if (falls) return { line, rest: "Ob die Maßnahme richtig ist, hängt an einer Wertung, die der Rat entscheiden muss, und an Punkten, die sich vorher klären oder ausgestalten lassen." };
-  return { line, rest: "Ob die Maßnahme richtig ist, hängt an Punkten, die sich vor einem Beschluss klären oder ausgestalten lassen." };
+const TENOR_STEP: Record<string, { held: string; shaky: string; falls: string }> = {
+  lage: { held: "zur Lage", shaky: "bei der Lage", falls: "welches Gewicht die Lage hat" },
+  wirkung: { held: "zur Wirkung", shaky: "bei der Wirkung", falls: "welches Gewicht die Wirkung hat" },
+  weg: { held: "zum gewählten Weg", shaky: "beim gewählten Weg", falls: "ob der gewählte Weg der richtige ist" },
+  eingriff: { held: "zur Abwägung von Last und Nutzen", shaky: "bei der Abwägung von Last und Nutzen", falls: "ob sich der Eingriff lohnt" },
+};
+export function tenorText(r: Ergebnis): string[] {
+  const of = (v: Verdict) => r.steps.filter((s) => s.verdict === v);
+  const words = (s: StepOut) =>
+    TENOR_STEP[s.key] ?? { held: `zu „${s.label}“`, shaky: `bei „${s.label}“`, falls: `welches Gewicht „${s.label}“ hat` };
+  const all = (xs: StepOut[]) => xs.length === r.steps.length && xs.length > 1;
+  const out: string[] = [];
+  const held = of("haelt");
+  const shaky = of("wackelt");
+  const falls = of("faellt");
+  if (all(held)) out.push("Die ganze Begründung der Stadt hat der Beteiligung standgehalten.");
+  else if (held.length) out.push(`Was die Stadt ${andList(held.map((s) => words(s).held))} sagt, hat der Beteiligung standgehalten.`);
+  if (all(shaky)) out.push("In jedem Schritt der Begründung gibt es Einwände, die sich vor dem Beschluss klären oder ausgestalten lassen.");
+  else if (shaky.length) out.push(`${cap(andList(shaky.map((s) => words(s).shaky)))} gibt es Einwände, die sich vor dem Beschluss klären oder ausgestalten lassen.`);
+  if (all(falls)) out.push("In jedem Schritt der Begründung bleibt eine Wertungsfrage, die der Rat entscheiden muss.");
+  else if (falls.length)
+    out.push(`${cap(andList(falls.map((s) => words(s).falls)))}, ${falls.length === 1 ? "ist eine Wertungsfrage" : "sind Wertungsfragen"}, die der Rat entscheiden muss.`);
+  return out;
 }
 
 export type Segment = { text: string } | { text: string; nr: number };
