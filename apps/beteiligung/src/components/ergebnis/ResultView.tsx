@@ -327,12 +327,27 @@ export function ResultView(props: ResultViewProps) {
               <span className="k">{i + 1} ·</span>
               {st.label}
             </h3>
-            {st.these ? (
-              <div className="these">
-                <div className="who">Die Stadt sagt</div>
-                <p>{st.these}</p>
-              </div>
-            ) : null}
+            {/* The town's claim and, joined to it, what became of it; the two lists below are the evidence. */}
+            <div className={`step-head ${small ? "grey" : v.tone}`}>
+              {st.these ? (
+                <div className="these">
+                  <div className="who">Die Stadt sagt</div>
+                  <p>{st.these}</p>
+                </div>
+              ) : null}
+              {small ? (
+                <div className="urteil">
+                  <p>{stepCountText(st)}</p>
+                </div>
+              ) : (
+                <div className="urteil">
+                  <span className={`st ${v.tone}`}>
+                    Stufe {i + 1} {v.text}
+                  </span>
+                  <p>{stepText(st, r)}</p>
+                </div>
+              )}
+            </div>
             <details className="rolle">
               <summary className="role sup">
                 <span className="rl">Stützt die These</span>
@@ -403,18 +418,6 @@ export function ResultView(props: ResultViewProps) {
               {!att.length && !st.unasked.length ? <div className="none">Niemand hat diese Stufe angegriffen.</div> : null}
               </div>
             </details>
-            {small ? (
-              <div className="urteil">
-                <p>{stepCountText(st)}</p>
-              </div>
-            ) : (
-              <div className="urteil">
-                <span className={`st ${v.tone}`}>
-                  Stufe {i + 1} {v.text}
-                </span>
-                <p>{stepText(st, r)}</p>
-              </div>
-            )}
           </section>
         );
       })}
