@@ -283,38 +283,9 @@ export function stepText(step: StepOut, r: Ergebnis): string {
 }
 
 /**
- * "Stufe 1 und 2 halten, Stufe 3 wackelt, Stufe 4 fällt." — or, for a reader who has not seen the step
- * scheme (the report), by name: "Die Stufen „So ist die Lage“ und „…“ halten, „…“ wackelt, „…“ fällt."
- */
-export function stepsLine(r: Ergebnis, byName = false): string {
-  const by = (v: Verdict) => r.steps.flatMap((s, i) => (s.verdict === v ? [byName ? `„${s.label}“` : String(i + 1)] : []));
-  const verb: Record<Verdict, [string, string]> = { haelt: ["hält", "halten"], wackelt: ["wackelt", "wackeln"], faellt: ["fällt", "fallen"] };
-  const groups = (["haelt", "wackelt", "faellt"] as Verdict[]).map((v) => ({ v, xs: by(v) })).filter((g) => g.xs.length);
-  const parts = groups.map(({ v, xs }, i) => {
-    const head = !byName ? "Stufe " : i === 0 ? (xs.length === 1 ? "Die Stufe " : "Die Stufen ") : "";
-    return `${head}${andList(xs)} ${xs.length === 1 ? verb[v][0] : verb[v][1]}`;
-  });
-  return `${parts.join(", ")}.`;
-}
-
-/** "Also": the conclusion from the four verdicts. */
-export function conclusionText(r: Ergebnis, byName = false): string {
-  const root = r.statements.find((s) => s.rolle === "schluss")?.text ?? "die Maßnahme";
-  const falls = r.steps.some((s) => s.verdict === "faellt");
-  const shaky = r.steps.some((s) => s.verdict === "wackelt");
-  const line = stepsLine(r, byName);
-  if (falls && !shaky)
-    return `${line} Der Schluss „${root}“ ist nicht widerlegt, aber er ist auch nicht aus Evidenz zu ziehen: Was ihn trägt oder kippt, ist eine Wertung. Sie gehört in den Rat.`;
-  if (falls) return `${line} Der Schluss „${root}“ hängt an einer Wertung, die der Rat entscheiden muss, und an Punkten, die sich vorher klären oder ausgestalten lassen.`;
-  if (shaky) return `${line} Der Schluss „${root}“ hängt an Punkten, die sich klären oder ausgestalten lassen. Vor einem Beschluss zu schließen.`;
-  return `${line} Die Begründung trägt in allen vier Stufen.`;
-}
-
-/**
  * The tenor on the results page ("Nach Argument"): what the four verdicts mean, in plain words, without step
  * numbers. One sentence per verdict that occurs, naming its steps by what they are about: what held, then what
- * can still be fixed, then what goes to the council. The measure stands right above it. The report keeps
- * conclusionText.
+ * can still be fixed, then what goes to the council. The report's summary uses the same sentences.
  */
 const TENOR_STEP: Record<string, { held: string; shaky: string; falls: string }> = {
   lage: { held: "zur Lage", shaky: "bei der Lage", falls: "welches Gewicht die Lage hat" },

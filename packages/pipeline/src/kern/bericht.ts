@@ -25,7 +25,6 @@ import {
   campLabel,
   alike,
   campShares,
-  conclusionText,
   countLine,
   pairsText,
   sidesText,
@@ -39,6 +38,7 @@ import {
   mediation,
   pct,
   stepText,
+  tenorText,
   word,
   type CampNames,
 } from "./befund-text.ts";
@@ -150,7 +150,8 @@ export function conclusions(r: Ergebnis, names: CampNames, ctx: ReportContext): 
     add("ergebnis", text, r.core.slice(0, 1));
   }
   if (r.diagnoses.length) add("ergebnis", diagnosisText(r, names, 0), [...new Set([...r.diagnoses[0]!.schlussNodes, ...r.diagnoses[0]!.artNodes])]);
-  add("ergebnis", `Die Begründung der Stadt hat vier Stufen. ${conclusionText(r, true)}`, root ? [root.nr] : []);
+  // What the four verdicts mean, in plain words (the same sentences as the tenor on the results page).
+  add("ergebnis", tenorText(r).join(" "), root ? [root.nr] : []);
 
   // Wer sich beteiligt hat
   const ps = participationSentences(r);
