@@ -324,7 +324,7 @@ export function ResultView(props: ResultViewProps) {
         const att = r.statements.flatMap((s) => s.entries.filter((e) => e.step === st.key && e.role === "greift_an").map((e) => ({ s, e })));
         const v = VERDICT_WORDS[st.verdict];
         return (
-          <section key={st.key} className={`group step kt-step ${small ? "grey" : v.tone}`}>
+          <section key={st.key} id={`stufe-${st.key}`} tabIndex={-1} className={`group step kt-step ${small ? "grey" : v.tone}`}>
             <span className="kt-node" aria-hidden>
               {i + 1}
             </span>
@@ -427,7 +427,7 @@ export function ResultView(props: ResultViewProps) {
         );
       })}
       {small ? null : (
-        <div className="kt-end">
+        <div className="kt-end" id="stufe-schluss" tabIndex={-1}>
           <span className="kt-node" aria-hidden />
           <h3>Also</h3>
           <div className="kt-also">
@@ -439,6 +439,15 @@ export function ResultView(props: ResultViewProps) {
     </>
   );
 
+  // The overview's rows lead to their step in the chain below (and the "Also" to its end).
+  const goStep = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: still ? "auto" : "smooth", block: "start" });
+    el.focus({ preventScroll: true });
+  };
+
   const scheme = small ? (
     <div className="scheme">
       <p>
@@ -446,16 +455,16 @@ export function ResultView(props: ResultViewProps) {
         steht, entscheidet die Auswertung erst mit Lagern; hier steht, was vorgebracht wurde.
       </p>
       {r.steps.map((st, i) => (
-        <div key={st.key} className="row">
+        <button key={st.key} type="button" className="row" onClick={() => goStep(`stufe-${st.key}`)}>
           <span className="k">{i + 1}</span>
           <span className="lbl">
-            {st.label}
+            <span className="t">{st.label}</span>
             <span className="sub num">
               {st.supports} stützend · {st.attacks} {st.attacks === 1 ? "Angriff" : "Angriffe"}
               {st.unasked.length ? ` · ${st.unasked.length} ${st.unasked.length === 1 ? "Frage" : "Fragen"} ungestellt` : ""}
             </span>
           </span>
-        </div>
+        </button>
       ))}
     </div>
   ) : (
@@ -469,23 +478,23 @@ export function ResultView(props: ResultViewProps) {
         const stand = (c.haelt ?? 0) + (c.verdeckt ?? 0);
         const v = VERDICT_WORDS[st.verdict];
         return (
-          <div key={st.key} className="row">
+          <button key={st.key} type="button" className="row" onClick={() => goStep(`stufe-${st.key}`)}>
             <span className="k">{i + 1}</span>
             <span className="lbl">
-              {st.label}
+              <span className="t">{st.label}</span>
               <span className="sub num">
                 {st.attacks} {st.attacks === 1 ? "Angriff" : "Angriffe"} · {c.abgewehrt ?? 0} abgewehrt · {stand} {stand === 1 ? "steht" : "stehen"}
                 {st.unasked.length ? ` · ${st.unasked.length} ${st.unasked.length === 1 ? "Frage" : "Fragen"} ungestellt` : ""}
               </span>
             </span>
             <span className={`st ${v.tone}`}>{v.text}</span>
-          </div>
+          </button>
         );
       })}
-      <div className="concl">
+      <button type="button" className="concl" onClick={() => goStep("stufe-schluss")}>
         <span>Also</span>
         {schemeConclusion(r)}
-      </div>
+      </button>
     </div>
   );
 
