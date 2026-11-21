@@ -228,10 +228,14 @@ export function ResultView(props: ResultViewProps) {
     return { dots, camps };
   }, [r.people, k]);
   const total = geo.dots.length;
+  // The camps left to right as their clouds lie. Names, counts and the detail's columns all follow this order,
+  // so the numbers under a cloud are that cloud's.
+  const order = [...geo.camps].sort((a, b) => a.cx - b.cx).map((c) => c.g);
+  const cols = { gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))` };
+  const byCloud = (s: StatementOut) => order.flatMap((g) => (s.camps[g] ? [{ g, c: s.camps[g]! }] : []));
   const vi = cur.nr - 1;
 
-  const campItems = (s: StatementOut) =>
-    s.camps.map((c, g) => ({ g, v: pct(c.agree, c.seen), seen: c.seen }));
+  const campItems = (s: StatementOut) => byCloud(s).map(({ g, c }) => ({ g, v: pct(c.agree, c.seen), seen: c.seen }));
 
   // ———— One statement in the list ————
   const item = (s: StatementOut, head?: ReactNode, foot?: ReactNode, key?: string) => {
@@ -572,7 +576,7 @@ export function ResultView(props: ResultViewProps) {
       ) : null}
       {k >= 2 ? (
         <div className="scores">
-          {cur.camps.map((c, g) => (
+          {byCloud(cur).map(({ g, c }) => (
             <div key={g} className={`score c${g}`}>
               <div className="who">{campName(names, g)}</div>
               <div className="big num">
@@ -836,20 +840,18 @@ export function ResultView(props: ResultViewProps) {
               </div>
             </div>
             {/* Camp names as text above the clouds, left to right as they lie: readable at any width. */}
-            <div className="camp-row" style={{ gridTemplateColumns: `repeat(${geo.camps.length}, minmax(0, 1fr))` }}>
-              {[...geo.camps]
-                .sort((a, b) => a.cx - b.cx)
-                .map((c) => (
-                  <div key={c.g} className={`c${c.g}`}>
-                    <b>
-                      <i aria-hidden />
-                      {campLabel(names, c.g)}
-                    </b>
-                    <span className="num">
-                      {n(r.camps?.sizes[c.g] ?? 0)} Personen · {pct(r.camps?.sizes[c.g] ?? 0, total)} %
-                    </span>
-                  </div>
-                ))}
+            <div className="camp-row" style={cols}>
+              {order.map((g) => (
+                <div key={g} className={`c${g}`}>
+                  <b>
+                    <i aria-hidden />
+                    {campLabel(names, g)}
+                  </b>
+                  <span className="num">
+                    {n(r.camps?.sizes[g] ?? 0)} Personen · {pct(r.camps?.sizes[g] ?? 0, total)} %
+                  </span>
+                </div>
+              ))}
             </div>
             <svg
               viewBox={`0 ${TOP - 10} ${W} ${H - TOP + 10}`}
@@ -878,8 +880,8 @@ export function ResultView(props: ResultViewProps) {
                 {tip.text}
               </div>
             ) : null}
-            <div className="counts">
-              {cur.camps.map((c, g) => (
+            <div className="counts" style={cols}>
+              {byCloud(cur).map(({ g, c }) => (
                 <div key={g}>
                   <b className="num">{n(c.agree)}</b> von {n(c.seen)} im {campLabel(names, g)} stimmen zu
                 </div>
