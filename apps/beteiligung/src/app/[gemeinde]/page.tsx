@@ -21,7 +21,7 @@ const n = (x: number) => x.toLocaleString("de-DE");
 export async function generateMetadata({ params }: { params: Promise<{ gemeinde: string }> }) {
   const { gemeinde } = await params;
   const k = RESERVED.has(gemeinde) ? null : await kommuneBySlug(gemeinde);
-  return k ? { title: `${k.name} auf streit.bar`, description: k.settings.claim || `Beteiligungen der ${k.name}` } : { title: "Nicht gefunden" };
+  return k ? { title: k.name, description: k.settings.claim || `Beteiligungen der ${k.name}` } : { title: "Nicht gefunden" };
 }
 
 /** The first paragraph of a procedure's summary, cut at a sentence end near `max` characters. */
