@@ -147,15 +147,15 @@ export function ImageForm({ kind, url, credit, alt }: { kind: "titelbild" | "por
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt={title ? "Ihr Titelbild" : "Ihr Foto"} className="image-preview" />
       ) : (
-        <p className="muted small">{title ? "Noch kein Titelbild. Ohne Bild beginnt Ihre Seite schlicht mit dem Namen der Kommune." : "Noch kein Foto. Ohne Foto steht dort nur der Name."}</p>
+        <p className="muted small">{title ? "Noch kein Titelbild. Ohne Bild beginnt Ihre Seite schlicht mit dem Namen der Kommune." : "Noch kein Foto. Ohne Foto steht unter dem Wort vorab nur der Name."}</p>
       )}
       <div className="field">
-        <label htmlFor={`b-${kind}`}>{url ? (title ? "Anderes Titelbild" : "Anderes Foto") : title ? "Titelbild hochladen" : "Foto hochladen"}</label>
+        <label htmlFor={`b-${kind}`}>{url ? (title ? "Anderes Titelbild" : "Anderes Foto zum Wort vorab") : title ? "Titelbild hochladen" : "Foto zum Wort vorab"}</label>
         <input id={`b-${kind}`} name="bild" type="file" className="input file-input" accept="image/jpeg,image/png,image/webp" />
         <span className="hint">
           {title
             ? "Ein Foto aus Ihrer Stadt im Querformat, am besten 2400 × 750 Pixel. JPG, PNG oder WebP, bis 5 MB."
-            : "Ein Porträt, am besten quadratisch. JPG, PNG oder WebP, bis 1 MB."}
+            : "Ein Porträt der Person, die das Wort vorab spricht. Es erscheint klein und rund neben ihrem Namen. Am besten quadratisch; JPG, PNG oder WebP, bis 1 MB."}
         </span>
       </div>
       {title ? (
