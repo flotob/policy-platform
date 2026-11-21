@@ -194,7 +194,6 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
                         <Link href={`${base}/${c.slug}`} className="btn btn-quiet">
                           Worum es geht
                         </Link>
-                        <span className="small">Ohne Anmeldung. Deine Stimmen bleiben anonym.</span>
                       </div>
                     </article>
                   );

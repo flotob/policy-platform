@@ -151,7 +151,6 @@ export default async function Einstieg({
               </div>
             </>
           )}
-          {c.state === "veroeffentlicht" ? null : <p className="small muted pub-anon">Ohne Anmeldung. Deine Stimmen bleiben anonym.</p>}
           {open && mine ? (
             <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} />
           ) : c.state === "auswertung" || c.state === "bericht" || (c.state === "veroeffentlicht" && !decision) ? (

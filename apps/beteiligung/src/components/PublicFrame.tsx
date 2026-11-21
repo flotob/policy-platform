@@ -100,7 +100,6 @@ export async function PublicFrame({
               <Link href="/">streit.bar</Link>
             </p>
             <ul className="pub-foot-list">
-              <li className="pub-foot-quiet">Ohne Anmeldung. Deine Stimmen bleiben anonym.</li>
               <li>
                 <Link href="/impressum">Impressum</Link>
               </li>
