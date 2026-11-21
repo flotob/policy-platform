@@ -14,7 +14,6 @@ export function CampNamesForm({
   descriptions,
   sizes,
   confirmed,
-  locked,
 }: {
   id: string;
   resultId: string;
@@ -22,13 +21,12 @@ export function CampNamesForm({
   descriptions: string[];
   sizes: number[];
   confirmed: boolean;
-  locked: boolean;
 }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(saveCampNames.bind(null, id, resultId), {});
   return (
     <form action={action} className="ws-form camp-names">
       {sizes.map((n, g) => (
-        <fieldset key={g} className={`camp-name c${g}`} disabled={locked}>
+        <fieldset key={g} className={`camp-name c${g}`}>
           <legend>
             Lager {"ABCDE"[g]} <span className="muted small num">· {n.toLocaleString("de-DE")} Personen</span>
           </legend>
@@ -42,22 +40,37 @@ export function CampNamesForm({
               id={`beschreibung${g}`}
               name={`beschreibung${g}`}
               className="textarea"
-              rows={2}
+              rows={4}
               maxLength={220}
               defaultValue={state.values?.[`beschreibung${g}`] ?? descriptions[g] ?? ""}
             />
           </div>
         </fieldset>
       ))}
-      {locked ? null : (
-        <div className="form-foot">
-          <button type="submit" className="btn" disabled={pending}>
-            {confirmed ? "Namen ändern" : "Namen übernehmen"}
-          </button>
-          <Status state={state} pending={pending} />
-        </div>
-      )}
+      <div className="form-foot">
+        <button type="submit" className="btn" disabled={pending}>
+          {confirmed ? "Namen ändern" : "Namen übernehmen"}
+        </button>
+        <Status state={state} pending={pending} />
+      </div>
     </form>
+  );
+}
+
+/** The camp names as plain text: once the report with them is released, or for team members who only read. */
+export function CampNamesView({ names, descriptions, sizes }: { names: string[]; descriptions: string[]; sizes: number[] }) {
+  return (
+    <div className="camp-names">
+      {sizes.map((n, g) => (
+        <div key={g} className={`camp-name c${g}`}>
+          <p className="camp-name-head">
+            Lager {"ABCDE"[g]} <span className="muted small num">· {n.toLocaleString("de-DE")} Personen</span>
+          </p>
+          <p className="camp-name-name">{names[g] || "Noch ohne Namen"}</p>
+          {descriptions[g] ? <p className="camp-name-desc">{descriptions[g]}</p> : null}
+        </div>
+      ))}
+    </div>
   );
 }
 

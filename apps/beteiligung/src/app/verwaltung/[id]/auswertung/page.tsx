@@ -12,7 +12,7 @@ import { countQueue, countReading } from "@/lib/redaktion";
 import { requireStaff } from "@/lib/session";
 
 import { closeParticipation, makeReport, reopenParticipation, reproposeNames } from "../../auswertung-actions";
-import { CampNamesForm } from "../../auswertung-forms";
+import { CampNamesForm, CampNamesView } from "../../auswertung-forms";
 
 import "../../../ergebnis.css";
 import "./auswertung.css";
@@ -202,7 +202,7 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
             {naming.proposal && confirmed && naming.proposal.names.join() !== naming.names.join() ? (
               <p className="small muted">Vorschlag der Maschine: {naming.proposal.names.map((x) => `„${x}“`).join(", ")}.</p>
             ) : null}
-            {editor ? (
+            {editor && !locked ? (
               <CampNamesForm
                 key={[...naming.names, ...naming.descriptions].join("|")}
                 id={c.id}
@@ -211,9 +211,10 @@ export default async function Auswertung({ params, searchParams }: { params: Pro
                 descriptions={naming.descriptions}
                 sizes={r.camps?.sizes ?? []}
                 confirmed={confirmed}
-                locked={locked}
               />
-            ) : null}
+            ) : (
+              <CampNamesView names={naming.names} descriptions={naming.descriptions} sizes={r.camps?.sizes ?? []} />
+            )}
             {editor && !locked ? (
               <form action={reproposeNames.bind(null, c.id, saved.id)} className="au-actions">
                 <button type="submit" className="btn btn-quiet btn-small">
