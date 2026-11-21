@@ -54,18 +54,9 @@ export default async function Home() {
               ergänzen, was fehlt. Am Ende weiß der Rat, woran er ist.
             </p>
             <div className="hero-cta">
-              <Link href="/registrieren" className="btn">
-                Verfahren anlegen
+              <Link href="/musterstadt" className="btn">
+                Musterstadt erkunden
               </Link>
-              {example ? (
-                <a href="#beispiel" className="btn btn-quiet">
-                  Beispiel ansehen
-                </a>
-              ) : (
-                <Link href="/musterstadt" className="btn btn-quiet">
-                  Beispiel ansehen
-                </Link>
-              )}
             </div>
           </HeroStage>
           <div className="hero-base">
@@ -154,7 +145,7 @@ export default async function Home() {
           <h2>Ein Verfahren, eine Frage</h2>
           <p className="muted">Legen Sie ein Konto für Ihre Kommune an und stellen Sie Ihre erste Maßnahme zur Diskussion. Öffentlich wird es erst, wenn Sie es freischalten.</p>
           <Link href="/registrieren" className="btn">
-            Verfahren anlegen
+            Konto anlegen
           </Link>
         </section>
       </main>
