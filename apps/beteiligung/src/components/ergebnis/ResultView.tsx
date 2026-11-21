@@ -127,11 +127,49 @@ export function ResultView(props: ResultViewProps) {
   const small = !r.ready;
   const N = r.statements.length;
   const byNr = useMemo(() => new Map(r.statements.map((s) => [s.nr, s])), [r]);
-  const initial = r.core[0] ?? r.statements.find((s) => s.category === "streit")?.nr ?? r.statements[0]?.nr ?? 1;
+  const t = r.params.bridgeThreshold;
+  // The lists by finding (or, without camps, by tally): within a group the most telling first. The core of the
+  // dispute leads; then the largest gap between the camps; where both camps agree, the broadest agreement.
+  const lists = useMemo(() => {
+    const lowest = (s: StatementOut) => Math.min(100, ...s.camps.filter((c) => c.seen).map((c) => pct(c.agree, c.seen)));
+    const share = (a: number, s: StatementOut) => (s.total.seen ? a / s.total.seen : 0);
+    const befund = new Map<Group, StatementOut[]>();
+    for (const s of r.statements) befund.set(groupOf(s, t), [...(befund.get(groupOf(s, t)) ?? []), s]);
+    for (const [g, xs] of befund)
+      xs.sort((a, b) =>
+        a.nr === r.core[0] ? -1 : b.nr === r.core[0] ? 1 : (g === "bruecke" ? lowest(b) - lowest(a) : b.gap - a.gap) || a.nr - b.nr,
+      );
+    const tally = new Map<Tally, StatementOut[]>();
+    for (const s of r.statements) tally.set(tallyOf(s), [...(tally.get(tallyOf(s)) ?? []), s]);
+    for (const [g, xs] of tally)
+      xs.sort(
+        (a, b) =>
+          (g === "zu"
+            ? share(b.total.agree, b) - share(a.total.agree, a)
+            : g === "ab"
+              ? share(b.total.disagree, b) - share(a.total.disagree, a)
+              : b.total.seen - a.total.seen) || a.nr - b.nr,
+      );
+    return { befund, tally };
+  }, [r, t]);
+  const firstIn = <G,>(order: G[], m: Map<G, StatementOut[]>) => order.map((g) => m.get(g)?.[0]?.nr).find((x) => x !== undefined);
+  const initial = (small ? firstIn(TALLY_ORDER, lists.tally) : (r.core[0] ?? firstIn(GROUP_ORDER, lists.befund))) ?? r.statements[0]?.nr ?? 1;
   const [sel, setSel] = useState(initial);
   const [view, setView] = useState<"befund" | "argument">("befund");
-  const [filter, setFilter] = useState<Group | "alle">("alle");
-  const [tallyFilter, setTallyFilter] = useState<Tally | "alle">("alle");
+  // Which groups are open: at first only the one holding the selected statement; selecting another opens its group.
+  const groupKeys = (nr: number) => {
+    const s = byNr.get(nr);
+    return s ? [`b:${groupOf(s, t)}`, `t:${tallyOf(s)}`] : [];
+  };
+  const [open, setOpen] = useState<Set<string>>(() => new Set(groupKeys(initial)));
+  const reveal = (nr: number) =>
+    setOpen((o) => (groupKeys(nr).every((x) => o.has(x)) ? o : new Set([...o, ...groupKeys(nr)])));
+  const toggle = (key: string) =>
+    setOpen((o) => {
+      const next = new Set(o);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const [mapMode, setMapMode] = useState<"vote" | "camp">("vote");
   const [sheet, setSheet] = useState(false);
   const [source, setSource] = useState<{ s: StatementOut; q: Quote } | null>(null);
@@ -143,7 +181,11 @@ export function ResultView(props: ResultViewProps) {
 
   useEffect(() => {
     const m = window.location.hash.match(/^#a(\d+)$/);
-    if (m && byNr.has(Number(m[1]))) setSel(Number(m[1]));
+    if (m && byNr.has(Number(m[1]))) {
+      setSel(Number(m[1]));
+      reveal(Number(m[1]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [byNr]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -163,12 +205,13 @@ export function ResultView(props: ResultViewProps) {
     };
   }, [source]);
 
-  const select = (nr: number, open = true) => {
+  const select = (nr: number, openSheet = true) => {
     setSel(nr);
+    reveal(nr);
     window.history.replaceState(null, "", `#a${nr}`);
     // The right column scrolls on its own: a new statement starts at its top, with the opinion space in view.
     if (stageRef.current) stageRef.current.scrollTop = 0;
-    if (open && window.innerWidth <= 900) setSheet(true);
+    if (openSheet && window.innerWidth <= 900) setSheet(true);
   };
 
   // ———— The opinion space ————
@@ -199,6 +242,7 @@ export function ResultView(props: ResultViewProps) {
     return (
       <button key={key ?? s.nr} type="button" className="item" aria-current={s.nr === sel ? "true" : "false"} onClick={() => select(s.nr)}>
         {head}
+        {!small && s.nr === r.core[0] ? <div className="kern">Kern des Streits</div> : null}
         <div className="t">{s.text}</div>
         {!small && s.category === "bruecke" && !firmBridge(s) ? <div className="vb">Brücke unter Vorbehalt</div> : null}
         {dec?.points[s.id] ? <div className={`bt o-${dec.points[s.id]!.outcome}`}>Beschluss: {outcomeOf(dec.points[s.id]!.outcome)?.lower}</div> : null}
@@ -250,60 +294,33 @@ export function ResultView(props: ResultViewProps) {
 
   // ———— Lists ————
   // "Nach Befund": the five findings, with the fact questions where proof stands on one side only apart.
-  const t = r.params.bridgeThreshold;
-  const counts = new Map<Group, number>();
-  for (const s of r.statements) counts.set(groupOf(s, t), (counts.get(groupOf(s, t)) ?? 0) + 1);
-
-  const tallies = new Map<Tally, number>();
-  for (const s of r.statements) tallies.set(tallyOf(s), (tallies.get(tallyOf(s)) ?? 0) + 1);
+  // Each group folds; its header names it and counts its statements.
+  const fold = (key: string, attr: { "data-cat"?: Group; "data-tally"?: Tally }, label: string, xs: StatementOut[]) => {
+    const isOpen = open.has(key);
+    const id = `gruppe-${key.slice(2)}`;
+    return (
+      <section key={key} className="group fold" id={id} {...attr}>
+        <h3>
+          <button type="button" className="grp" aria-expanded={isOpen} aria-controls={`${id}-liste`} onClick={() => toggle(key)}>
+            <span className="dot" />
+            <span className="gl">{label}</span>
+            <span className="gn num">{xs.length}</span>
+            <i className="chev" aria-hidden />
+          </button>
+        </h3>
+        {isOpen ? (
+          <div className="items" id={`${id}-liste`}>
+            {xs.map((s) => item(s))}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
   const tallyList = (
-    <>
-      <div className="chips" role="group" aria-label="Filter">
-        <button type="button" className="chip" aria-pressed={tallyFilter === "alle"} onClick={() => setTallyFilter("alle")}>
-          Alle Aussagen<span className="n num">{N}</span>
-        </button>
-        {TALLY_ORDER.filter((t) => tallies.get(t)).map((t) => (
-          <button key={t} type="button" className="chip" aria-pressed={tallyFilter === t} onClick={() => setTallyFilter(t)}>
-            {TALLY_WORDS[t]}
-            <span className="n num">{tallies.get(t)}</span>
-          </button>
-        ))}
-      </div>
-      {TALLY_ORDER.filter((t) => (tallyFilter === "alle" || tallyFilter === t) && tallies.get(t)).map((t) => (
-        <section key={t} className="group" data-tally={t}>
-          <h3>
-            <span className="dot" />
-            {TALLY_WORDS[t]}
-          </h3>
-          <div className="items">{r.statements.filter((s) => tallyOf(s) === t).map((s) => item(s))}</div>
-        </section>
-      ))}
-    </>
+    <>{TALLY_ORDER.filter((g) => lists.tally.get(g)?.length).map((g) => fold(`t:${g}`, { "data-tally": g }, TALLY_WORDS[g], lists.tally.get(g)!))}</>
   );
-
   const befundList = (
-    <>
-      <div className="chips" role="group" aria-label="Filter">
-        <button type="button" className="chip" aria-pressed={filter === "alle"} onClick={() => setFilter("alle")}>
-          Alle Aussagen<span className="n num">{N}</span>
-        </button>
-        {GROUP_ORDER.filter((c) => counts.get(c)).map((c) => (
-          <button key={c} type="button" className="chip" aria-pressed={filter === c} onClick={() => setFilter(c)}>
-            {groupWords(c, k).label}
-            <span className="n num">{counts.get(c)}</span>
-          </button>
-        ))}
-      </div>
-      {GROUP_ORDER.filter((c) => (filter === "alle" || filter === c) && counts.get(c)).map((c) => (
-        <section key={c} className="group" data-cat={c}>
-          <h3>
-            <span className="dot" />
-            {groupWords(c, k).label}
-          </h3>
-          <div className="items">{r.statements.filter((s) => groupOf(s, t) === c).map((s) => item(s))}</div>
-        </section>
-      ))}
-    </>
+    <>{GROUP_ORDER.filter((g) => lists.befund.get(g)?.length).map((g) => fold(`b:${g}`, { "data-cat": g }, groupWords(g, k).label, lists.befund.get(g)!))}</>
   );
 
   const root = r.statements.find((s) => s.rolle === "schluss");
@@ -683,9 +700,12 @@ export function ResultView(props: ResultViewProps) {
   ].join(" ");
   const showBridges = () => {
     setView("befund");
-    if (small) setTallyFilter("zu");
-    else setFilter("bruecke");
-    listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const key = small ? "t:zu" : "b:bruecke";
+    setOpen((o) => new Set([...o, key]));
+    // After the group has opened: scroll to its header.
+    requestAnimationFrame(() =>
+      (document.getElementById(`gruppe-${key.slice(2)}`) ?? listRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
   const gaps = gapTexts(r, props.questions);
