@@ -161,7 +161,7 @@
 .erg .legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; align-items: center; }
 .erg .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .erg .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.erg .legend i.none { background: transparent; border: 1px solid var(--line-2); }
+.erg .legend i.nv { box-sizing: border-box; background: transparent; border: 1px solid var(--line-2); }
 .erg .map svg { width: 100%; height: auto; display: block; margin-top: 6px; max-width: 100%; }
 .erg .map circle.p { transition: fill 0.35s ease, fill-opacity 0.35s ease; }
 .erg .map circle.v-a { fill: var(--agree); }

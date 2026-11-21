@@ -822,7 +822,7 @@ export function ResultView(props: ResultViewProps) {
                       enthält sich
                     </span>
                     <span>
-                      <i className="none" />
+                      <i className="nv" />
                       nicht abgestimmt
                     </span>
                   </>
