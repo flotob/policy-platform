@@ -17,7 +17,14 @@ export async function PublicFrame({
 }) {
   const k = await kommuneBySlug(town.slug);
   const s = k?.settings;
-  const contact = s ? [s.kontakt.stelle, s.kontakt.telefon].filter(Boolean).join(", ") : "";
+  const name = k?.name ?? town.name;
+  const townLinks = s
+    ? [
+        { label: "Website", url: s.website },
+        { label: "Impressum", url: s.impressum },
+        { label: "Datenschutz", url: s.datenschutz },
+      ].filter((l) => l.url)
+    : [];
   return (
     <div className="pub">
       <header className="pub-head wrap">
@@ -49,42 +56,59 @@ export async function PublicFrame({
         </nav>
       </header>
       {children}
-      <footer className="site-foot">
-        <div className="wrap small muted pub-foot">
-          {s && (contact || s.kontakt.email || s.website) ? (
-            <p>
-              Fragen zur Beteiligung: {contact}
-              {contact && s.kontakt.email ? ", " : ""}
-              {s.kontakt.email ? <a href={`mailto:${s.kontakt.email}`}>{s.kontakt.email}</a> : null}
-              {s.website ? (
-                <>
-                  {" · "}
-                  <a href={s.website} rel="noopener">
-                    Website von {k?.name ?? town.name}
-                  </a>
-                </>
-              ) : null}
+      {/* One footer in three columns: the town (its own links), who answers questions, streit.bar. It replaces
+          the operator's strip (LegalFooter) on these pages, so streit.bar's imprint is linked here. */}
+      <footer className="site-foot pub-foot">
+        <div className="wrap pub-foot-grid">
+          <div>
+            <p className="pub-foot-h">
+              <Link href={`/${town.slug}`}>{name}</Link>
             </p>
+            {townLinks.length ? (
+              <ul className="pub-foot-list">
+                {townLinks.map((l) => (
+                  <li key={l.label}>
+                    <a href={l.url} rel="noopener">
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          {s && (s.kontakt.stelle || s.kontakt.email || s.kontakt.telefon) ? (
+            <div>
+              <p className="pub-foot-h">Fragen zur Beteiligung</p>
+              <ul className="pub-foot-list">
+                {s.kontakt.stelle ? <li>{s.kontakt.stelle}</li> : null}
+                {s.kontakt.email ? (
+                  <li>
+                    <a href={`mailto:${s.kontakt.email}`}>{s.kontakt.email}</a>
+                  </li>
+                ) : null}
+                {s.kontakt.telefon ? (
+                  <li>
+                    <a href={`tel:${s.kontakt.telefon.replace(/[^\d+]/g, "")}`}>{s.kontakt.telefon}</a>
+                  </li>
+                ) : null}
+                {s.kontakt.zeiten ? <li className="pub-foot-quiet">{s.kontakt.zeiten}</li> : null}
+              </ul>
+            </div>
           ) : null}
-          {s?.impressum || s?.datenschutz ? (
-            <p>
-              {k?.name ?? town.name}:{" "}
-              {s.impressum ? (
-                <a href={s.impressum} rel="noopener">
-                  Impressum
-                </a>
-              ) : null}
-              {s.impressum && s.datenschutz ? " · " : null}
-              {s.datenschutz ? (
-                <a href={s.datenschutz} rel="noopener">
-                  Datenschutz
-                </a>
-              ) : null}
+          <div>
+            <p className="pub-foot-h">
+              <Link href="/">streit.bar</Link>
             </p>
-          ) : null}
-          <p>
-            Eine Beteiligung auf <Link href="/">streit.bar</Link>. Ohne Anmeldung; deine Stimmen bleiben anonym.
-          </p>
+            <ul className="pub-foot-list">
+              <li className="pub-foot-quiet">Ohne Anmeldung. Deine Stimmen bleiben anonym.</li>
+              <li>
+                <Link href="/impressum">Impressum</Link>
+              </li>
+              <li>
+                <Link href="/datenschutz">Datenschutz</Link>
+              </li>
+            </ul>
+          </div>
         </div>
       </footer>
     </div>

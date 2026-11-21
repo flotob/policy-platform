@@ -57,7 +57,16 @@
 .legal-foot a { color: var(--ink-3); }
 .legal-foot a:hover { color: var(--ink); }
 .pub-logo { height: 22px; width: auto; max-width: 120px; object-fit: contain; vertical-align: middle; margin-right: 8px; }
-.pub-foot p + p { margin-top: 6px; }
+.pub-foot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 28px 48px; }
+.pub-foot-h { font-weight: 600; font-size: 14px; color: var(--ink); margin-bottom: 10px; }
+.pub-foot-h a { text-decoration: none; }
+.pub-foot-h a:hover { text-decoration: underline; }
+.pub-foot-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; color: var(--ink-2); }
+.pub-foot-list a { color: var(--ink-2); text-decoration: none; }
+.pub-foot-list a:hover { color: var(--ink); text-decoration: underline; }
+.pub-foot-quiet { color: var(--ink-3); }
+/* Citizen pages carry streit.bar's imprint in their own footer. */
+body:has(.pub-foot) .legal-foot { display: none; }
 .legal { max-width: 68ch; padding-block: 48px 32px; }
 .legal h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(30px, 4vw, 40px); margin-bottom: 20px; }
 .legal h2 { font-family: var(--serif); font-weight: 600; font-size: 21px; margin: 28px 0 8px; }
