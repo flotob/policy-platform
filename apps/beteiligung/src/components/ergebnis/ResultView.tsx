@@ -333,11 +333,15 @@ export function ResultView(props: ResultViewProps) {
                 <p>{st.these}</p>
               </div>
             ) : null}
-            <div className="role sup">
-              <span className="rl">Stützt die These</span>
-              <span className="rn num">{sup.length}</span>
-            </div>
-            <div className="items sup">
+            <details className="rolle">
+              <summary className="role sup">
+                <span className="rl">Stützt die These</span>
+                <span className="rn num">
+                  {sup.length}
+                  <i className="chev" aria-hidden />
+                </span>
+              </summary>
+              <div className="items sup">
               {sup.length ? (
                 sup.map(({ s, e }, j) =>
                   item(
@@ -353,15 +357,18 @@ export function ResultView(props: ResultViewProps) {
               ) : (
                 <div className="none">Keine Aussage aus der Beteiligung stützt diese Stufe ausdrücklich.</div>
               )}
-            </div>
-            <div className="role att">
-              <span className="rl">Greift die These an</span>
-              <span className="rn num">
-                {att.length}
-                {st.unasked.length ? ` + ${st.unasked.length} ungestellt` : ""}
-              </span>
-            </div>
-            <div className="items att">
+              </div>
+            </details>
+            <details className="rolle">
+              <summary className="role att">
+                <span className="rl">Greift die These an</span>
+                <span className="rn num">
+                  {att.length}
+                  {st.unasked.length ? ` + ${st.unasked.length} ungestellt` : ""}
+                  <i className="chev" aria-hidden />
+                </span>
+              </summary>
+              <div className="items att">
               {att.map(({ s, e }, j) => {
                 const q = qLabel(e.question);
                 const head = e.attack ? (
@@ -394,7 +401,8 @@ export function ResultView(props: ResultViewProps) {
                 </div>
               ))}
               {!att.length && !st.unasked.length ? <div className="none">Niemand hat diese Stufe angegriffen.</div> : null}
-            </div>
+              </div>
+            </details>
             {small ? (
               <div className="urteil">
                 <p>{stepCountText(st)}</p>
