@@ -26,6 +26,6 @@ export async function reportFromDeck(gemeinde: string, verfahren: string, id: st
   const c = await getPublicCampaign(gemeinde, verfahren);
   if (!c) redirect("/");
   const r = await reportContent(c, "node", id, field(form, "grund"), field(form, "notiz"));
-  const note = r.ok ? "Danke, die Redaktion sieht sich das an. Du kannst weiter abstimmen oder die Aussage überspringen." : r.error;
+  const note = r.ok ? "Danke, die Redaktion sieht sich das an. Sie können weiter abstimmen oder die Aussage überspringen." : r.error;
   redirect(`/${c.tenant.slug}/${c.slug}/abstimmen?${noticeQuery(note)}`);
 }

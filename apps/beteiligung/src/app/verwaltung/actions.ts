@@ -138,7 +138,7 @@ export async function uploadFile(id: string, _prev: ActionState, form: FormData)
   const { staff, campaign } = await own(id);
   const values = valuesOf(form);
   const files = filesOf(form, "file");
-  const problem = uploadProblem(files, false);
+  const problem = uploadProblem(files);
   if (problem) return { error: problem, values };
   const role = field(form, "role");
   if (!["entwurf", "unterlage", "stellungnahme"].includes(role)) return { error: "Bitte wählen Sie, was die Datei ist.", values };

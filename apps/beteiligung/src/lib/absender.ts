@@ -20,14 +20,14 @@ export const UPLOAD = { maxFiles: 10, maxFile: 20 * 1024 * 1024, maxTotal: 40 * 
 /** The files of a form field, without the empty entry a browser sends when nothing was chosen. */
 export const filesOf = (form: FormData, name: string): File[] => form.getAll(name).filter((f): f is File => f instanceof File && f.size > 0);
 
-/** Why a set of files cannot be taken, in the form's words (Sie or du), or null. */
-export function uploadProblem(files: File[], du: boolean): string | null {
-  if (!files.length) return du ? "Bitte wähle eine Datei aus." : "Bitte wählen Sie eine Datei aus.";
+/** Why a set of files cannot be taken, or null. */
+export function uploadProblem(files: File[]): string | null {
+  if (!files.length) return "Bitte wählen Sie eine Datei aus.";
   if (files.length > UPLOAD.maxFiles) return `Höchstens ${UPLOAD.maxFiles} Dateien auf einmal.`;
   const big = files.find((f) => f.size > UPLOAD.maxFile);
-  if (big) return `„${big.name}“ ist größer als 20 MB.${du ? "" : " Bitte teilen Sie die Datei auf."}`;
+  if (big) return `„${big.name}“ ist größer als 20 MB. Bitte teilen Sie die Datei auf.`;
   if (files.reduce((n, f) => n + f.size, 0) > UPLOAD.maxTotal)
-    return du ? "Zusammen sind die Dateien größer als 40 MB. Lade sie bitte in zwei Schritten hoch." : "Zusammen sind die Dateien größer als 40 MB. Bitte laden Sie sie in zwei Schritten hoch.";
+    return "Zusammen sind die Dateien größer als 40 MB. Bitte laden Sie sie in zwei Schritten hoch.";
   return null;
 }
 

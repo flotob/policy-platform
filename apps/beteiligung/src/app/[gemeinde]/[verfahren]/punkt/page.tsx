@@ -23,12 +23,12 @@ export default async function EigenerPunkt({ params }: { params: Promise<{ gemei
         <p className="door-kicker">{c.question}</p>
         <h1 className="serif">Was fehlt in der Debatte?</h1>
         <p className="pub-lead">
-          Zwei Sätze reichen. Die Maschine prüft sofort, ob es deinen Punkt schon gibt; dann zählt deine Stimme dort. Ist er neu, prüft ihn ein Mensch
-          aus der Redaktion, und du kannst mitverfolgen, was daraus wird.
+          Zwei Sätze reichen. Die Maschine prüft sofort, ob es Ihren Punkt schon gibt; dann zählt Ihre Stimme dort. Ist er neu, prüft ihn ein Mensch
+          aus der Redaktion, und Sie können mitverfolgen, was daraus wird.
         </p>
         {c.fictional ? (
           <p className="notice small">
-            Dies ist ein Beispiel mit erfundenen Inhalten. Was du hier schreibst, sehen auch andere Besucher, die sich das Beispiel aus Sicht der
+            Dies ist ein Beispiel mit erfundenen Inhalten. Was Sie hier schreiben, sehen auch andere Besucher, die sich das Beispiel aus Sicht der
             Verwaltung ansehen. Bitte nichts Persönliches eintragen.
           </p>
         ) : null}

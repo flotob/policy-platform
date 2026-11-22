@@ -10,7 +10,7 @@ import { answerShort } from "../../actions";
 import "../../../public.css";
 import "../../tueren.css";
 
-export const metadata = { title: "Dein Punkt" };
+export const metadata = { title: "Ihr Punkt" };
 
 /**
  * Door 2 (Stephan's screen 3, second half): the machine's answer. A point
@@ -38,7 +38,7 @@ export default async function PunktGeprueft({ params }: { params: Promise<{ geme
   return (
     <PublicFrame town={c.tenant} campaign={c} back>
       <main className="wrap door">
-        <p className="door-kicker">Dein Punkt</p>
+        <p className="door-kicker">Ihr Punkt</p>
         <blockquote className="door-quote">„{row.text}“</blockquote>
         <p className="door-checked small muted">Geprüft</p>
 
@@ -46,8 +46,8 @@ export default async function PunktGeprueft({ params }: { params: Promise<{ geme
           <section className="door-answer">
             <h1 className="serif">Das sieht nicht nach einem Argument zur Maßnahme aus.</h1>
             <p>
-              Ein Argument sagt, was stimmt oder was richtig wäre, und warum es für oder gegen die Maßnahme spricht. Magst du deinen Punkt so
-              formulieren? Du kannst ihn auch so an die Redaktion schicken.
+              Ein Argument sagt, was stimmt oder was richtig wäre, und warum es für oder gegen die Maßnahme spricht. Möchten Sie Ihren Punkt so
+              formulieren? Sie können ihn auch so an die Redaktion schicken.
             </p>
             <div className="door-actions">
               <a href={`${base}/punkt`} className="btn">
@@ -66,8 +66,8 @@ export default async function PunktGeprueft({ params }: { params: Promise<{ geme
             <blockquote className={`door-match${d.outcome === "gegenteil" ? " against" : ""}`}>„{row.node_text}“</blockquote>
             <p>
               {d.outcome === "gegenteil"
-                ? "Meinst du, dass diese Aussage nicht stimmt? Dann zählt deine Stimme dort als Ablehnung."
-                : "Meinst du das? Dann zählt deine Stimme dort als Zustimmung, und dein Satz kommt zu den Belegen dieses Punkts."}
+                ? "Meinen Sie, dass diese Aussage nicht stimmt? Dann zählt Ihre Stimme dort als Ablehnung."
+                : "Meinen Sie das? Dann zählt Ihre Stimme dort als Zustimmung, und Ihr Satz kommt zu den Belegen dieses Punkts."}
             </p>
             <div className="door-actions">
               <form action={yes}>
@@ -81,7 +81,7 @@ export default async function PunktGeprueft({ params }: { params: Promise<{ geme
                 </button>
               </form>
             </div>
-            <p className="small muted">Bei „Nein“ prüft ein Mensch deinen Punkt. Du bekommst einen Link, um mitzuverfolgen, was daraus wird.</p>
+            <p className="small muted">Bei „Nein“ prüft ein Mensch Ihren Punkt. Sie bekommen einen Link, um mitzuverfolgen, was daraus wird.</p>
           </section>
         ) : (
           redirect(`${base}/laufzettel/${token}`)

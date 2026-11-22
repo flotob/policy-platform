@@ -79,7 +79,7 @@ type After = { state: string; decision: PublicDecision | null };
  */
 function Beschluss({ n, own, after }: { n: NonNullable<MoveView["node"]>; own: boolean; after: After }) {
   const d = after.decision;
-  const subject = own ? "Dein Punkt" : `Punkt ${n.ord}, zu dem dein Beitrag gehört,`;
+  const subject = own ? "Ihr Punkt" : `Punkt ${n.ord}, zu dem Ihr Beitrag gehört,`;
   let head: string;
   let body: string | null = null;
   let tone = "wait";
@@ -121,17 +121,17 @@ function Fate({ m, base, token, short, after }: { m: MoveView; base: string; tok
     head = "Nicht in die Abstimmung aufgenommen";
     body = `Die Redaktion hat diesen Beitrag verworfen${m.decision?.reason ? `: ${REJECT[m.decision.reason as keyof typeof REJECT] ?? m.decision.reason}` : ""}. Er bleibt im Protokoll.`;
   } else if (m.state === "vorgelegt" || !n || n.status !== "released") {
-    head = m.decision?.einspruch ? "Dein Einspruch liegt bei der Redaktion" : `Ein Mensch aus der Redaktion prüft ${short ? "deinen Punkt" : "dieses Argument"}`;
+    head = m.decision?.einspruch ? "Ihr Einspruch liegt bei der Redaktion" : `Ein Mensch aus der Redaktion prüft ${short ? "Ihren Punkt" : "dieses Argument"}`;
     body = n?.status === "released" ? `Die Frage ist, ob er zu Punkt ${n.ord} gehört.` : "Sobald entschieden ist, steht es hier.";
   } else if (own) {
-    head = `Dein Punkt ist jetzt Punkt ${n.ord}`;
+    head = `Ihr Punkt ist jetzt Punkt ${n.ord}`;
     body = `${m.decidedBy?.startsWith("ki") ? "Die Maschine hat ihn" : "Ein Mensch aus der Redaktion hat ihn"} geprüft und als neuen Punkt angelegt.${n.releasedAt ? ` Seit dem ${date.format(new Date(n.releasedAt))} stimmen andere darüber ab.` : ""}`;
   } else if (m.stance === -1) {
-    head = `Dein Punkt zählt als Widerspruch zu Punkt ${n.ord}`;
-    body = "Er sagt das Gegenteil einer Aussage, die schon zur Abstimmung steht. Deine Stimme zählt dort als Ablehnung.";
+    head = `Ihr Punkt zählt als Widerspruch zu Punkt ${n.ord}`;
+    body = "Er sagt das Gegenteil einer Aussage, die schon zur Abstimmung steht. Ihre Stimme zählt dort als Ablehnung.";
   } else {
-    head = `Dein Punkt gehört zu Punkt ${n.ord}`;
-    body = "Diese Aussage stand schon zur Abstimmung. Deine Stimme zählt dort, dein Satz gehört zu ihren Belegen.";
+    head = `Ihr Punkt gehört zu Punkt ${n.ord}`;
+    body = "Diese Aussage stand schon zur Abstimmung. Ihre Stimme zählt dort, Ihr Satz gehört zu ihren Belegen.";
   }
 
   const byAuthor = m.decision?.action === "vom_verfasser_bestaetigt";
@@ -139,7 +139,7 @@ function Fate({ m, base, token, short, after }: { m: MoveView; base: string; tok
     kern: m.kern,
     place: place(m),
     known: byAuthor
-      ? `${m.stance === -1 ? "Gegenteil von" : "Gleich wie"} Punkt ${n?.ord ?? "?"} · Sicherheit ${pct(m.stance === -1 ? m.match?.pOpposite : m.match?.pSame)} · dir zur Bestätigung gezeigt`
+      ? `${m.stance === -1 ? "Gegenteil von" : "Gleich wie"} Punkt ${n?.ord ?? "?"} · Sicherheit ${pct(m.stance === -1 ? m.match?.pOpposite : m.match?.pSame)} · Ihnen zur Bestätigung gezeigt`
       : m.route === "auto"
         ? `Treffer auf Punkt ${m.matchOrd ?? "?"} · Sicherheit ${pct(m.match?.pSame)}`
         : m.route === "unsicher"
@@ -161,7 +161,7 @@ function Fate({ m, base, token, short, after }: { m: MoveView; base: string; tok
         : m.state === "vorgelegt"
           ? "offen"
           : action === "vom_verfasser_bestaetigt"
-            ? "von dir bestätigt"
+            ? "von Ihnen bestätigt"
             : action === "auto"
               ? "automatisch, ohne Vorlage"
               : own
@@ -329,13 +329,13 @@ export default async function Laufzettel({
       <main className="wrap door slip">
         <div className="slip-head">
           <p className="door-kicker">
-            {isShort ? "Deine Eingabe" : `Deine Stellungnahme${s.filename ? ` „${s.filename as string}“` : ""}`} vom {date.format(new Date(String(s.created_at)))}
+            {isShort ? "Ihre Eingabe" : `Ihre Stellungnahme${s.filename ? ` „${s.filename as string}“` : ""}`} vom {date.format(new Date(String(s.created_at)))}
           </p>
           <p className="small muted num">Laufzettel Nr. {token.slice(0, 4)}</p>
         </div>
         {batch.length > 1 ? (
           <nav className="slip-batch" aria-label="Dateien derselben Einsendung">
-            Du hast {batch.length} Dateien zusammen eingereicht. Sie zählen als eine Stellungnahme; jede hat ihren eigenen Laufzettel:
+            Sie haben {batch.length} Dateien zusammen eingereicht. Sie zählen als eine Stellungnahme; jede hat ihren eigenen Laufzettel:
             <ul>
               {batch.map((b) => (
                 <li key={b.token}>
@@ -348,21 +348,21 @@ export default async function Laufzettel({
           </nav>
         ) : null}
         {isShort ? <blockquote className="door-quote">„{s.text as string}“</blockquote> : null}
-        {einspruch ? <p className="notice small">Dein Einspruch ist angekommen. Ein Mensch aus der Redaktion sieht sich die Zuordnung noch einmal an.</p> : null}
+        {einspruch ? <p className="notice small">Ihr Einspruch ist angekommen. Ein Mensch aus der Redaktion sieht sich die Zuordnung noch einmal an.</p> : null}
 
         {reading ? (
           <section className="fate">
-            <h2 className="serif">Die Maschine liest {isShort ? "deinen Punkt" : "deine Stellungnahme"} gerade.</h2>
+            <h2 className="serif">Die Maschine liest {isShort ? "Ihren Punkt" : "Ihre Stellungnahme"} gerade.</h2>
             <p>Das dauert etwa eine Minute. Danach prüft ein Mensch aus der Redaktion alles Neue. Diese Seite aktualisiert sich von selbst.</p>
           </section>
         ) : failed ? (
           <section className="fate">
             <h2 className="serif">Beim Lesen ist etwas schiefgegangen.</h2>
-            <p>Die Redaktion sieht es und kümmert sich darum. Dein Beitrag ist nicht verloren.</p>
+            <p>Die Redaktion sieht es und kümmert sich darum. Ihr Beitrag ist nicht verloren.</p>
           </section>
         ) : !views.length ? (
           <section className="fate">
-            <h2 className="serif">Ein Mensch aus der Redaktion prüft deinen Punkt.</h2>
+            <h2 className="serif">Ein Mensch aus der Redaktion prüft Ihren Punkt.</h2>
             <p>Sobald entschieden ist, steht es hier.</p>
           </section>
         ) : isShort ? (
@@ -385,7 +385,7 @@ export default async function Laufzettel({
 
         {!after.decision ? <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} token={token} after={c.state === "veroeffentlicht" ? "decision" : "result"} /> : null}
         <p className="slip-keep small muted">
-          {confirmed ? "Du hast bestätigt, dass dein Punkt schon da war. " : ""}Speichere diesen Link, um später nachzusehen.{" "}
+          {confirmed ? "Sie haben bestätigt, dass Ihr Punkt schon da war. " : ""}Speichern Sie diesen Link, um später nachzusehen.{" "}
           {c.state === "offen" ? <Link href={`${base}/abstimmen`}>Weiter abstimmen</Link> : c.state === "veroeffentlicht" ? <Link href={`${base}/ergebnis`}>Zum Ergebnis</Link> : null}
         </p>
       </main>

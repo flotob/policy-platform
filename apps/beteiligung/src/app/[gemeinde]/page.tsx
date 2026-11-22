@@ -263,7 +263,7 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
               <h2 id="tp-wie">So läuft eine Beteiligung</h2>
               <ol>
                 <li>Die {/^(Stadt|Gemeinde)$/.test(k.name.split(/\s+/)[0]!) ? k.name.split(/\s+/)[0] : "Kommune"} stellt ein Vorhaben zur Diskussion und begründet es.</li>
-                <li>Du stimmst über kurze Aussagen ab, bringst einen eigenen Punkt ein oder reichst eine Stellungnahme ein.</li>
+                <li>Sie stimmen über kurze Aussagen ab, bringen einen eigenen Punkt ein oder reichen eine Stellungnahme ein.</li>
                 <li>
                   Der Rat bekommt einen Bericht: worüber man sich einig ist, was ein Gutachten klären kann und was er selbst entscheiden muss. Danach steht bei
                   jeder Aussage, was der Rat aus ihr gemacht hat.
@@ -322,8 +322,8 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
                   </dl>
                   {s.kontakt.telefon || s.kontakt.stelle ? (
                     <p className="tp-offline">
-                      <strong>Ohne Internet?</strong> Du kannst auch {s.kontakt.telefon ? "am Telefon, " : ""}persönlich oder per Brief mitmachen. Die Redaktion trägt
-                      deinen Beitrag ein, und er zählt wie jeder andere.
+                      <strong>Ohne Internet?</strong> Sie können auch {s.kontakt.telefon ? "am Telefon, " : ""}persönlich oder per Brief mitmachen. Die Redaktion trägt
+                      Ihren Beitrag ein, und er zählt wie jeder andere.
                     </p>
                   ) : null}
                 </section>

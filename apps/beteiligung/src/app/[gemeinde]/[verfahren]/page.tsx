@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ gemeinde:
 /**
  * The entry screen of a campaign (Stephan's Teilnehmeransicht, screen 1):
  * the question, what the town proposes, how to take part. Citizens are
- * addressed with "du" as in his draft; no account, ever.
+ * addressed with "Sie" (Florian, 2026-11-22: one form on every citizen page; his draft had "du"); no account, ever.
  */
 export default async function Einstieg({
   params,
@@ -68,8 +68,8 @@ export default async function Einstieg({
   const end = c.params.end ? day.format(new Date(c.params.end)) : null;
 
   const how = [
-    doors.abstimmen ? { title: "Abstimmen", text: "Du siehst kurze Aussagen und sagst zu jeder: stimme zu, lehne ab oder überspringe." } : null,
-    doors.kurzaussage ? { title: "Eigenen Punkt einbringen", text: "Wenn dir ein Punkt fehlt, schreibst du ihn in zwei Sätzen dazu." } : null,
+    doors.abstimmen ? { title: "Abstimmen", text: "Sie sehen kurze Aussagen und sagen zu jeder: zustimmen, ablehnen oder überspringen." } : null,
+    doors.kurzaussage ? { title: "Eigenen Punkt einbringen", text: "Wenn Ihnen ein Punkt fehlt, schreiben Sie ihn in zwei Sätzen dazu." } : null,
     doors.stellungnahme ? { title: "Stellungnahme einreichen", text: "Für längere Schreiben, etwa von Vereinen, Betrieben oder Fachleuten." } : null,
   ].filter((x): x is { title: string; text: string } => x !== null);
 
@@ -97,7 +97,7 @@ export default async function Einstieg({
         </section>
 
         <aside className="pub-join" aria-labelledby="mitmachen">
-          <h2 id="mitmachen">{closed ? (c.state === "veroeffentlicht" ? "Das Ergebnis" : "Die Beteiligung ist geschlossen") : "So machst du mit"}</h2>
+          <h2 id="mitmachen">{closed ? (c.state === "veroeffentlicht" ? "Das Ergebnis" : "Die Beteiligung ist geschlossen") : "So machen Sie mit"}</h2>
           {closed ? null : (
             <ul className="pub-how">
               {how.map((h) => (
@@ -158,7 +158,7 @@ export default async function Einstieg({
           ) : null}
           {open && !needsCode && !letterCode && !me && codes?.drawn ? (
             <details className="pub-letter">
-              <summary>Du hast einen Brief mit Code bekommen?</summary>
+              <summary>Sie haben einen Brief mit Code bekommen?</summary>
               <CodeForm gemeinde={c.tenant.slug} verfahren={c.slug} drawn />
             </details>
           ) : null}

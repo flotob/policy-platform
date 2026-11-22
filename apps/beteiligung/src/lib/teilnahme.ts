@@ -68,7 +68,7 @@ export async function ensureParticipant(c: Campaign, invite?: string): Promise<P
     SELECT count(*)::int AS n FROM participants
     WHERE consultation_id = ${c.consultationId} AND origin_hash = ${origin} AND created_at > now() - interval '1 hour'`);
   if (Number((recent.rows[0] as Row).n) >= LIMITS.participantsPerOriginHour) {
-    throw new ParticipationError("Von diesem Anschluss sind in der letzten Stunde sehr viele Teilnahmen gestartet worden. Bitte versuch es später noch einmal.");
+    throw new ParticipationError("Von diesem Anschluss sind in der letzten Stunde sehr viele Teilnahmen gestartet worden. Bitte versuchen Sie es später noch einmal.");
   }
   const token = randomBytes(24).toString("base64url");
   const id = await db.transaction(async (tx) => {

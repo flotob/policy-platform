@@ -18,15 +18,15 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
     body = (
       <>
         <h1>Dieser Link ist ungültig</h1>
-        <p>Vielleicht ist er unvollständig angekommen. Kopiere ihn bitte ganz aus der E-Mail in die Adresszeile.</p>
+        <p>Vielleicht ist er unvollständig angekommen. Kopieren Sie ihn bitte ganz aus der E-Mail in die Adresszeile.</p>
       </>
     );
   } else if (purpose === "abmelden") {
     body =
       fertig || f.unsubscribed ? (
         <>
-          <h1>Du bist abgemeldet</h1>
-          <p>Zu „{f.campaign.title}“ bekommst du keine Nachrichten mehr. Deine Adresse haben wir gelöscht.</p>
+          <h1>Sie sind abgemeldet</h1>
+          <p>Zu „{f.campaign.title}“ bekommen Sie keine Nachrichten mehr. Ihre Adresse haben wir gelöscht.</p>
           <p>
             <Link href={f.campaign.url}>Zur Beteiligung</Link>
           </p>
@@ -34,7 +34,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
       ) : (
         <>
           <h1>Keine Nachrichten mehr?</h1>
-          <p>Zu „{f.campaign.title}“ schreiben wir dir dann nicht mehr, und deine Adresse wird gelöscht.</p>
+          <p>Zu „{f.campaign.title}“ schreiben wir Ihnen dann nicht mehr, und Ihre Adresse wird gelöscht.</p>
           <form action={answer.bind(null, f.id, "abmelden", t)} className="nachricht-form">
             <button type="submit" className="btn">
               Abmelden
@@ -46,7 +46,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
     body = (
       <>
         <h1>Dieser Link ist abgelaufen</h1>
-        <p>Die Bestätigung gilt sieben Tage. Trag deine Adresse bei „{f.campaign.title}“ einfach noch einmal ein, dann bekommst du einen neuen Link.</p>
+        <p>Die Bestätigung gilt sieben Tage. Tragen Sie Ihre Adresse bei „{f.campaign.title}“ einfach noch einmal ein, dann bekommen Sie einen neuen Link.</p>
         <p>
           <Link href={f.campaign.url}>Zur Beteiligung</Link>
         </p>
@@ -58,7 +58,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
         <>
           <h1>Danke, bestätigt</h1>
           <p>
-            Wir schreiben dir, wenn das Ergebnis von „{f.campaign.title}“ da ist und wenn der Gemeinderat entschieden hat. Mehr nicht. Jede Nachricht hat
+            Wir schreiben Ihnen, wenn das Ergebnis von „{f.campaign.title}“ da ist und wenn der Gemeinderat entschieden hat. Mehr nicht. Jede Nachricht hat
             einen Link zum Abmelden.
           </p>
           <p>
@@ -69,7 +69,7 @@ export default async function Nachricht({ searchParams }: { searchParams: Promis
         <>
           <h1>Adresse bestätigen</h1>
           <p>
-            Du bekommst höchstens zwei Nachrichten zu „{f.campaign.title}“: wenn das Ergebnis da ist und wenn der Gemeinderat entschieden hat.
+            Sie bekommen höchstens zwei Nachrichten zu „{f.campaign.title}“: wenn das Ergebnis da ist und wenn der Gemeinderat entschieden hat.
           </p>
           <form action={answer.bind(null, f.id, "bestaetigen", t)} className="nachricht-form">
             <button type="submit" className="btn">

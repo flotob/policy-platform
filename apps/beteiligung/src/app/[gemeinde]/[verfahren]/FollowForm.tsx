@@ -14,7 +14,7 @@ function Send() {
   );
 }
 
-/** "Willst du erfahren, was daraus wird?" — voluntary, two messages at most. */
+/** "Möchten Sie erfahren, was daraus wird?" — voluntary, two messages at most. */
 export function FollowForm({
   gemeinde,
   verfahren,
@@ -36,21 +36,21 @@ export function FollowForm({
   return (
     <form action={action} className="follow">
       <p className="follow-head">
-        <strong>Willst du erfahren, was daraus wird?</strong>{" "}
+        <strong>Möchten Sie erfahren, was daraus wird?</strong>{" "}
         {after === "decision"
-          ? "Wir schreiben dir einmal: wenn der Gemeinderat entschieden hat, und was aus den Punkten geworden ist."
-          : "Wir schreiben dir zweimal: wenn das Ergebnis da ist, und wenn der Gemeinderat entschieden hat."}
+          ? "Wir schreiben Ihnen einmal: wenn der Gemeinderat entschieden hat, und was aus den Punkten geworden ist."
+          : "Wir schreiben Ihnen zweimal: wenn das Ergebnis da ist, und wenn der Gemeinderat entschieden hat."}
       </p>
       <div className="follow-row">
         <label htmlFor="follow-email" className="visually-hidden">
           E-Mail-Adresse
         </label>
-        <input id="follow-email" name="email" type="email" className="input" placeholder="deine@adresse.de" autoComplete="email" defaultValue={state.values?.email ?? ""} required />
+        <input id="follow-email" name="email" type="email" className="input" placeholder="name@beispiel.de" autoComplete="email" defaultValue={state.values?.email ?? ""} required />
         <Send />
       </div>
       {state.error ? <p className="error">{state.error}</p> : null}
       <p className="follow-fine small muted">
-        Freiwillig. Die Adresse steht nicht bei deinen Stimmen, wird nur dafür benutzt und mit einem Klick gelöscht.
+        Freiwillig. Die Adresse steht nicht bei Ihren Stimmen, wird nur dafür benutzt und mit einem Klick gelöscht.
       </p>
     </form>
   );

@@ -37,7 +37,7 @@ export async function enterLetter(id: string, _prev: ActionState, form: FormData
   const text = values.text!;
   if (!scans.length && text.length < 40) return { error: "Bitte den Text eintragen (mindestens ein, zwei Sätze) oder einen Scan anhängen.", values };
   if (scans.some((s) => !SCAN_TYPES.includes(s.type))) return { error: "Scans bitte als PDF, JPG, PNG oder WebP.", values };
-  const problem = scans.length ? uploadProblem(scans, false) : null;
+  const problem = scans.length ? uploadProblem(scans) : null;
   if (problem) return { error: problem, values };
   // The same organisation as before: same spelling, same sender.
   if (org) org = sameSender(org, (await knownSenders(c.id)).map((s) => s.name)) ?? org;

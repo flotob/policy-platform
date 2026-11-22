@@ -100,13 +100,13 @@ export default async function Abstimmen({
                 <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 1)}>
                   <button type="submit" className="vote vote-a">
                     <span aria-hidden className="vote-dot" />
-                    Stimme zu
+                    Zustimmen
                   </button>
                 </form>
                 <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, -1)}>
                   <button type="submit" className="vote vote-d">
                     <span aria-hidden className="vote-dot" />
-                    Lehne ab
+                    Ablehnen
                   </button>
                 </form>
                 <form action={vote.bind(null, c.tenant.slug, c.slug, next.id, next.version, 0)}>
@@ -134,7 +134,7 @@ export default async function Abstimmen({
                     <div className="report-actions">
                       <button type="submit">Melden</button>
                     </div>
-                    <p className="small muted">Die Redaktion entscheidet. Bis dahin bleibt die Aussage stehen; du kannst sie überspringen.</p>
+                    <p className="small muted">Die Redaktion entscheidet. Bis dahin bleibt die Aussage stehen; Sie können sie überspringen.</p>
                   </form>
                 </details>
               ) : null}
@@ -148,9 +148,9 @@ export default async function Abstimmen({
               ) : null}
               <span className="small muted">
                 {next.typ === "W"
-                  ? "Bei einer Wertungsfrage gibt es kein Richtig oder Falsch. Es zählt, wie du abwägst."
+                  ? "Bei einer Wertungsfrage gibt es kein Richtig oder Falsch. Es zählt, wie Sie abwägen."
                   : next.typ === "T"
-                    ? "Bei einer Tatsachenfrage zählt, was du für zutreffend hältst. Weißt du es nicht, überspring sie."
+                    ? "Bei einer Tatsachenfrage zählt, was Sie für zutreffend halten. Wissen Sie es nicht, überspringen Sie sie."
                     : "Ein Vorschlag, wie die Maßnahme gestaltet werden könnte."}
               </span>
             </div>
@@ -158,9 +158,9 @@ export default async function Abstimmen({
           </>
         ) : (
           <section className="deck-done">
-            <h1 className="serif">Danke. Du hast zu allen {statements.length} Aussagen abgestimmt.</h1>
+            <h1 className="serif">Danke. Sie haben zu allen {statements.length} Aussagen abgestimmt.</h1>
             <p className="pub-lead">
-              Kommen neue Punkte dazu, kannst du später auch über sie abstimmen. Fehlt dir etwas, schreib es dazu.
+              Kommen neue Punkte dazu, können Sie später auch über sie abstimmen. Fehlt Ihnen etwas, schreiben Sie es dazu.
             </p>
             <div className="deck-done-links">
               {doors.kurzaussage ? (
@@ -175,7 +175,7 @@ export default async function Abstimmen({
               ) : null}
             </div>
             <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open />
-            <h2>Deine Stimmen</h2>
+            <h2>Ihre Stimmen</h2>
             <p className="small muted">
               Wie die anderen abgestimmt haben, zeigt das Ergebnis. Es erscheint, wenn die Beteiligung abgeschlossen und ausgewertet ist.
             </p>
@@ -187,7 +187,7 @@ export default async function Abstimmen({
                     <p className="done-text">{s.text}</p>
                     <p className="done-meta">
                       <span className={`mine mine-${v === 1 ? "a" : v === -1 ? "d" : "p"}`}>
-                        Du: {v === 1 ? "stimmst zu" : v === -1 ? "lehnst ab" : "übersprungen"}
+                        Ihre Stimme: {v === 1 ? "Zustimmung" : v === -1 ? "Ablehnung" : "übersprungen"}
                       </span>
                     </p>
                   </li>

@@ -48,8 +48,8 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
     else {
       const p = await ensureParticipant(c);
       const r = await redeemCode(c, p.id, code);
-      if (r === "unbekannt") return { error: "Diesen Code kennen wir nicht, oder er wurde schon benutzt. Mitmachen kannst du trotzdem.", values: { code } };
-      if (r === "schon") redirect(`${base}/abstimmen?${noticeQuery("Du nimmst in diesem Browser schon mit einem Code teil.")}`);
+      if (r === "unbekannt") return { error: "Diesen Code kennen wir nicht, oder er wurde schon benutzt. Mitmachen können Sie trotzdem.", values: { code } };
+      if (r === "schon") redirect(`${base}/abstimmen?${noticeQuery("Sie nehmen in diesem Browser schon mit einem Code teil.")}`);
     }
   } catch (e) {
     if (e instanceof ParticipationError) return { error: e.message, values: { code } };
@@ -68,9 +68,9 @@ export async function vote(gemeinde: string, verfahren: string, statementId: str
     if (e instanceof ParticipationError) redirect(`${base}?${noticeQuery(e.message)}`);
     throw e;
   }
-  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?${noticeQuery("Langsam: so schnell kann niemand lesen. Warte einen Moment.")}`);
+  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?${noticeQuery("Langsam: so schnell kann niemand lesen. Warten Sie einen Moment.")}`);
   const counted = await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0, Number(version) || undefined);
-  if (!counted) redirect(`${base}/abstimmen?${noticeQuery("Diese Aussage wurde gerade geändert oder zurückgezogen. Deine Stimme ist nicht gezählt; sieh dir die Karte bitte noch einmal an.")}`);
+  if (!counted) redirect(`${base}/abstimmen?${noticeQuery("Diese Aussage wurde gerade geändert oder zurückgezogen. Ihre Stimme ist nicht gezählt; sehen Sie sich die Karte bitte noch einmal an.")}`);
   redirect(`${base}/abstimmen`);
 }
 
@@ -83,7 +83,7 @@ export async function submitShort(gemeinde: string, verfahren: string, _prev: Do
   if (!c.params.doors.kurzaussage) redirect(base);
   const text = field(form, "text").replace(/\s+/g, " ");
   const values = { text };
-  if (text.length < 12) return { error: "Schreib bitte einen ganzen Satz: was fehlt, und warum.", values };
+  if (text.length < 12) return { error: "Schreiben Sie bitte einen ganzen Satz: was fehlt, und warum.", values };
   if (text.length > LIMITS.shortMaxChars) return { error: `Höchstens ${LIMITS.shortMaxChars} Zeichen. Zwei Sätze reichen.`, values };
   let p;
   try {
@@ -92,7 +92,7 @@ export async function submitShort(gemeinde: string, verfahren: string, _prev: Do
     if (e instanceof ParticipationError) return { error: e.message, values };
     throw e;
   }
-  if (!(await within("short", p.id))) return { error: "Du hast in der letzten Stunde schon mehrere Punkte geschickt. Bitte später wieder.", values };
+  if (!(await within("short", p.id))) return { error: "Sie haben in der letzten Stunde schon mehrere Punkte geschickt. Bitte später wieder.", values };
 
   const run = await runShortCheck(c, text);
   const { token } = await storeShort(c, p.id, text, run);
@@ -124,9 +124,9 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   const values = { als: as, org, orgType };
   // One upload may hold a statement and its attachments: all of it is this one sender.
   const files = filesOf(form, "file");
-  const problem = uploadProblem(files, true);
+  const problem = uploadProblem(files);
   if (problem) return { error: problem, values };
-  if (as === "organisation" && org.length < 3) return { error: "Für wen schreibst du? Der Name erscheint bei jedem Zitat.", values };
+  if (as === "organisation" && org.length < 3) return { error: "Für wen schreiben Sie? Der Name erscheint bei jedem Zitat.", values };
   let p;
   try {
     p = await ensureParticipant(c, field(form, "code") || undefined);
@@ -137,7 +137,7 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   // Every file costs the machine a reading: the daily limit counts files.
   if (!(await within("upload", p.id, files.length)))
     return {
-      error: `Am Tag gehen bis zu ${LIMITS.uploadsPerDay} Dateien. ${files.length > 1 ? "Lade heute weniger hoch oder den Rest morgen." : "Bitte morgen wieder."}`,
+      error: `Am Tag gehen bis zu ${LIMITS.uploadsPerDay} Dateien. ${files.length > 1 ? "Laden Sie heute weniger hoch oder den Rest morgen." : "Bitte morgen wieder."}`,
       values,
     };
 
@@ -170,7 +170,7 @@ export async function uploadStatement(gemeinde: string, verfahren: string, _prev
   } catch (e) {
     if (e instanceof UnreadableFile) return { error: e.message, values };
     console.error("[tuer3] reading an upload failed:", e);
-    return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuch es gleich noch einmal.", values };
+    return { error: "Die Datei ließ sich gerade nicht lesen. Bitte versuchen Sie es gleich noch einmal.", values };
   }
   // One tracking slip per file; the files of one upload share the slip number (TOKEN, TOKEN-2, …) and link to each other.
   const token = trackingToken();
@@ -258,6 +258,6 @@ export async function followCampaign(gemeinde: string, verfahren: string, token:
   return {
     ok: res.already
       ? "Diese Adresse bekommt die Nachrichten schon."
-      : "Fast geschafft: Wir haben dir eine E-Mail geschickt. Bitte bestätige den Link darin, sonst schreiben wir dir nicht.",
+      : "Fast geschafft: Wir haben Ihnen eine E-Mail geschickt. Bitte bestätigen Sie den Link darin, sonst schreiben wir Ihnen nicht.",
   };
 }

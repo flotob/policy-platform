@@ -58,7 +58,7 @@ export async function follow(c: Public, raw: string, laufzettel: string[], origi
   if (email.length > 200 || !EMAIL.test(email)) return { ok: false, error: "Diese E-Mail-Adresse sieht nicht vollständig aus." };
   const [recent] = await rows(sql`
     SELECT count(*)::int AS n FROM campaign_followers WHERE campaign_id = ${c.id} AND origin_hash = ${origin} AND created_at > now() - interval '1 hour'`);
-  if (Number(recent?.n ?? 0) >= PER_ORIGIN_HOUR) return { ok: false, error: "Von diesem Anschluss kamen gerade viele Adressen. Bitte versuch es später noch einmal." };
+  if (Number(recent?.n ?? 0) >= PER_ORIGIN_HOUR) return { ok: false, error: "Von diesem Anschluss kamen gerade viele Adressen. Bitte versuchen Sie es später noch einmal." };
   const [f] = await rows(sql`
     INSERT INTO campaign_followers (tenant_id, campaign_id, email, laufzettel, origin_hash)
     VALUES (${c.tenantId}, ${c.id}, ${email}, ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(laufzettel)}::jsonb)), ${origin})
@@ -68,7 +68,7 @@ export async function follow(c: Public, raw: string, laufzettel: string[], origi
       confirmed_at = CASE WHEN campaign_followers.unsubscribed_at IS NULL THEN campaign_followers.confirmed_at END,
       unsubscribed_at = NULL
     RETURNING id, confirmed_at, confirm_sent_at`);
-  if (!f) return { ok: false, error: "Das hat nicht geklappt. Bitte versuch es noch einmal." };
+  if (!f) return { ok: false, error: "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal." };
   if (f.confirmed_at) return { ok: true, already: true };
   // One confirmation mail per ten minutes is enough, however often the form is sent.
   if (f.confirm_sent_at && Date.now() - new Date(String(f.confirm_sent_at)).getTime() < 10 * 60 * 1000) return { ok: true, already: false };
@@ -76,19 +76,19 @@ export async function follow(c: Public, raw: string, laufzettel: string[], origi
   const sent = await sendMail({
     to: email,
     subject: `Bitte bestätigen: Nachricht zu „${c.title}“`,
-    text: `Hallo,
+    text: `Guten Tag,
 
-du hast auf streit.bar gebeten, Nachricht zu bekommen, wie es mit der Beteiligung „${c.question}“ (${townShort(town)}) weitergeht: wenn das Ergebnis da ist und wenn der Gemeinderat entschieden hat.
+Sie haben auf streit.bar gebeten, Nachricht zu bekommen, wie es mit der Beteiligung „${c.question}“ (${townShort(town)}) weitergeht: wenn das Ergebnis da ist und wenn der Gemeinderat entschieden hat.
 
-Bitte bestätige das mit diesem Link:
+Bitte bestätigen Sie das mit diesem Link:
 ${link(f.id as string, "bestaetigen")}
 
-Warst du das nicht, dann ignoriere diese E-Mail. Ohne Bestätigung schreiben wir dir nie wieder und löschen die Adresse nach sieben Tagen.
+Waren Sie das nicht, dann ignorieren Sie diese E-Mail. Ohne Bestätigung schreiben wir Ihnen nie wieder und löschen die Adresse nach sieben Tagen.
 
 streit.bar`,
   });
   if (sent.ok) await getDb().execute(sql`UPDATE campaign_followers SET confirm_sent_at = now() WHERE id = ${f.id as string}`);
-  else if (sent.reason !== "not_configured") return { ok: false, error: "Die Bestätigungs-E-Mail ließ sich gerade nicht senden. Bitte versuch es später noch einmal." };
+  else if (sent.reason !== "not_configured") return { ok: false, error: "Die Bestätigungs-E-Mail ließ sich gerade nicht senden. Bitte versuchen Sie es später noch einmal." };
   return { ok: true, already: false };
 }
 
@@ -222,25 +222,25 @@ export async function notifyFollowers(c: Campaign, kind: "ergebnis" | "beschluss
         let body: string;
         if (kind === "ergebnis") {
           subject = `Das Ergebnis ist da: ${c.title}`;
-          body = `Hallo,
+          body = `Guten Tag,
 
 die Beteiligung „${c.question}“ in ${townShort(town.name)} ist ausgewertet. Worüber gestritten wird, wo sich alle einig sind und was der Gemeinderat entscheiden muss, steht hier:
 ${base}/ergebnis
 
 Der ganze Bericht:
 ${base}/bericht
-${slips.length ? `\nWas aus ${slips.length === 1 && own.length === 1 ? "deinem Punkt" : "deinen Punkten"} geworden ist, zeigt dein Laufzettel:\n${slips.map((t) => `${base}/laufzettel/${t}`).join("\n")}\n` : ""}
-Sobald der Gemeinderat entschieden hat, schreiben wir dir noch einmal.`;
+${slips.length ? `\nWas aus ${slips.length === 1 && own.length === 1 ? "Ihrem Punkt" : "Ihren Punkten"} geworden ist, zeigt Ihr Laufzettel:\n${slips.map((t) => `${base}/laufzettel/${t}`).join("\n")}\n` : ""}
+Sobald der Gemeinderat entschieden hat, schreiben wir Ihnen noch einmal.`;
         } else {
           const d = decision!;
           const when = decisionDate(d.datum);
           subject = `Der ${d.gremium} hat entschieden: ${c.title}`;
           const mine = own.map((p) =>
             p.decision
-              ? `Dein Punkt „${p.text}“ (Aussage ${p.ord}) lag dem ${d.gremium}${when ? ` am ${when}` : ""} vor. ${outcomeSentence(p.decision)}`
-              : `Zu deinem Punkt „${p.text}“ (Aussage ${p.ord}) hat die Verwaltung nichts Eigenes vermerkt.`,
+              ? `Ihr Punkt „${p.text}“ (Aussage ${p.ord}) lag dem ${d.gremium}${when ? ` am ${when}` : ""} vor. ${outcomeSentence(p.decision)}`
+              : `Zu Ihrem Punkt „${p.text}“ (Aussage ${p.ord}) hat die Verwaltung nichts Eigenes vermerkt.`,
           );
-          body = `Hallo,
+          body = `Guten Tag,
 
 der ${d.gremium} von ${townShort(town.name)} hat${when ? ` am ${when}` : ""} über „${c.title}“ entschieden.${d.summary ? `\n\n${d.summary}` : ""}
 ${mine.length ? `\n${mine.join("\n\n")}\n` : ""}

@@ -25,12 +25,12 @@ export function CodeForm({ gemeinde, verfahren, code = "", drawn = false }: { ge
   return (
     <form action={action} className="door-form">
       <div className="field">
-        <label htmlFor="code">{drawn ? "Dein Code aus dem Brief" : "Dein Einladungscode"}</label>
+        <label htmlFor="code">{drawn ? "Ihr Code aus dem Brief" : "Ihr Einladungscode"}</label>
         <input id="code" name="code" className="input code-input" defaultValue={state.values?.code ?? code} autoComplete="off" placeholder="ABCD-2345" required />
         <span className="hint">
           {drawn
-            ? "Du gehörst zu den Menschen, die per Los eingeladen wurden. Deine Stimmen zählen wie alle anderen und zusätzlich für die Gegenprobe."
-            : "Er steht in dem Brief, mit dem die Stadt dich eingeladen hat."}
+            ? "Sie gehören zu den Menschen, die per Los eingeladen wurden. Ihre Stimmen zählen wie alle anderen und zusätzlich für die Gegenprobe."
+            : "Er steht in dem Brief, mit dem die Stadt Sie eingeladen hat."}
         </span>
       </div>
       {state.error ? <p className="error">{state.error}</p> : null}
@@ -47,7 +47,7 @@ export function ShortForm({ gemeinde, verfahren, needsCode }: { gemeinde: string
     <form action={action} className="door-form">
       <div className="field">
         <label htmlFor="text" className="visually-hidden">
-          Dein Punkt
+          Ihr Punkt
         </label>
         <textarea
           id="text"
@@ -66,7 +66,7 @@ export function ShortForm({ gemeinde, verfahren, needsCode }: { gemeinde: string
       </div>
       {needsCode ? (
         <div className="field">
-          <label htmlFor="code2">Dein Einladungscode</label>
+          <label htmlFor="code2">Ihr Einladungscode</label>
           <input id="code2" name="code" className="input code-input" autoComplete="off" required />
         </div>
       ) : null}
@@ -83,11 +83,11 @@ export function UploadForm({ gemeinde, verfahren, needsCode, filesPerDay }: { ge
   return (
     <form action={action} className="door-form">
       <fieldset className="plain">
-        <legend>Du schreibst</legend>
+        <legend>Sie schreiben</legend>
         <label className="check">
           <input type="radio" name="als" value="privat" checked={als === "privat"} onChange={() => setAls("privat")} />
           <span>
-            als Privatperson <span className="muted small">— dein Name erscheint nirgends</span>
+            als Privatperson <span className="muted small">— Ihr Name erscheint nirgends</span>
           </span>
         </label>
         <label className="check">
@@ -100,7 +100,7 @@ export function UploadForm({ gemeinde, verfahren, needsCode, filesPerDay }: { ge
           <div className="field">
             <label htmlFor="org">Name</label>
             <input id="org" name="org" className="input" defaultValue={state.values?.org ?? ""} placeholder="Sportverein Musterstadt e. V." required />
-            <span className="hint">Erscheint bei jedem Zitat aus deiner Stellungnahme.</span>
+            <span className="hint">Erscheint bei jedem Zitat aus Ihrer Stellungnahme.</span>
           </div>
           <div className="field">
             <label htmlFor="orgType">Art</label>
@@ -119,12 +119,12 @@ export function UploadForm({ gemeinde, verfahren, needsCode, filesPerDay }: { ge
         label="Datei oder Dateien"
         accept={READABLE_ACCEPT}
         required
-        together="Sie zählen zusammen als deine Stellungnahme."
-        hint={`Deine Stellungnahme und ihre Anlagen gern auf einmal, bis zu ${filesPerDay} Dateien am Tag, je bis 20 MB. PDF, Word, Text oder ein Foto des Briefs; auch eingescannte Seiten liest die Maschine.`}
+        together="Sie zählen zusammen als Ihre Stellungnahme."
+        hint={`Ihre Stellungnahme und ihre Anlagen gern auf einmal, bis zu ${filesPerDay} Dateien am Tag, je bis 20 MB. PDF, Word, Text oder ein Foto des Briefs; auch eingescannte Seiten liest die Maschine.`}
       />
       {needsCode ? (
         <div className="field">
-          <label htmlFor="code3">Dein Einladungscode</label>
+          <label htmlFor="code3">Ihr Einladungscode</label>
           <input id="code3" name="code" className="input code-input" autoComplete="off" required />
         </div>
       ) : null}
