@@ -1,8 +1,10 @@
 /* Public campaign pages: the town's question first, the way in beside it. */
 .pub-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px 24px; flex-wrap: wrap; padding-block: 16px 0; }
 .pub-mark { font-size: 17px; }
-.pub-crumbs { display: flex; align-items: baseline; flex-wrap: wrap; min-width: 0; }
-.pub-town { font-weight: 600; text-decoration: none; color: var(--ink-2); }
+/* Where you are, on one line: the town stays whole, a long procedure title ends in "…". */
+.pub-crumbs { display: flex; align-items: center; min-width: 0; max-width: 100%; white-space: nowrap; }
+.pub-town { flex: none; font-weight: 600; text-decoration: none; color: var(--ink-2); }
+.pub-town + .pub-sep + .pub-town { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pub-town:hover { color: var(--ink); text-decoration: underline; }
 .pub-preview { grid-column: 1 / -1; }
 .pub-main {
@@ -52,8 +54,10 @@
 .tp-head-cover .tp-name { padding-top: 16px; }
 .tp-name h1 { font-family: var(--serif); font-weight: 600; font-size: clamp(32px, 4.4vw, 44px); line-height: 1.05; letter-spacing: -0.012em; }
 .tp-name p { margin-top: 6px; font-size: 17px; color: var(--ink-2); }
-.tp-links { display: flex; flex-wrap: wrap; gap: 8px; }
-.tp-links a { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel); font-size: 14px; font-weight: 600; text-decoration: none; }
+/* The town's links in one row; more than fit scroll sideways instead of wrapping. */
+.tp-links { display: flex; gap: 8px; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; padding-block: 2px; }
+.tp-links::-webkit-scrollbar { display: none; }
+.tp-links a { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel); font-size: 14px; font-weight: 600; text-decoration: none; }
 .tp-links a:hover { border-color: var(--ink-3); }
 .tp-count { margin-top: 18px; padding: 14px 8px 0; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-2); }
 .tp-count strong { color: var(--ink); }
@@ -99,6 +103,13 @@
 .tp-offline { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-2); }
 .tp-offline strong { color: var(--ink); }
 
+@media (max-width: 640px) {
+  .pub-crumbs { font-size: 14px; }
+  .pub-crumbs .pub-logo { height: 20px; margin-right: 6px; }
+  .pub-crumbs .pub-sep { margin: 0 6px; }
+  /* The pill row runs to the screen's edges, so it reads as a row you can swipe. */
+  .tp-links { margin-inline: -24px; max-width: none; width: calc(100% + 48px); padding-inline: 24px; scroll-padding-inline: 24px; }
+}
 @media (max-width: 900px) {
   .pub-main { grid-template-columns: minmax(0, 1fr); gap: 28px; }
   .pub-join { position: static; }

@@ -88,6 +88,16 @@ export function HeroStage({ example, children }: { example: Example | null; chil
   const textRef = useRef<HTMLDivElement>(null);
   const capRef = useRef<HTMLParagraphElement>(null);
   const [cap, setCap] = useState<number | null>(null);
+  // Only beside the text on wide screens. On phones the picture would sit under the button as a long moving strip,
+  // and the example right below shows the same people anyway: no canvas, no animation running there.
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 961px)");
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -95,7 +105,7 @@ export function HeroStage({ example, children }: { example: Example | null; chil
     const textEl = textRef.current;
     const capEl = capRef.current;
     const ctx = cv?.getContext("2d");
-    if (!example || !stage || !cv || !textEl || !capEl || !ctx) return;
+    if (!example || !wide || !stage || !cv || !textEl || !capEl || !ctx) return;
     const ex = example;
 
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -280,18 +290,18 @@ export function HeroStage({ example, children }: { example: Example | null; chil
       ro.disconnect();
       io.disconnect();
     };
-  }, [example]);
+  }, [example, wide]);
 
-  const cur = example && cap != null ? example.statements[cap] : null;
+  const cur = example && wide && cap != null ? example.statements[cap] : null;
   return (
     <div className="hero-stage" ref={stageRef}>
-      {example ? <canvas className="hero-field" ref={canvasRef} aria-hidden /> : null}
+      {example && wide ? <canvas className="hero-field" ref={canvasRef} aria-hidden /> : null}
       <div className="wrap hero-main">
         <div className="hero-text" ref={textRef}>
           {children}
         </div>
       </div>
-      {example ? (
+      {example && wide ? (
         <p className={cur ? "hero-cap on" : "hero-cap"} ref={capRef} aria-hidden>
           {cur ? (
             <>

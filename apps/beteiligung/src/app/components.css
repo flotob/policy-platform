@@ -1,6 +1,6 @@
 /* Shared pieces: header, footer, opinion space. */
 
-.site-head { border-bottom: 1px solid var(--line); background: var(--bg); }
+.site-head { position: relative; border-bottom: 1px solid var(--line); background: var(--bg); }
 .site-head-in { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; flex-wrap: wrap; padding-block: 8px; }
 .wordmark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--serif); font-weight: 600; font-size: 19px; text-decoration: none; letter-spacing: -0.005em; }
 .wordmark-mark { position: relative; width: 26px; height: 18px; flex: none; }
@@ -9,6 +9,9 @@
 .site-nav { display: flex; align-items: center; gap: 20px; font-size: 15px; }
 .site-nav a:not(.btn) { text-decoration: none; color: var(--ink-2); }
 .site-nav a:not(.btn):hover { color: var(--ink); text-decoration: underline; }
+.site-nav .btn { white-space: nowrap; }
+.site-menu { display: flex; align-items: center; gap: 20px; }
+.site-menu-btn { display: none; }
 .site-foot { border-top: 1px solid var(--line); padding-block: 24px 40px; margin-top: 72px; }
 
 /* Operator's legal links, on every page */
@@ -54,5 +57,15 @@ body:has(.pub-foot) .legal-foot { display: none; }
 .report-done { font-size: 13px; color: var(--agree); }
 .legal .nachricht-form { margin-top: 28px; }
 
-/* The header on phones: the same on every page (it used to change only after a visit to the start page). */
-@media (max-width: 560px) { .site-nav { gap: 14px; font-size: 14px; } }
+/* The header on phones: one row (wordmark, main button, menu); the other links open below the bar. */
+@media (max-width: 640px) {
+  .site-head-in { flex-wrap: nowrap; min-height: 56px; }
+  .site-nav { gap: 6px; }
+  .site-menu { display: none; position: absolute; left: 0; right: 0; top: 100%; z-index: 45; flex-direction: column; align-items: stretch; gap: 0; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: 0 18px 30px rgba(23, 32, 30, 0.1); padding: 2px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
+  .site-menu.open { display: flex; }
+  .site-nav .site-menu a { padding: 14px 0; font-size: 17px; color: var(--ink); text-decoration: none; }
+  .site-nav .site-menu a + a { border-top: 1px solid var(--line); }
+  .site-menu-btn { display: grid; place-items: center; width: 42px; height: 42px; margin-right: -9px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--ink); cursor: pointer; }
+  .site-menu-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+  .site-menu-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+}

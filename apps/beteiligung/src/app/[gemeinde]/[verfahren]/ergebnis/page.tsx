@@ -36,7 +36,7 @@ export default async function Ergebnis({ params }: { params: Promise<{ gemeinde:
           title={c.title}
           town={townShort(c.tenant.name)}
           measure={c.measure}
-          eyebrow={`Online-Anhang zum Bericht · ${c.tenant.name}${c.fictional ? " · Beispiel mit erfundenen Inhalten" : ""}`}
+          eyebrow={`Online-Anhang zum Bericht${c.fictional ? " · Beispiel mit erfundenen Inhalten" : ""}`}
           period={period}
           questions={questionLabels}
           method={methodParagraphs(c, r)}

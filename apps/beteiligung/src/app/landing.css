@@ -125,14 +125,12 @@
   .bx-dot, .hero-cap { transition: none; }
 }
 @media (max-width: 960px) {
-  /* The picture moves below the text; the caption under it, inside the stage's lower padding. */
+  /* No moving picture here (HeroStage draws it only on wide screens): the text alone, the example follows below. */
   .hero-full { min-height: 0; }
-  .hero-stage { display: flex; flex-direction: column; align-items: stretch; }
-  .hero-full .hero-stage { min-height: 0; padding-bottom: 130px; }
-  .hero-main { padding-block: 40px; }
-  .hero-full .hero-main { padding-bottom: 0; }
+  .hero-full .hero-stage { min-height: 0; }
+  .hero-main { padding-block: 40px 44px; }
   .hero-text { max-width: none; }
-  .hero-field { position: relative; height: 340px; order: 2; }
+  .hero-field, .hero-cap { display: none; }
   .hero-answers { grid-template-columns: minmax(0, 1fr); gap: 18px; }
   .bx { padding-block: 44px; }
   .bx-flow { grid-template-columns: minmax(0, 1fr); gap: 28px; margin-top: 28px; }

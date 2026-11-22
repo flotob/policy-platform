@@ -72,6 +72,8 @@ const H = 300;
 const TOP = 20;
 const PAD = 14;
 const r1 = (x: number) => Math.round(x * 10) / 10;
+/** Up to this width the right column is a sheet from below (ergebnis.css, "Phones"). */
+const SHEET_MAX = 900;
 const n = (x: number) => x.toLocaleString("de-DE");
 
 type Pt = { x: number; y: number };
@@ -195,14 +197,21 @@ export function ResultView(props: ResultViewProps) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [source]);
+  // The page behind stays still while the source dialog or the phone sheet is open.
   useEffect(() => {
-    if (!source) return;
+    if (!source && !(sheet && window.innerWidth <= SHEET_MAX)) return;
     document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
     return () => {
       document.body.style.overflow = "";
     };
+  }, [source, sheet]);
+  useEffect(() => {
+    if (source) closeRef.current?.focus();
   }, [source]);
+  // The opened sheet takes the focus (for screen readers), without a ring on the close button.
+  useEffect(() => {
+    if (sheet) stageRef.current?.focus({ preventScroll: true });
+  }, [sheet]);
 
   const select = (nr: number, openSheet = true) => {
     setSel(nr);
@@ -210,7 +219,7 @@ export function ResultView(props: ResultViewProps) {
     window.history.replaceState(null, "", `#a${nr}`);
     // The right column scrolls on its own: a new statement starts at its top, with the opinion space in view.
     if (stageRef.current) stageRef.current.scrollTop = 0;
-    if (openSheet && window.innerWidth <= 900) setSheet(true);
+    if (openSheet && window.innerWidth <= SHEET_MAX) setSheet(true);
   };
 
   // ———— The opinion space ————
@@ -693,7 +702,8 @@ export function ResultView(props: ResultViewProps) {
   const still = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const pick = (nr: number) => {
     select(nr);
-    stageRef.current?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" });
+    // On phones the statement opens in the sheet; the page stays where it is.
+    if (window.innerWidth > SHEET_MAX) stageRef.current?.scrollIntoView({ behavior: still() ? "auto" : "smooth", block: "start" });
   };
   const goList = (v: "befund" | "argument") => {
     setView(v);
@@ -714,7 +724,15 @@ export function ResultView(props: ResultViewProps) {
   return (
     <div className="erg">
       <header className="erg-top">
-        <div className="eyebrow">{props.eyebrow}</div>
+        <div className="eyebrow">
+          {/* Breaks only between its parts, never inside one. */}
+          {props.eyebrow.split(" · ").map((part, i) => (
+            <span key={i}>
+              {i ? " · " : null}
+              <span className="nw">{part}</span>
+            </span>
+          ))}
+        </div>
         <h1>
           {props.title}: Worüber {props.town} wirklich streitet
         </h1>
@@ -838,9 +856,12 @@ export function ResultView(props: ResultViewProps) {
           <div>{view === "befund" ? (small ? tallyList : befundList) : argumentList}</div>
         </aside>
 
-        <section className={`erg-stage${sheet ? " open" : ""}`} ref={stageRef} aria-live="polite">
-          <button type="button" className="closeb" aria-label="Schließen" onClick={() => setSheet(false)}>
-            <span />
+        <section className={`erg-stage${sheet ? " open" : ""}`} ref={stageRef} tabIndex={-1} aria-live="polite">
+          <button type="button" className="closeb" onClick={() => setSheet(false)}>
+            Schließen
+            <svg viewBox="0 0 12 12" aria-hidden>
+              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+            </svg>
           </button>
           {small ? (
             <div className="map map-small">
@@ -956,13 +977,8 @@ export function ResultView(props: ResultViewProps) {
         </section>
       </div>
 
-      <button type="button" className="erg-sheetbar" aria-label="Auswertung öffnen" onClick={() => setSheet(true)}>
-        <span>
-          <span style={{ opacity: 0.7 }}>Gewählte Aussage</span>
-          <b>{cur.text}</b>
-        </span>
-        <span className="arr">▲</span>
-      </button>
+      {/* Phones: the sheet opens only when a statement is tapped; a tap beside it closes it again. */}
+      {sheet ? <div className="erg-scrim" aria-hidden onClick={() => setSheet(false)} /> : null}
 
       {source ? (
         <div

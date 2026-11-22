@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { getStaff } from "@/lib/session";
 
+import { SiteNav } from "./SiteNav";
+
 /** Public header: the product, the way in for municipalities. */
 export async function SiteHeader() {
   const staff = await getStaff();
@@ -15,22 +17,7 @@ export async function SiteHeader() {
           </span>
           streit.bar
         </Link>
-        <nav className="site-nav" aria-label="Hauptnavigation">
-          <Link href="/#ablauf">So funktioniert es</Link>
-          <Link href="/musterstadt">Beispiel</Link>
-          {staff ? (
-            <Link href="/verwaltung" className="btn btn-small">
-              Meine Kommune
-            </Link>
-          ) : (
-            <>
-              <Link href="/anmelden">Anmelden</Link>
-              <Link href="/registrieren" className="btn btn-small">
-                Für Kommunen
-              </Link>
-            </>
-          )}
-        </nav>
+        <SiteNav staff={!!staff} />
       </div>
     </header>
   );
