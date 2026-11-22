@@ -61,8 +61,8 @@ interface MoveView {
     frage: string | null;
     releasedAt: string | null;
     releasedBy: string | null;
-    agree: number;
-    disagree: number;
+    /** The counts of the published result; none while the procedure runs (no public interim counts). */
+    tally: { agree: number; disagree: number } | null;
     mergedOrd: number | null;
   };
   matchOrd: number | null;
@@ -191,10 +191,12 @@ function Fate({ m, base, token, short, after }: { m: MoveView; base: string; tok
           <p className="fate-text serif">{n.text}</p>
           <p className="small">
             <span className="fate-typ">{TYP_LONG[n.typ] ?? n.typ}</span>
-            <span className="muted num">
-              {" "}
-              · Bisher: {n.agree} dafür, {n.disagree} dagegen
-            </span>
+            {n.tally ? (
+              <span className="muted num">
+                {" "}
+                · Im Ergebnis: {n.tally.agree} dafür, {n.tally.disagree} dagegen
+              </span>
+            ) : null}
           </p>
         </div>
       ) : null}
@@ -267,8 +269,6 @@ export default async function Laufzettel({
         p.released_at AS n_released_at, p.released_by AS n_released_by,
         -- The point was opened from this very contribution (its first proposal is this move's sentence).
         (m.route IN ('neu', 'praezisierung') AND p.proposal->>'text' = m.aussage) AS n_own,
-        (SELECT count(*) FROM map_point_votes v WHERE v.map_point_id = p.id AND v.version = p.version AND v.value = 1)::int AS n_agree,
-        (SELECT count(*) FROM map_point_votes v WHERE v.map_point_id = p.id AND v.version = p.version AND v.value = -1)::int AS n_disagree,
         (SELECT ord FROM map_points x WHERE x.id = (m.match->>'node')::uuid) AS match_ord
       FROM moves m LEFT JOIN map_points p ON p.id = m.map_point_id
       WHERE m.submission_id = ${s.id as string} ORDER BY m.ord`)
@@ -284,6 +284,7 @@ export default async function Laufzettel({
   // Once the result is published, points carry the numbers of the results page (Aussage 41), not their internal order.
   const bundle = c.state === "veroeffentlicht" ? await publishedBundle(c) : null;
   const nrOf = new Map((bundle?.result.statements ?? []).map((x) => [x.id, x.nr]));
+  const tallyOf = new Map((bundle?.result.statements ?? []).map((x) => [x.id, { agree: x.total.agree, disagree: x.total.disagree }]));
   const views: MoveView[] = moves.map((m) => ({
     id: m.id as string,
     quote: m.quote as string,
@@ -312,8 +313,7 @@ export default async function Laufzettel({
           frage: (m.n_frage as string | null) ?? null,
           releasedAt: m.n_released_at ? String(m.n_released_at) : null,
           releasedBy: (m.n_released_by as string | null) ?? null,
-          agree: Number(m.n_agree),
-          disagree: Number(m.n_disagree),
+          tally: tallyOf.get(m.map_point_id as string) ?? null,
           mergedOrd: null,
         },
   }));

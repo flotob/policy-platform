@@ -35,28 +35,12 @@ function context(s: Statement): string {
   return parts.join(" · ");
 }
 
-function Bar({ s }: { s: Statement }) {
-  const total = s.agree + s.disagree + s.pass;
-  if (!total) return <span className="small muted">Noch keine Stimmen</span>;
-  const pct = (x: number) => `${Math.round((x / total) * 100)}%`;
-  return (
-    <span className="deck-tally">
-      <span className="deck-tally-bar" aria-hidden>
-        <i className="a" style={{ width: pct(s.agree) }} />
-        <i className="p" style={{ width: pct(s.pass) }} />
-        <i className="d" style={{ width: pct(s.disagree) }} />
-      </span>
-      <span className="small muted num">
-        {s.agree} dafür · {s.disagree} dagegen{s.pass ? ` · ${s.pass} übersprungen` : ""}
-      </span>
-    </span>
-  );
-}
-
 /**
  * Door 1 (Stephan's screen 2): one statement at a time, its label above it
  * — fact or value — three buttons, no answer field. When everything is
- * voted, the participant sees how the others voted (only then: no anchoring).
+ * voted, the participant sees their own votes. How the others voted is not
+ * shown while the procedure runs (Stephan's paper, step 4: no public interim
+ * counts); the published result shows it.
  */
 export default async function Abstimmen({
   params,
@@ -191,7 +175,10 @@ export default async function Abstimmen({
               ) : null}
             </div>
             <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open />
-            <h2>So haben die anderen bisher abgestimmt</h2>
+            <h2>Deine Stimmen</h2>
+            <p className="small muted">
+              Wie die anderen abgestimmt haben, zeigt das Ergebnis. Es erscheint, wenn die Beteiligung abgeschlossen und ausgewertet ist.
+            </p>
             <ul className="done-list">
               {statements.map((s) => {
                 const v = voted.get(s.id);
@@ -202,7 +189,6 @@ export default async function Abstimmen({
                       <span className={`mine mine-${v === 1 ? "a" : v === -1 ? "d" : "p"}`}>
                         Du: {v === 1 ? "stimmst zu" : v === -1 ? "lehnst ab" : "übersprungen"}
                       </span>
-                      <Bar s={s} />
                     </p>
                   </li>
                 );
