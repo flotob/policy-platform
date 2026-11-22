@@ -159,7 +159,8 @@ export default async function Einstieg({
               </div>
             </>
           )}
-          {open && mine ? (
+          <Beitraege items={contributions} base={base} side />
+          {open && (mine || contributions.length) ? (
             <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} />
           ) : c.state === "auswertung" || c.state === "bericht" || (c.state === "veroeffentlicht" && !decision) ? (
             <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} after={c.state === "veroeffentlicht" ? "decision" : "result"} />
@@ -171,8 +172,6 @@ export default async function Einstieg({
             </details>
           ) : null}
         </aside>
-
-        <Beitraege items={contributions} base={base} className="pub-mine" />
 
         {STEPS.some((s) => c.steps[s.key]) ? (
           <section className="pub-why" aria-labelledby="begruendung">

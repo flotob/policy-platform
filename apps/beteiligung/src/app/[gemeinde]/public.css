@@ -183,5 +183,20 @@
 .ml-yes { color: var(--agree); }
 .ml-no { color: var(--disagree); }
 .mine-list > .small { max-width: 60ch; }
-.pub-mine { grid-column: 1 / 2; border-top: 1px solid var(--line); padding-top: 28px; }
-@media (max-width: 900px) { .pub-mine { grid-column: auto; } }
+/* The same, compact, in the procedure page's sidebar. */
+.mine-side { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.mine-side h3 { font-family: var(--serif); font-size: 18px; font-weight: 600; }
+.mine-side h3 .num { font-family: var(--sans); font-size: 14px; font-weight: 400; }
+.mine-side ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.mine-side li + li { border-top: 1px solid var(--line); }
+.mine-side a { display: grid; gap: 2px; padding: 9px 0; text-decoration: none; color: var(--ink); }
+.mine-side a:hover .ms-text { text-decoration: underline; }
+.ms-text { font-size: 15px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ms-meta { font-size: 13px; color: var(--ink-2); }
+.ms-meta .ml-status { font-size: 13px; }
+.mine-side details { border-top: 1px solid var(--line); }
+.mine-side summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 9px 0; }
+.mine-side > .small { margin-top: 8px; }
+/* A long sidebar scrolls on its own rather than running off the screen while it sticks. */
+/* It runs beside the town's reasoning too, so a tall sidebar leaves no gap under the introduction. */
+@media (min-width: 901px) { .pub-join { grid-row: span 2; max-height: calc(100dvh - 40px); overflow-y: auto; } }
