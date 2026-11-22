@@ -167,3 +167,21 @@
 .follow-close:hover { background: var(--bg); color: var(--ink); }
 .follow-reopen { display: block; margin: 18px auto 0; border: 0; background: none; padding: 4px; font: inherit; font-size: 14px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .follow-reopen:hover { color: var(--ink); }
+
+/* "Ihre Beiträge": this browser's points and statements in a procedure, each with where it stands. */
+.mine-list h2 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
+.mine-list h2 .num { font-family: var(--sans); font-size: 15px; font-weight: 400; }
+.mine-list ul { list-style: none; margin: 12px 0 10px; padding: 0; border-top: 1px solid var(--line); max-width: 680px; }
+.mine-list li { border-bottom: 1px solid var(--line); }
+.mine-list a { display: grid; gap: 3px; padding: 12px 4px; text-decoration: none; color: var(--ink); }
+.mine-list a:hover { background: var(--panel); }
+.mine-list a:hover .ml-text { text-decoration: underline; }
+.ml-meta { font-size: 13px; color: var(--ink-2); }
+.ml-text { font-family: var(--serif); font-size: 17px; line-height: 1.4; }
+.ml-status { font-size: 14px; font-weight: 600; }
+.ml-wait { color: var(--ink-2); }
+.ml-yes { color: var(--agree); }
+.ml-no { color: var(--disagree); }
+.mine-list > .small { max-width: 60ch; }
+.pub-mine { grid-column: 1 / 2; border-top: 1px solid var(--line); padding-top: 28px; }
+@media (max-width: 900px) { .pub-mine { grid-column: auto; } }

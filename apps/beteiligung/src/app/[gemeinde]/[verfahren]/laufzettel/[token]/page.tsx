@@ -4,17 +4,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { CopyLink } from "@/components/CopyLink";
 import { batchTokens } from "@/lib/absender";
 import { PublicFrame } from "@/components/PublicFrame";
 import { publishedBundle } from "@/lib/bericht";
 import { publicDecision } from "@/lib/beschluss";
 import { decisionDate, outcomeOf, type PublicDecision } from "@/lib/beschluss-words";
+import { myContributions } from "@/lib/beitraege";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
 import { QUESTIONS, STEPS } from "@/lib/params";
+import { getParticipant } from "@/lib/teilnahme";
 import { REJECT } from "@/lib/vocab";
 
 import { objectToAssignment } from "../../actions";
+import { Beitraege } from "../../Beitraege";
 import { FollowForm } from "../../FollowForm";
 import "../../../public.css";
 import "../../tueren.css";
@@ -120,6 +124,9 @@ function Fate({ m, base, token, short, after }: { m: MoveView; base: string; tok
   if (m.state === "verworfen") {
     head = "Nicht in die Abstimmung aufgenommen";
     body = `Die Redaktion hat diesen Beitrag verworfen${m.decision?.reason ? `: ${REJECT[m.decision.reason as keyof typeof REJECT] ?? m.decision.reason}` : ""}. Er bleibt im Protokoll.`;
+  } else if ((m.state === "vorgelegt" || !n || n.status !== "released") && after.state !== "offen") {
+    head = "Kam vor Schluss nicht mehr zur Abstimmung";
+    body = `Die Beteiligung wurde geschlossen, bevor die Redaktion über ${short ? "Ihren Punkt" : "dieses Argument"} entschieden hatte.`;
   } else if (m.state === "vorgelegt" || !n || n.status !== "released") {
     head = m.decision?.einspruch ? "Ihr Einspruch liegt bei der Redaktion" : `Ein Mensch aus der Redaktion prüft ${short ? "Ihren Punkt" : "dieses Argument"}`;
     body = n?.status === "released" ? `Die Frage ist, ob er zu Punkt ${n.ord} gehört.` : "Sobald entschieden ist, steht es hier.";
@@ -322,6 +329,10 @@ export default async function Laufzettel({
   const batch = isShort ? [] : await batchTokens(c.consultationId, token);
   const after: After = { state: c.state, decision: c.state === "veroeffentlicht" ? await publicDecision(c.id) : null };
   const confirmed = (s.decided as { answer?: string } | null)?.answer === "ja";
+  // This browser's other points and statements in the procedure (not the files sent together with this one: listed above).
+  const me = await getParticipant(c);
+  const siblings = new Set([token, ...batch.map((b) => b.token)]);
+  const others = me ? (await myContributions(c, me.id)).filter((b) => !siblings.has(b.token)) : [];
 
   return (
     <PublicFrame town={c.tenant} campaign={c} back>
@@ -360,6 +371,11 @@ export default async function Laufzettel({
             <h2 className="serif">Beim Lesen ist etwas schiefgegangen.</h2>
             <p>Die Redaktion sieht es und kümmert sich darum. Ihr Beitrag ist nicht verloren.</p>
           </section>
+        ) : !views.length && c.state !== "offen" ? (
+          <section className="fate">
+            <h2 className="serif">{isShort ? "Ihr Punkt kam" : "Ihre Stellungnahme kam"} vor Schluss nicht mehr zur Abstimmung.</h2>
+            <p>Die Beteiligung wurde geschlossen, bevor die Redaktion darüber entschieden hatte.</p>
+          </section>
         ) : !views.length ? (
           <section className="fate">
             <h2 className="serif">Ein Mensch aus der Redaktion prüft Ihren Punkt.</h2>
@@ -384,10 +400,25 @@ export default async function Laufzettel({
         )}
 
         {!after.decision ? <FollowForm gemeinde={c.tenant.slug} verfahren={c.slug} token={token} after={c.state === "veroeffentlicht" ? "decision" : "result"} /> : null}
-        <p className="slip-keep small muted">
-          {confirmed ? "Sie haben bestätigt, dass Ihr Punkt schon da war. " : ""}Speichern Sie diesen Link, um später nachzusehen.{" "}
-          {c.state === "offen" ? <Link href={`${base}/abstimmen`}>Weiter abstimmen</Link> : c.state === "veroeffentlicht" ? <Link href={`${base}/ergebnis`}>Zum Ergebnis</Link> : null}
-        </p>
+        <div className="slip-keep">
+          <p className="small muted">
+            {confirmed ? "Sie haben bestätigt, dass Ihr Punkt schon da war. " : ""}In diesem Browser finden Sie den Laufzettel wieder auf der Seite der
+            Beteiligung unter „Ihre Beiträge“. Für ein anderes Gerät setzen Sie ein Lesezeichen oder kopieren den Link.
+          </p>
+          <div className="slip-keep-actions">
+            <CopyLink />
+            {c.state === "offen" ? (
+              <Link href={`${base}/abstimmen`} className="btn btn-quiet btn-small">
+                Weiter abstimmen
+              </Link>
+            ) : c.state === "veroeffentlicht" ? (
+              <Link href={`${base}/ergebnis`} className="btn btn-quiet btn-small">
+                Zum Ergebnis
+              </Link>
+            ) : null}
+          </div>
+        </div>
+        <Beitraege items={others} base={base} title="Ihre anderen Beiträge" className="slip-others" />
       </main>
     </PublicFrame>
   );

@@ -7,9 +7,11 @@ import { myVotes, participation, ROUND } from "@/lib/abstimmung";
 import { publicDecision } from "@/lib/beschluss";
 import { decisionHead } from "@/lib/beschluss-words";
 import { getPublicCampaign, inviteCounts } from "@/lib/campaigns";
+import { myContributions } from "@/lib/beitraege";
 import { STEPS } from "@/lib/params";
 import { getParticipant } from "@/lib/teilnahme";
 
+import { Beitraege } from "./Beitraege";
 import { CodeForm } from "./DoorForms";
 import { FollowForm, FollowPrompt } from "./FollowForm";
 import "../public.css";
@@ -49,13 +51,14 @@ export default async function Einstieg({
   const base = `/${c.tenant.slug}/${c.slug}`;
   const [stats, me, decision, codes] = await Promise.all([
     participation(c),
-    open ? getParticipant(c) : null,
+    // Also after closing: the person's own contributions stay listed, with what became of them.
+    getParticipant(c),
     c.state === "veroeffentlicht" ? publicDecision(c.id) : null,
     open ? inviteCounts(c.id) : null,
   ]);
   // A QR code on a letter to residents drawn by lot carries the code (?code=…).
   const letterCode = open && code ? code.replace(/[^A-Za-z0-9-]/g, "").slice(0, 12) : "";
-  const mine = me ? (await myVotes(c, me.id)).size : 0;
+  const [mine, contributions] = me ? await Promise.all([myVotes(c, me.id).then((v) => v.size), myContributions(c, me.id)]) : [0, []];
   const needsCode = open && c.params.access === "einladung" && !me;
   // What the machine does, on the first screen (Stephan: "Dass eine KI mitarbeitet, steht auf dem ersten Bildschirm").
   const machine =
@@ -168,6 +171,8 @@ export default async function Einstieg({
             </details>
           ) : null}
         </aside>
+
+        <Beitraege items={contributions} base={base} className="pub-mine" />
 
         {STEPS.some((s) => c.steps[s.key]) ? (
           <section className="pub-why" aria-labelledby="begruendung">

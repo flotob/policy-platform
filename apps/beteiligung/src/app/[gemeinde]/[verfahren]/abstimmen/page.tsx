@@ -4,6 +4,7 @@ import { readNotice } from "@/lib/notice";
 
 import { PublicFrame } from "@/components/PublicFrame";
 import { lastVotedTyp, myVotes, nextFor, poolFor, ROUND, statementsUnderVote, themaOf, type Statement } from "@/lib/abstimmung";
+import { myContributions } from "@/lib/beitraege";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { QUESTIONS, STEPS, type StepKey } from "@/lib/params";
 import { REASONS } from "@/lib/meldungen";
@@ -11,6 +12,7 @@ import { getParticipant } from "@/lib/teilnahme";
 
 import { vote } from "../actions";
 import { reportFromDeck } from "../melden-actions";
+import { Beitraege } from "../Beitraege";
 import { FollowPrompt } from "../FollowForm";
 import "../../public.css";
 import "../tueren.css";
@@ -100,6 +102,8 @@ export default async function Abstimmen({
     (x) => x.open > 0,
   );
   const more = Math.min(ROUND, allOpen);
+  // The person's own points, on the screens between rounds and at the very end.
+  const contributions = me && !next ? await myContributions(c, me.id) : [];
 
   return (
     <PublicFrame town={c.tenant} campaign={c} back>
@@ -264,7 +268,8 @@ export default async function Abstimmen({
                 </div>
               </>
             ) : null}
-            {voted.size ? <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open /> : null}
+            <Beitraege items={contributions} base={base} />
+            {voted.size || contributions.length ? <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open /> : null}
           </section>
         ) : (
           <section className="deck-done">
@@ -285,6 +290,7 @@ export default async function Abstimmen({
               ) : null}
             </div>
             <FollowPrompt gemeinde={c.tenant.slug} verfahren={c.slug} open />
+            <Beitraege items={contributions} base={base} />
             <h2>Ihre Stimmen</h2>
             <p className="small muted">
               Wie die anderen abgestimmt haben, zeigt das Ergebnis. Es erscheint, wenn die Beteiligung abgeschlossen und ausgewertet ist.

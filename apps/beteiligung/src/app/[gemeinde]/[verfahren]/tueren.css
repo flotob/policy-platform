@@ -105,6 +105,9 @@
 .slip-move { margin-top: 28px; }
 .slip-move .fate { margin-top: 10px; }
 .slip-keep { margin-top: 28px; }
+.slip-keep .small { max-width: 60ch; }
+.slip-keep-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.slip-others { margin-top: 40px; }
 
 @media (max-width: 640px) {
   .card { padding: 22px 18px 20px; }

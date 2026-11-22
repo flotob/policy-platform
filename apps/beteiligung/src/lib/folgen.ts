@@ -67,12 +67,18 @@ export async function follow(c: Public, raw: string, laufzettel: string[], origi
       -- Unsubscribed and back: confirm again.
       confirmed_at = CASE WHEN campaign_followers.unsubscribed_at IS NULL THEN campaign_followers.confirmed_at END,
       unsubscribed_at = NULL
-    RETURNING id, confirmed_at, confirm_sent_at`);
+    RETURNING id, confirmed_at, confirm_sent_at, laufzettel`);
   if (!f) return { ok: false, error: "Das hat nicht geklappt. Bitte versuchen Sie es noch einmal." };
   if (f.confirmed_at) return { ok: true, already: true };
   // One confirmation mail per ten minutes is enough, however often the form is sent.
   if (f.confirm_sent_at && Date.now() - new Date(String(f.confirm_sent_at)).getTime() < 10 * 60 * 1000) return { ok: true, already: false };
   const town = c.tenant.name;
+  // The person's tracking slips right away, not only with the result: a way back from any device.
+  const slips = (f.laufzettel as string[] | null) ?? [];
+  const base = appUrl(`/${c.tenant.slug}/${c.slug}`);
+  const slipText = slips.length
+    ? `\n${slips.length === 1 ? "Was aus Ihrem Beitrag wird, zeigt Ihr Laufzettel. Der Link funktioniert" : "Was aus Ihren Beiträgen wird, zeigen Ihre Laufzettel. Die Links funktionieren"} auch, wenn Sie nicht bestätigen:\n${slips.map((t) => `${base}/laufzettel/${t}`).join("\n")}\n`
+    : "";
   const sent = await sendMail({
     to: email,
     subject: `Bitte bestätigen: Nachricht zu „${c.title}“`,
@@ -82,7 +88,7 @@ Sie haben auf streit.bar gebeten, Nachricht zu bekommen, wie es mit der Beteilig
 
 Bitte bestätigen Sie das mit diesem Link:
 ${link(f.id as string, "bestaetigen")}
-
+${slipText}
 Waren Sie das nicht, dann ignorieren Sie diese E-Mail. Ohne Bestätigung schreiben wir Ihnen nie wieder und löschen die Adresse nach sieben Tagen.
 
 streit.bar`,
@@ -246,7 +252,7 @@ der ${d.gremium} von ${townShort(town.name)} hat${when ? ` am ${when}` : ""} üb
 ${mine.length ? `\n${mine.join("\n\n")}\n` : ""}
 Jede Aussage der Beteiligung mit dem, was aus ihr geworden ist:
 ${base}/ergebnis
-${slips.length ? `\nDein Laufzettel:\n${slips.map((t) => `${base}/laufzettel/${t}`).join("\n")}\n` : ""}
+${slips.length ? `\n${slips.length === 1 ? "Ihr Laufzettel" : "Ihre Laufzettel"}:\n${slips.map((t) => `${base}/laufzettel/${t}`).join("\n")}\n` : ""}
 Das war unsere letzte Nachricht zu diesem Verfahren.`;
         }
         const res = await sendMail({
