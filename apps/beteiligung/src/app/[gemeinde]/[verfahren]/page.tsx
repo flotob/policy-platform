@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { readNotice } from "@/lib/notice";
 
 import { PublicFrame } from "@/components/PublicFrame";
-import { myVotes, participation } from "@/lib/abstimmung";
+import { myVotes, participation, ROUND } from "@/lib/abstimmung";
 import { publicDecision } from "@/lib/beschluss";
 import { decisionHead } from "@/lib/beschluss-words";
 import { getPublicCampaign, inviteCounts } from "@/lib/campaigns";
@@ -68,7 +68,12 @@ export default async function Einstieg({
   const end = c.params.end ? day.format(new Date(c.params.end)) : null;
 
   const how = [
-    doors.abstimmen ? { title: "Abstimmen", text: "Sie sehen kurze Aussagen und sagen zu jeder: zustimmen, ablehnen oder überspringen." } : null,
+    doors.abstimmen
+      ? {
+          title: "Abstimmen",
+          text: `Sie sehen kurze Aussagen und sagen zu jeder: zustimmen, ablehnen oder überspringen. Eine Runde hat ${ROUND} Aussagen; danach können Sie aufhören oder weitermachen.`,
+        }
+      : null,
     doors.kurzaussage ? { title: "Eigenen Punkt einbringen", text: "Wenn Ihnen ein Punkt fehlt, schreiben Sie ihn in zwei Sätzen dazu." } : null,
     doors.stellungnahme ? { title: "Stellungnahme einreichen", text: "Für längere Schreiben, etwa von Vereinen, Betrieben oder Fachleuten." } : null,
   ].filter((x): x is { title: string; text: string } => x !== null);
@@ -143,7 +148,7 @@ export default async function Einstieg({
             <>
               {end ? <p className="pub-when">Die Beteiligung läuft bis {end}.</p> : null}
               <Link href={`${base}/abstimmen`} className="btn pub-cta">
-                {mine ? `Weiter abstimmen (${mine} von ${stats.statements})` : "Abstimmen starten"}
+                {mine ? "Weiter abstimmen" : "Abstimmen starten"}
               </Link>
               <div className="pub-doors">
                 {doors.kurzaussage ? <Link href={`${base}/punkt`}>Eigenen Punkt einbringen</Link> : null}

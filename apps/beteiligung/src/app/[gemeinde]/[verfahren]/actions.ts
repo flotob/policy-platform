@@ -7,7 +7,7 @@ import { extractFileText, readScan, syncDerivedVotes, UnreadableFile } from "@po
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { castVote } from "@/lib/abstimmung";
+import { castVote, deckQuery } from "@/lib/abstimmung";
 import { batchTokens, filesOf, uploadProblem } from "@/lib/absender";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { getDb } from "@/lib/db";
@@ -59,8 +59,11 @@ export async function startWithCode(gemeinde: string, verfahren: string, _prev: 
 }
 
 /** Door 1: one click, one vote; the deck moves on. */
-export async function vote(gemeinde: string, verfahren: string, statementId: string, version: number, value: -1 | 0 | 1): Promise<void> {
+export async function vote(gemeinde: string, verfahren: string, statementId: string, version: number, value: -1 | 0 | 1, form?: FormData): Promise<void> {
   const { c, base } = await open(gemeinde, verfahren);
+  // The round the person is in (where it began, which topic) rides along, so the deck keeps counting it.
+  const round = deckQuery(form);
+  const back = (note?: string) => `${base}/abstimmen?${[round, note ? noticeQuery(note) : ""].filter(Boolean).join("&")}`;
   let p;
   try {
     p = await ensureParticipant(c);
@@ -68,10 +71,10 @@ export async function vote(gemeinde: string, verfahren: string, statementId: str
     if (e instanceof ParticipationError) redirect(`${base}?${noticeQuery(e.message)}`);
     throw e;
   }
-  if (!(await within("vote", p.id))) redirect(`${base}/abstimmen?${noticeQuery("Langsam: so schnell kann niemand lesen. Warten Sie einen Moment.")}`);
+  if (!(await within("vote", p.id))) redirect(back("Langsam: so schnell kann niemand lesen. Warten Sie einen Moment."));
   const counted = await castVote(c, p.id, statementId, value === 1 || value === -1 ? value : 0, Number(version) || undefined);
-  if (!counted) redirect(`${base}/abstimmen?${noticeQuery("Diese Aussage wurde gerade geändert oder zurückgezogen. Ihre Stimme ist nicht gezählt; sehen Sie sich die Karte bitte noch einmal an.")}`);
-  redirect(`${base}/abstimmen`);
+  if (!counted) redirect(back("Diese Aussage wurde gerade geändert oder zurückgezogen. Ihre Stimme ist nicht gezählt; sehen Sie sich die Karte bitte noch einmal an."));
+  redirect(back());
 }
 
 /**

@@ -1,8 +1,13 @@
 /**
  * Door 1 (Gesamtmodell B2–B4): which statement a participant sees next, and
- * the vote itself. Statements with few votes come first so every one gets
- * enough for the camp math; facts and values alternate; the measure itself
- * opens the deck (assumption 1: it is voted on like every other point).
+ * the vote itself. Nobody is asked to vote on everything: the deck comes in
+ * rounds of ROUND statements, each with a clear end. The measure itself opens
+ * the deck (assumption 1: it is voted on like every other point), then one of
+ * the town's own reasons for each step, then the statements with the fewest
+ * votes so far, so every one gets enough for the camp math ("damit keine
+ * Aussage untergeht"); facts and values alternate. After a round a person may
+ * go on by topic (one of the four steps), never by picking single statements:
+ * nobody can steer votes onto a statement of their choice.
  * A statement changed after opening (new version) comes back to everyone
  * who voted on the old wording.
  */
@@ -13,6 +18,10 @@ import { sql } from "@policy/db";
 
 import type { Campaign } from "./campaigns";
 import { getDb } from "./db";
+import { STEPS, type StepKey } from "./params";
+
+/** Statements per round. Seven votes already place a person in a camp (befund.ts MIN_VOTES). */
+export const ROUND = 20;
 
 type Row = Record<string, unknown>;
 
@@ -78,16 +87,53 @@ export async function myVotes(c: Campaign, participantId: string): Promise<Map<s
 
 const tiebreak = (participantId: string, id: string) => createHash("sha1").update(`${participantId}|${id}`).digest().readUInt32BE(0);
 
-/** B2: the next statement for this participant, or null when they have voted on all. */
-export function nextFor(statements: Statement[], voted: Map<string, number>, participantId: string, lastTyp: string | null): Statement | null {
-  const open = statements.filter((s) => !voted.has(s.id));
+/** A topic from a form or the address: one of the four steps, or none. */
+export function themaOf(v: unknown): StepKey | null {
+  return STEPS.find((x) => x.key === v)?.key ?? null;
+}
+
+/**
+ * The deck's place in the address: `ab` = how many votes the person had when this round began, `thema` = the
+ * step it is limited to. The vote forms carry both as hidden fields; this turns them back into a query string.
+ */
+export function deckQuery(form?: FormData | null): string {
+  const q = new URLSearchParams();
+  const ab = Number(form?.get("ab"));
+  if (Number.isInteger(ab) && ab >= 0) q.set("ab", String(ab));
+  const thema = themaOf(form?.get("thema"));
+  if (thema) q.set("thema", thema);
+  return q.toString();
+}
+
+/** The statements a deck draws from: all of them, or one step's (with the measure, which always comes first). */
+export function poolFor(statements: Statement[], thema: StepKey | null): Statement[] {
+  return thema ? statements.filter((s) => s.rolle === "schluss" || s.schritt === thema) : statements;
+}
+
+/**
+ * B2: the next statement for this participant, or null when they have voted on all of the pool. First the
+ * measure, then one of the town's reasons for every step the person has not seen a reason of yet (in the
+ * steps' order; the reason with the fewest votes, so all of a step's reasons are voted on evenly), then the
+ * fewest votes first.
+ */
+export function nextFor(statements: Statement[], voted: Map<string, number>, participantId: string, lastTyp: string | null, thema: StepKey | null = null): Statement | null {
+  const open = poolFor(statements, thema).filter((s) => !voted.has(s.id));
   if (!open.length) return null;
   const root = open.find((s) => s.rolle === "schluss");
   if (root) return root;
-  const ordered = open
-    .map((s) => ({ s, n: s.agree + s.disagree + s.pass, t: tiebreak(participantId, s.id) }))
-    .sort((a, b) => a.n - b.n || a.t - b.t)
-    .map((x) => x.s);
+  const fewestFirst = (xs: Statement[]) =>
+    xs
+      .map((s) => ({ s, n: s.agree + s.disagree + s.pass, t: tiebreak(participantId, s.id) }))
+      .sort((a, b) => a.n - b.n || a.t - b.t)
+      .map((x) => x.s);
+  for (const step of STEPS) {
+    if (thema && step.key !== thema) continue;
+    const reasons = statements.filter((s) => s.rolle === "praemisse" && s.schritt === step.key);
+    if (reasons.some((s) => voted.has(s.id))) continue;
+    const first = fewestFirst(reasons)[0];
+    if (first) return first;
+  }
+  const ordered = fewestFirst(open);
   // Facts and values take turns where the next few allow it.
   return ordered.slice(0, 4).find((s) => s.typ !== lastTyp) ?? ordered[0]!;
 }

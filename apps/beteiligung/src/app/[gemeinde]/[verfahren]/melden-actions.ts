@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { noticeQuery } from "@/lib/notice";
 
+import { deckQuery } from "@/lib/abstimmung";
 import { getPublicCampaign } from "@/lib/campaigns";
 import { reportContent } from "@/lib/meldungen";
 
@@ -27,5 +28,5 @@ export async function reportFromDeck(gemeinde: string, verfahren: string, id: st
   if (!c) redirect("/");
   const r = await reportContent(c, "node", id, field(form, "grund"), field(form, "notiz"));
   const note = r.ok ? "Danke, die Redaktion sieht sich das an. Sie können weiter abstimmen oder die Aussage überspringen." : r.error;
-  redirect(`/${c.tenant.slug}/${c.slug}/abstimmen?${noticeQuery(note)}`);
+  redirect(`/${c.tenant.slug}/${c.slug}/abstimmen?${[deckQuery(form), noticeQuery(note)].filter(Boolean).join("&")}`);
 }

@@ -44,6 +44,18 @@
 .done-list li { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .done-text { font-family: var(--serif); font-size: 17px; line-height: 1.4; }
 .done-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-top: 6px; }
+/* After a round: the four steps as topics to go on with. */
+.deck-thema { margin: -12px 0 18px; color: var(--ink-2); }
+.round-end .pub-lead { max-width: 56ch; }
+.round-end h2 + .small { margin: -4px 0 12px; max-width: 56ch; }
+.round-topics { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); max-width: 640px; }
+.round-topics li { border-bottom: 1px solid var(--line); }
+.round-topics a { display: grid; grid-template-columns: 1fr auto; gap: 2px 16px; padding: 14px 4px; text-decoration: none; color: var(--ink); }
+.round-topics a:hover { background: var(--panel); }
+.round-topics a[aria-current] .rt-name::after { content: " (bisher)"; font-weight: 400; color: var(--ink-3); font-size: 14px; }
+.rt-name { font-family: var(--serif); font-size: 19px; font-weight: 600; }
+.rt-n { font-size: 13px; color: var(--ink-2); align-self: center; white-space: nowrap; }
+.rt-hint { grid-column: 1 / -1; font-size: 14px; color: var(--ink-2); }
 .mine { font-size: 13px; font-weight: 600; }
 .mine-a { color: var(--agree); }
 .mine-d { color: var(--disagree); }
