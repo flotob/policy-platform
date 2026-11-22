@@ -76,6 +76,10 @@
 .tp-open-meta { margin-top: 12px; font-size: 14px; color: var(--ink-2); }
 .tp-open-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 18px; }
 .tp-open-actions .small { color: var(--ink-3); }
+@media (max-width: 560px) {
+  /* Phones: the card's ways in stacked, each as wide as the card. */
+  .tp-open-actions { flex-direction: column; align-items: stretch; }
+}
 .tp-rows { list-style: none; margin: 14px 0 0; padding: 0; }
 .tp-rows li { border-top: 1px solid var(--line); padding-block: 18px; }
 .tp-row-k { font-size: 13px; font-weight: 600; color: var(--ink-2); }

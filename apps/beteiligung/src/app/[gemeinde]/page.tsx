@@ -191,6 +191,16 @@ export default async function Gemeinde({ params }: { params: Promise<{ gemeinde:
                         <Link href={vote ? `${base}/${c.slug}/abstimmen` : `${base}/${c.slug}`} className="btn">
                           {vote ? "Abstimmen starten" : "Mitmachen"}
                         </Link>
+                        {/* The way to write something yourself, straight from the card (not only from the voting screen). */}
+                        {c.params.doors.kurzaussage ? (
+                          <Link href={`${base}/${c.slug}/punkt`} className="btn btn-quiet">
+                            Eigenen Punkt einbringen
+                          </Link>
+                        ) : c.params.doors.stellungnahme ? (
+                          <Link href={`${base}/${c.slug}/stellungnahme`} className="btn btn-quiet">
+                            Stellungnahme einreichen
+                          </Link>
+                        ) : null}
                         <Link href={`${base}/${c.slug}`} className="btn btn-quiet">
                           Worum es geht
                         </Link>

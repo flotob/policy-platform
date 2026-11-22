@@ -170,7 +170,7 @@ export default async function Abstimmen({
               ) : null}
               {doors.stellungnahme ? (
                 <Link href={`${base}/stellungnahme`} className="btn btn-quiet">
-                  Stellungnahme hochladen
+                  Stellungnahme einreichen
                 </Link>
               ) : null}
             </div>

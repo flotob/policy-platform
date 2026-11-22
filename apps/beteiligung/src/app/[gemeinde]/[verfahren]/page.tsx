@@ -147,7 +147,7 @@ export default async function Einstieg({
               </Link>
               <div className="pub-doors">
                 {doors.kurzaussage ? <Link href={`${base}/punkt`}>Eigenen Punkt einbringen</Link> : null}
-                {doors.stellungnahme ? <Link href={`${base}/stellungnahme`}>Stellungnahme hochladen</Link> : null}
+                {doors.stellungnahme ? <Link href={`${base}/stellungnahme`}>Stellungnahme einreichen</Link> : null}
               </div>
             </>
           )}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { PublicFrame } from "@/components/PublicFrame";
@@ -26,6 +27,12 @@ export default async function EigenerPunkt({ params }: { params: Promise<{ gemei
           Zwei Sätze reichen. Die Maschine prüft sofort, ob es Ihren Punkt schon gibt; dann zählt Ihre Stimme dort. Ist er neu, prüft ihn ein Mensch
           aus der Redaktion, und Sie können mitverfolgen, was daraus wird.
         </p>
+        {c.params.doors.stellungnahme ? (
+          <p className="small muted door-alt">
+            Ein längerer Text, etwa für einen Verein oder Betrieb?{" "}
+            <Link href={`/${c.tenant.slug}/${c.slug}/stellungnahme`}>Stellungnahme einreichen</Link>
+          </p>
+        ) : null}
         {c.fictional ? (
           <p className="notice small">
             Dies ist ein Beispiel mit erfundenen Inhalten. Was Sie hier schreiben, sehen auch andere Besucher, die sich das Beispiel aus Sicht der
