@@ -1392,7 +1392,7 @@ function PersonPanel(props: {
             </div>
           );
         })}
-        <p className="hint">Ein Klick auf eine Aussage färbt den Meinungsraum nach ihr.</p>
+        <p className="hint">Ein Klick auf eine Aussage wählt sie auf der Seite aus.</p>
       </section>
     </div>
   );
