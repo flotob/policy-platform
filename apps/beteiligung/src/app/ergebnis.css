@@ -272,6 +272,22 @@
 .erg-source .also { margin-top: 16px; }
 .erg-source .ov { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .erg-source .ov:first-of-type { border-top: 0; }
+.erg-source .sclose .sl { display: none; }
+.erg-source .sback { display: block; font-size: 13px; font-weight: 600; color: var(--focus); margin: -4px 0 12px; padding: 2px 0; }
+.erg-source .pv-more { display: block; font-size: 13px; font-weight: 600; color: var(--focus); margin-top: 10px; padding: 2px 0; text-align: left; }
+.erg-source .pv-intro { font-size: 14px; line-height: 1.5; color: var(--ink-2); margin: 10px 0 0; max-width: 62ch; }
+.erg-source .pv-sec { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.erg-source .pv-st { font-family: var(--serif); font-size: 17px; line-height: 1.4; margin: 6px 0 10px; }
+.erg-source .pv-how { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 14px; color: var(--ink-2); }
+.erg-source .quotes { margin-top: 10px; }
+.erg-source .pv-for { font-size: 12.5px; color: var(--ink-3); margin-bottom: 6px; line-height: 1.4; }
+.erg-source .pv-group h4 { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: var(--ink-3); margin: 12px 0 2px; }
+.erg-source .pv-row { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 10px; align-items: baseline; width: 100%; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; line-height: 1.4; text-align: left; color: var(--ink); }
+.erg-source .pv-group h4 + .pv-row { border-top: 0; }
+.erg-source .pv-row:hover .t { text-decoration: underline; text-underline-offset: 2px; }
+.erg-source .pv-row .nr { font-size: 12px; color: var(--ink-3); }
+.erg-source .pv-row .how { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.erg .map .dot-hint { font-size: 11.5px; color: var(--ink-3); margin: 2px 0 0; }
 
 /* Gaps and method */
 .erg-bottom { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
@@ -305,6 +321,18 @@
   .erg .score .big { font-size: 32px; }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) { .erg-stage, .erg-stage.open { transition: none; } }
+/* Phones: a quote's source and the person behind a dot open as a drawer from below, over the statement sheet. */
+@media (max-width: 900px) {
+  .erg-source { align-items: flex-end; padding: 0; }
+  .erg-source .spanel { max-width: none; max-height: 88dvh; border-radius: 14px 14px 0 0; overscroll-behavior: contain; padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); animation: erg-up 0.3s ease; }
+  .erg-source .sclose { position: sticky; top: 0; z-index: 3; display: flex; justify-content: flex-end; width: 100%; padding: 12px 0 8px; margin-bottom: 4px; border-radius: 0; background: var(--panel); font-size: 14px; font-weight: 600; color: var(--ink-2); }
+  .erg-source .sclose:hover { background: var(--panel); }
+  .erg-source .sclose .sx { display: none; }
+  .erg-source .sclose .sl { display: inline; }
+  .erg-source .chain { padding-right: 0; }
+}
+@keyframes erg-up { from { transform: translateY(100%); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .erg-source .spanel { animation: none; } }
 
 /* Too few people for camps: counts over everyone (ResultView "small") */
 .erg .tally { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 8px; background: var(--line); }

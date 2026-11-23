@@ -1,6 +1,6 @@
 "use client";
 
-import type { Entry, Ergebnis, Quote, StatementOut } from "@policy/pipeline/kern";
+import type { Entry, Ergebnis, Person, Quote, StatementOut } from "@policy/pipeline/kern";
 import {
   campLabel,
   campName,
@@ -32,7 +32,7 @@ import {
   word,
   type CampNames,
 } from "@policy/pipeline/kern/text";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 
 import { ReportBox } from "@/components/ReportBox";
 import { decisionDate, decisionHead, outcomeOf, outcomeSentence, type PublicDecision } from "@/lib/beschluss-words";
@@ -174,6 +174,8 @@ export function ResultView(props: ResultViewProps) {
   const [mapMode, setMapMode] = useState<"vote" | "camp">("vote");
   const [sheet, setSheet] = useState(false);
   const [source, setSource] = useState<{ s: StatementOut; q: Quote } | null>(null);
+  /** The person behind a dot in the opinion space (its display number), shown in the same dialog as a quote's source. */
+  const [who, setWho] = useState<number | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -191,23 +193,30 @@ export function ResultView(props: ResultViewProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // From a quote opened in the person view, Escape goes back to the person first.
       if (source) setSource(null);
+      else if (who !== null) setWho(null);
       else setSheet(false);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [source]);
+  }, [source, who]);
   // The page behind stays still while the source dialog or the phone sheet is open.
+  const dialog = source !== null || who !== null;
   useEffect(() => {
-    if (!source && !(sheet && window.innerWidth <= SHEET_MAX)) return;
+    if (!dialog && !(sheet && window.innerWidth <= SHEET_MAX)) return;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [source, sheet]);
+  }, [dialog, sheet]);
   useEffect(() => {
-    if (source) closeRef.current?.focus();
-  }, [source]);
+    if (dialog) closeRef.current?.focus({ preventScroll: true });
+  }, [source, who, dialog]);
+  const closeDialog = () => {
+    setSource(null);
+    setWho(null);
+  };
   // The opened sheet takes the focus (for screen readers), without a ring on the close button.
   useEffect(() => {
     if (sheet) stageRef.current?.focus({ preventScroll: true });
@@ -237,6 +246,31 @@ export function ResultView(props: ResultViewProps) {
     return { dots, camps };
   }, [r.people, k]);
   const total = geo.dots.length;
+  // Organisations are named (their statements are public); everyone else is a number.
+  const orgOf = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of r.statements) for (const q of s.quotes) if (q.person && q.source?.kind === "organisation" && !m.has(q.person)) m.set(q.person, q.sender);
+    return m;
+  }, [r]);
+  const whoLabel = (nr: number) => orgOf.get(nr) ?? `Person ${nr}`;
+  /** The dot nearest to the pointer, within `px` screen pixels — the dots are too small to hit exactly, above all on phones. */
+  const nearest = (e: ReactMouseEvent<SVGSVGElement>, px: number) => {
+    const svg = e.currentTarget;
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const at = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    const lim = px / (svg.getBoundingClientRect().width / W || 1);
+    let best: (typeof geo.dots)[number] | null = null;
+    let bd = lim * lim;
+    for (const d of geo.dots) {
+      const dd = (d.cx - at.x) ** 2 + (d.cy - at.y) ** 2;
+      if (dd <= bd) {
+        bd = dd;
+        best = d;
+      }
+    }
+    return best;
+  };
   // The camps left to right as their clouds lie. Names, counts and the detail's columns all follow this order,
   // so the numbers under a cloud are that cloud's.
   const order = [...geo.camps].sort((a, b) => a.cx - b.cx).map((c) => c.g);
@@ -720,6 +754,7 @@ export function ResultView(props: ResultViewProps) {
   const gaps = gapTexts(r, props.questions);
   const sat = r.saturation;
   const person = source?.q.person ? r.people.find((x) => x.n === source.q.person && x.camp >= 0) : undefined;
+  const personShown = who !== null ? r.people.find((x) => x.n === who && x.camp >= 0) : undefined;
 
   return (
     <div className="erg">
@@ -942,15 +977,20 @@ export function ResultView(props: ResultViewProps) {
               role="img"
               aria-label={`${total} Punkte, je einer pro teilnehmender Person, in ${k} Lagern; eingefärbt nach ihrer Stimme zur gewählten Aussage`}
               onMouseMove={(e) => {
-                const t = e.target as SVGElement;
-                const pn = t.getAttribute("data-n");
-                if (!pn) return setTip(null);
-                const d = geo.dots.find((x) => x.n === Number(pn));
+                const d = nearest(e, 8);
+                e.currentTarget.style.cursor = d ? "pointer" : "";
                 if (!d) return setTip(null);
                 const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                setTip({ x: e.clientX - box.left, y: e.clientY - box.top, text: `Person ${d.n} · ${campName(names, d.camp)} · ${VOTE[d.v[vi] ?? "."]}` });
+                setTip({ x: e.clientX - box.left, y: e.clientY - box.top, text: `${whoLabel(d.n)} · ${campName(names, d.camp)} · ${VOTE[d.v[vi] ?? "."]}` });
               }}
               onMouseLeave={() => setTip(null)}
+              onClick={(e) => {
+                const d = nearest(e, window.matchMedia("(pointer: coarse)").matches ? 18 : 10);
+                if (!d) return;
+                setTip(null);
+                setSource(null);
+                setWho(d.n);
+              }}
             >
               {geo.camps.map((c) => (c.path ? <path key={c.g} className="hull" d={c.path} /> : null))}
               {geo.dots.map((d) => {
@@ -964,6 +1004,7 @@ export function ResultView(props: ResultViewProps) {
                 {tip.text}
               </div>
             ) : null}
+            <p className="dot-hint">Ein Klick auf einen Punkt zeigt, woher die Stimmen dieser Person kommen.</p>
             <div className="counts" style={cols}>
               {byCloud(cur).map(({ g, c }) => (
                 <div key={g}>
@@ -980,20 +1021,48 @@ export function ResultView(props: ResultViewProps) {
       {/* Phones: the sheet opens only when a statement is tapped; a tap beside it closes it again. */}
       {sheet ? <div className="erg-scrim" aria-hidden onClick={() => setSheet(false)} /> : null}
 
-      {source ? (
+      {source || personShown ? (
         <div
           className="erg-source"
           role="dialog"
           aria-modal="true"
-          aria-label="Quelle"
+          aria-label={source ? "Quelle" : personShown ? whoLabel(personShown.n) : "Person"}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSource(null);
+            if (e.target === e.currentTarget) closeDialog();
           }}
         >
           <div className="spanel">
-            <button type="button" className="sclose" aria-label="Schließen" ref={closeRef} onClick={() => setSource(null)}>
-              ×
+            <button type="button" className="sclose" aria-label="Schließen" ref={closeRef} onClick={closeDialog}>
+              <span className="sx" aria-hidden>
+                ×
+              </span>
+              <span className="sl">Schließen</span>
             </button>
+            {/* Kept while a quote of this person is open, so "Zurück" finds the lists as they were. */}
+            {personShown ? (
+              <div hidden={source !== null}>
+              <PersonPanel
+                key={personShown.n}
+                r={r}
+                names={names}
+                p={personShown}
+                name={orgOf.get(personShown.n) ?? null}
+                cur={cur}
+                onQuote={(s, q) => setSource({ s, q })}
+                onPick={(nr) => {
+                  closeDialog();
+                  select(nr);
+                }}
+              />
+              </div>
+            ) : null}
+            {source ? (
+            <>
+            {personShown ? (
+              <button type="button" className="sback" onClick={() => setSource(null)}>
+                ← Zurück zu {whoLabel(personShown.n)}
+              </button>
+            ) : null}
             <div className="chain">
               <span>Bericht</span>
               <i>→</i>
@@ -1048,7 +1117,7 @@ export function ResultView(props: ResultViewProps) {
                 label="Hier stimmt etwas nicht: Zitat melden"
               />
             ) : null}
-            {person ? (
+            {person && !personShown ? (
               <div className="also">
                 <div className="eyebrow">Dieselbe Person hat außerdem bewertet</div>
                 {r.statements
@@ -1061,7 +1130,19 @@ export function ResultView(props: ResultViewProps) {
                     </div>
                   ))}
                 <p className="hint">So wird aus einem Zitat eine Stimme: Man sieht, wo diese Person sonst steht, und ob der Bericht sie fair einordnet.</p>
+                <button
+                  type="button"
+                  className="pv-more"
+                  onClick={() => {
+                    setWho(person.n);
+                    setSource(null);
+                  }}
+                >
+                  Alle Stimmen und Texte von {whoLabel(person.n)} ansehen
+                </button>
               </div>
+            ) : null}
+            </>
             ) : null}
           </div>
         </div>
@@ -1112,6 +1193,207 @@ export function ResultView(props: ResultViewProps) {
           ) : null}
         </section>
       </div>
+    </div>
+  );
+}
+
+// ———— One person behind a dot ————
+// Stephan: every dot leads back to what this person actually put in — their own clicks, the passages of their
+// texts that count as votes (each opening the original), or the plain note that the person is simulated.
+const HOW_SHORT = { k: "selbst", t: "aus dem Text", z: "simuliert" } as const;
+type How = keyof typeof HOW_SHORT;
+const SHOW = 8;
+const tone = (v: string) => (v === "a" ? "ok" : v === "d" ? "bad" : "grey");
+
+function PersonPanel(props: {
+  r: Ergebnis;
+  names: CampNames;
+  p: Person;
+  /** The organisation's name; private persons stay a number. */
+  name: string | null;
+  /** The statement the opinion space is coloured by. */
+  cur: StatementOut;
+  onQuote: (s: StatementOut, q: Quote) => void;
+  onPick: (nr: number) => void;
+}) {
+  const { r, names, p, name, cur } = props;
+  const [all, setAll] = useState<Set<string>>(() => new Set());
+  const more = (key: string) => setAll((x) => new Set([...x, key]));
+  const label = name ?? `Person ${p.n}`;
+  const sender = p.via === "datei" || p.via === "stellungnahme";
+  const texts = r.statements.flatMap((s) => s.quotes.filter((q) => q.person === p.n).map((q) => ({ s, q })));
+  const withText = new Set(texts.map((x) => x.s.nr));
+  const how = (nr: number): How | null => {
+    const c = p.o?.[nr - 1];
+    if (c === "k" || c === "t" || c === "z") return c;
+    // Older results do not record it: what the published passages and the way the person came in show.
+    if (withText.has(nr)) return "t";
+    if (p.via === "simulation") return "z";
+    if (sender) return "t";
+    return null;
+  };
+  const voted = r.statements.filter((s) => (p.v[s.nr - 1] ?? ".") !== ".");
+  const by = (c: "a" | "d" | "p") => voted.filter((s) => p.v[s.nr - 1] === c);
+  const tally: Record<How, number> = { k: 0, t: 0, z: 0 };
+  for (const s of voted) {
+    const h = how(s.nr);
+    if (h) tally[h]++;
+  }
+  const fromText = sender ? "aus der Stellungnahme" : "aus eigenen Texten";
+  const only = (Object.keys(tally) as How[]).find((h) => tally[h] && tally[h] === voted.length);
+  const parts = only
+    ? [{ k: "alle selbst abgestimmt", t: `alle ${fromText} gelesen`, z: "alle simuliert" }[only]]
+    : [
+        tally.k ? `davon ${n(tally.k)} selbst abgestimmt` : null,
+        tally.t ? `${tally.k ? "" : "davon "}${n(tally.t)} ${fromText} gelesen` : null,
+        tally.z ? `${tally.k || tally.t ? "" : "davon "}${n(tally.z)} simuliert` : null,
+      ].filter(Boolean);
+
+  const kind =
+    p.via === "simulation"
+      ? "Simulierte Person"
+      : sender
+        ? name
+          ? "Stellungnahme"
+          : "Stellungnahme einer Privatperson"
+        : p.drawn
+          ? "Per Los eingeladen"
+          : "Aus der Beteiligung";
+  const intro =
+    p.via === "simulation"
+      ? `Diese Person ist simuliert: Ihre Stimmen hat ein Rechenmodell erzeugt${texts.length ? ", auch ihre Texte gehören zur Simulation" : ""}.`
+      : sender
+        ? "Die Stimmen sind aus der Stellungnahme gelesen: Wo sie eine Aussage stützt, zählt das als Zustimmung, wo sie ihr widerspricht, als Ablehnung."
+        : `${p.drawn ? "Per Los ausgewählt und mit einem Brief eingeladen. " : ""}Hat selbst abgestimmt${
+            texts.length || tally.t ? ". Was die Person geschrieben hat, zählt dort als Stimme, wo es eine Aussage stützt oder ihr widerspricht" : ""
+          }.`;
+
+  const quotes = (xs: { s: StatementOut; q: Quote }[], withStatement: boolean) => (
+    <div className="quotes">
+      {xs.map(({ s, q }) => (
+        <blockquote
+          key={q.move}
+          className={`q${q.camp !== null ? ` c${q.camp}` : ""}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => props.onQuote(s, q)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              props.onQuote(s, q);
+            }
+          }}
+        >
+          {withStatement ? (
+            <div className="pv-for">
+              Zu Aussage {s.nr}: {s.text}
+            </div>
+          ) : null}
+          <p>„{q.text}“</p>
+          <div className="src">
+            {q.stance === 1 ? "stimmt zu" : "widerspricht"} <span className="go">Im Original lesen →</span>
+          </div>
+        </blockquote>
+      ))}
+    </div>
+  );
+
+  const v = p.v[cur.nr - 1] ?? ".";
+  const h = how(cur.nr);
+  const here = texts.filter((x) => x.s.nr === cur.nr);
+  const others = texts.filter((x) => x.s.nr !== cur.nr);
+  const src = sender ? "der Stellungnahme" : "dem eigenen Text";
+  const now =
+    v === "."
+      ? sender
+        ? "Dazu sagt die Stellungnahme nichts."
+        : "Zu dieser Aussage hat die Person nicht abgestimmt."
+      : h === "k"
+        ? "Selbst abgestimmt."
+        : h === "z"
+          ? "Vom Rechenmodell erzeugt."
+          : h === "t"
+            ? here.length
+              ? `Gelesen aus ${src}:`
+              : `Gelesen aus ${src}. Die Stelle zeigen wir nicht: Sie nennt eine Privatperson oder wurde nach einer Meldung verborgen.`
+            : null;
+
+  return (
+    <div className="pv">
+      <div className="chain">
+        <span>Meinungsraum</span>
+        <i>→</i>
+        <b>{sender ? "Absender" : "Person"}</b>
+        <i>→</i>
+        <span>Stimmen und Texte</span>
+        <i>→</i>
+        <span>Original</span>
+      </div>
+      <div className="eyebrow">{kind}</div>
+      <h3>{label}</h3>
+      <div className="meta">
+        {p.camp >= 0 ? `${campLabel(names, p.camp)} · ` : ""}
+        {n(voted.length)} {voted.length === 1 ? "Stimme" : "Stimmen"}
+        {parts.length ? `, ${parts.join(", ")}` : ""}
+      </div>
+      <p className="pv-intro">{intro}</p>
+
+      <section className="pv-sec">
+        <div className="eyebrow">Zur gewählten Aussage {cur.nr}</div>
+        <p className="pv-st">{cur.text}</p>
+        <div className="pv-how">
+          <span className={`st ${tone(v)}`}>{VOTE[v]}</span>
+          {now ? <span>{now}</span> : null}
+        </div>
+        {here.length ? quotes(here, false) : null}
+      </section>
+
+      {others.length ? (
+        <section className="pv-sec">
+          <div className="eyebrow">
+            {here.length ? "Weitere Textstellen" : "Textstellen"} · {n(others.length)}
+          </div>
+          {quotes(all.has("texte") ? others : others.slice(0, SHOW), true)}
+          {others.length > SHOW && !all.has("texte") ? (
+            <button type="button" className="pv-more" onClick={() => more("texte")}>
+              Alle {n(others.length)} Textstellen zeigen
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="pv-sec">
+        <div className="eyebrow">Alle Stimmen · {n(voted.length)}</div>
+        {(["a", "d", "p"] as const).map((c) => {
+          const xs = by(c);
+          if (!xs.length) return null;
+          const open = all.has(c);
+          return (
+            <div key={c} className="pv-group">
+              <h4>
+                <span className={`st ${tone(c)}`}>{VOTE[c]}</span>
+                <span className="num">{n(xs.length)}</span>
+              </h4>
+              {(open ? xs : xs.slice(0, SHOW)).map((s) => {
+                const hw = how(s.nr);
+                return (
+                  <button key={s.nr} type="button" className="pv-row" onClick={() => props.onPick(s.nr)}>
+                    <span className="nr num">{s.nr}</span>
+                    <span className="t">{s.text}</span>
+                    <span className="how">{hw ? HOW_SHORT[hw] : ""}</span>
+                  </button>
+                );
+              })}
+              {xs.length > SHOW && !open ? (
+                <button type="button" className="pv-more" onClick={() => more(c)}>
+                  Alle {n(xs.length)} zeigen
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+        <p className="hint">Ein Klick auf eine Aussage färbt den Meinungsraum nach ihr.</p>
+      </section>
     </div>
   );
 }

@@ -38,6 +38,8 @@ export const PROOF: readonly BelegKey[] = ["vergleichsfall", "studie", "messdate
 // MIN_CAMP_VOTES, carries and rejects live in position.ts, so the sentences apply the same rule.
 /** A participant needs this many votes to be placed in a camp (Polis default). */
 const MIN_VOTES = 7;
+/** map_point_votes.method → Person.o: k own click, t read from the person's own text, z simulated. */
+const ORIGIN: Record<string, string> = { real: "k", tuer2: "t", abgeleitet: "t", inferred: "t", simulation: "z" };
 /** The share of a camp's carrying votes a bridge must survive losing (Stephan: "die jeweils einflussreichsten Stimmen herausrechnen"). */
 export const ROBUST_SHARE = 0.1;
 /** Drawn residents per camp who voted on a statement before the cross-check says anything about it. */
@@ -92,6 +94,8 @@ export interface VoteIn {
   participant: string;
   node: string;
   value: -1 | 0 | 1;
+  /** How the vote came about (map_point_votes.method): real (own click), tuer2/abgeleitet (read from their text), simulation. */
+  method?: string | null;
 }
 
 export interface ParticipantIn {
@@ -251,7 +255,14 @@ export interface Person {
   y: number;
   /** One character per statement in display order: a(gree) d(isagree) p(ass) . (no vote). */
   v: string;
+  /**
+   * How each vote came about, same order as `v`: k (own click), t (read from their own text: a statement,
+   * an upload or an own point), z (simulated), ? (not known), . (no vote). Older stored results have none.
+   */
+  o?: string;
   via: string | null;
+  /** Came with a code from a letter to residents drawn by lot. */
+  drawn?: true;
 }
 
 export interface Ergebnis {
@@ -456,6 +467,30 @@ export function evaluate(input: EvaluateInput): Ergebnis {
   const minVotes = Math.min(MIN_VOTES, Math.max(2, Math.floor(nodes.length / 2)));
   const needed = Math.max(input.params.minParticipants, 6);
 
+  // Each person's row: the vote and how it came about, one character per statement.
+  const voteOf = new Map<string, string[]>();
+  const originOf = new Map<string, string[]>();
+  for (const v of votes) {
+    const a = voteOf.get(v.participant) ?? nodes.map(() => ".");
+    const o = originOf.get(v.participant) ?? nodes.map(() => ".");
+    a[nodeIndex.get(v.node)!] = v.value === 1 ? "a" : v.value === -1 ? "d" : "p";
+    o[nodeIndex.get(v.node)!] = ORIGIN[v.method ?? ""] ?? "?";
+    voteOf.set(v.participant, a);
+    originOf.set(v.participant, o);
+  }
+  const viaOf = new Map(input.participants.map((p) => [p.id, p.via]));
+  const drawnIds = new Set(input.participants.filter((p) => p.drawn).map((p) => p.id));
+  const personRow = (pid: string, id: number, camp: number, x: number, y: number): Person => ({
+    n: id + 1,
+    camp,
+    x,
+    y,
+    v: voteOf.get(pid)!.join(""),
+    o: originOf.get(pid)!.join(""),
+    via: viaOf.get(pid) ?? null,
+    ...(drawnIds.has(pid) ? { drawn: true as const } : {}),
+  });
+
   const campOf = new Map<string, number>();
   let camps: Ergebnis["camps"] = null;
   let people: Person[] = [];
@@ -485,39 +520,16 @@ export function evaluate(input: EvaluateInput): Ergebnis {
       const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
       const sx = (x: number) => Math.round(((x - x0) / (x1 - x0 || 1)) * 1000);
       const sy = (y: number) => Math.round(((y - y0) / (y1 - y0 || 1)) * 1000);
-      const voteOf = new Map<string, string[]>();
-      for (const v of votes) {
-        const a = voteOf.get(v.participant) ?? nodes.map(() => ".");
-        a[nodeIndex.get(v.node)!] = v.value === 1 ? "a" : v.value === -1 ? "d" : "p";
-        voteOf.set(v.participant, a);
-      }
-      const via = new Map(input.participants.map((p) => [p.id, p.via]));
       // Everyone who voted is in the open matrix (W1); only the placed ones have a camp and a position.
       const at = new Map(ok.map((id, i) => [id, i]));
       people = pids.map((pid, id) => {
         const i = at.get(id);
-        return {
-          n: id + 1,
-          camp: i === undefined ? -1 : campOf.get(pid)!,
-          x: i === undefined ? -1 : sx(pts[i]![0]!),
-          y: i === undefined ? -1 : sy(pts[i]![1]!),
-          v: voteOf.get(pid)!.join(""),
-          via: via.get(pid) ?? null,
-        };
+        return i === undefined ? personRow(pid, id, -1, -1, -1) : personRow(pid, id, campOf.get(pid)!, sx(pts[i]![0]!), sy(pts[i]![1]!));
       });
     }
   }
   // Without camps everyone still belongs in the open matrix (W1): no position, no camp, the votes.
-  if (!people.length && pids.length) {
-    const voteOf = new Map<string, string[]>();
-    for (const v of votes) {
-      const a = voteOf.get(v.participant) ?? nodes.map(() => ".");
-      a[nodeIndex.get(v.node)!] = v.value === 1 ? "a" : v.value === -1 ? "d" : "p";
-      voteOf.set(v.participant, a);
-    }
-    const via = new Map(input.participants.map((p) => [p.id, p.via]));
-    people = pids.map((pid, id) => ({ n: id + 1, camp: -1, x: -1, y: -1, v: voteOf.get(pid)!.join(""), via: via.get(pid) ?? null }));
-  }
+  if (!people.length && pids.length) people = pids.map((pid, id) => personRow(pid, id, -1, -1, -1));
   const k = camps?.k ?? 0;
   const members = Array.from({ length: k }, (_, g) => new Set([...campOf].filter(([, c]) => c === g).map(([p]) => p)));
   const drawn = new Set(input.participants.filter((p) => p.drawn).map((p) => p.id));

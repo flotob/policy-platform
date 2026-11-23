@@ -69,7 +69,7 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
       JOIN submissions s ON s.id = m.submission_id LEFT JOIN campaign_files f ON f.submission_id = s.id
       WHERE m.consultation_id = ${c.consultationId} AND m.state = 'verknuepft' ORDER BY m.created_at`),
     rows(sql`
-      SELECT v.participant_id, v.map_point_id, v.value FROM map_point_votes v
+      SELECT v.participant_id, v.map_point_id, v.value, v.method FROM map_point_votes v
       JOIN map_points p ON p.id = v.map_point_id AND p.version = v.version
       WHERE p.consultation_id = ${c.consultationId} AND p.status = 'released' AND p.rolle IS NOT NULL`),
     rows(sql`
@@ -128,7 +128,12 @@ async function loadInput(c: Campaign): Promise<EvaluateInput> {
         decidedBy: (m.decided_by as string | null) ?? null,
       }),
     ),
-    votes: votes.map((v) => ({ participant: v.participant_id as string, node: v.map_point_id as string, value: Number(v.value) as -1 | 0 | 1 })),
+    votes: votes.map((v) => ({
+      participant: v.participant_id as string,
+      node: v.map_point_id as string,
+      value: Number(v.value) as -1 | 0 | 1,
+      method: (v.method as string | null) ?? null,
+    })),
     participants: participants.map((p) => ({ id: p.id as string, via: (p.via as string | null) ?? null, drawn: p.drawn === true })),
     context: {
       steps: STEPS.map((s) => ({ key: s.key, label: s.label, these: c.steps[s.key] ?? "" })),

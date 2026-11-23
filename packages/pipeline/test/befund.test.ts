@@ -203,6 +203,27 @@ describe("evaluate", () => {
       expect(firmBridge(fact)).toBe(true);
       expect(lotSummary(withLot)).toMatchObject({ drawn: 12, firm: withLot.statements.filter((s) => s.category === "bruecke").length, onlySelf: 0 });
     });
+    it("every person's row says how each vote came about, and who was drawn", () => {
+      const how = (v: VoteIn) =>
+        v.participant === "p01" ? (v.node === "frist" ? "tuer2" : "real") : v.participant === "p20" ? "simulation" : v.participant === "p21" ? "abgeleitet" : undefined;
+      const withHow = evaluate({
+        ...input,
+        votes: votes.map((v) => ({ ...v, method: how(v) })),
+        participants: participants.map((p) => ({ ...p, drawn: p.id === "p01" })),
+      });
+      const row = (pid: string) => withHow.people[[...new Set(votes.map((v) => v.participant))].sort().indexOf(pid)]!;
+      const frist = withHow.statements.find((s) => s.id === "frist")!.nr - 1;
+      expect(row("p01").o![frist]).toBe("t");
+      expect(row("p01").o!.replace(/t/, "")).toMatch(/^k+$/);
+      expect(row("p01").drawn).toBe(true);
+      expect(row("p20").o).toMatch(/^z+$/);
+      expect(row("p21").o).toMatch(/^t+$/);
+      expect(row("p00").o).toMatch(/^\?+$/);
+      expect(row("p00").drawn).toBeUndefined();
+      // The origin is no part of the matrix: same votes, same hash, same camps.
+      expect(withHow.matrixHash).toBe(r.matrixHash);
+      expect(withHow.people.map((p) => p.camp)).toEqual(r.people.map((p) => p.camp));
+    });
     it("a bridge the drawn residents of one camp do not share is not firm, and the report says so", () => {
       const skill = by("skill");
       expect(skill.category).toBe("bruecke");
